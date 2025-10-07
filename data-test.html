@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Data Structure Test</title>
+<style>
+body{background:#000;color:#4dd9cc;font-family:monospace;padding:20px}
+pre{background:#111;padding:10px;border:1px solid #4dd9cc;margin:10px 0;overflow:auto;max-height:400px}
+h2{color:#d97b8f;margin-top:20px}
+</style>
+</head><body>
+<h1>ARKADU Data Structure Comparison</h1>
+
+<h2>1. Raw Artifacts (first 3)</h2>
+<pre id="rawData"></pre>
+
+<h2>2. Chambers Built (first 10)</h2>
+<pre id="chambers"></pre>
+
+<h2>3. Depth 0 Chambers with Species</h2>
+<pre id="depth0"></pre>
+
+<h2>4. Depth 1 Chambers with Species (first 10)</h2>
+<pre id="depth1"></pre>
+
+<h2>5. Species Color Mapping</h2>
+<pre id="colors"></pre>
+
+<script>
+const COLORS={
+png:0x4dd9cc,jpg:0x4dd9cc,jpeg:0x4dd9cc,
+mp4:0xd97b8f,mov:0xd97b8f,
+mp3:0xe8b849,wav:0xe8b849,py:0xe8b849,
+json:0x9d7be8,txt:0x9d7be8,md:0x9d7be8,
+html:0x6bbd8f,css:0x6bbd8f,js:0x6bbd8f,
+pdf:0xe8b849,sh:0x6bbd8f,
+unknown:0x6b8a96
+};
+
+async function test(){
+const r=await fetch('sys/primitive.jsonl');
+const t=await r.text();
+const artifacts=t.trim().split('\n').map(l=>JSON.parse(l));
+
+document.getElementById('rawData').textContent=JSON.stringify(artifacts.slice(0,3),null,2);
+
+// Build chambers
+const m={};
+artifacts.forEach(a=>{
+const p=a.path.split('/');
+for(let d=1;d<p.length;d++){
+const cp=p.slice(0,d).join('/');
+if(!m[cp]){
+m[cp]={
+id:cp,name:p[d-1],depth:d-1,
+artifacts:[],species:{},totalSize:0
+};
+}
+if(d===p.length-1){
+m[cp].artifacts.push(a);
+const s=(a.ext||'unknown').replace(/^\./,'');
+m[cp].species[s]=(m[cp].species[s]||0)+1;
+m[cp].totalSize+=(a.size||0);
+}
+}
+});
+
+const chambers=Object.values(m);
+document.getElementById('chambers').textContent=
+JSON.stringify(chambers.slice(0,10).map(c=>({
+id:c.id,
+depth:c.depth,
+artCount:c.artifacts.length,
+species:c.species
+})),null,2);
+
+const depth0=chambers.filter(c=>c.depth===0);
+document.getElementById('depth0').textContent=
+JSON.stringify(depth0.map(c=>({
+id:c.id,
+artCount:c.artifacts.length,
+species:Object.keys(c.species).length>0?c.species:'NO SPECIES'
+})),null,2);
+
+const depth1=chambers.filter(c=>c.depth===1).slice(0,10);
+document.getElementById('depth1').textContent=
+JSON.stringify(depth1.map(c=>({
+id:c.id,
+artCount:c.artifacts.length,
+species:Object.keys(c.species).length>0?c.species:'NO SPECIES'
+})),null,2);
+
+const colorList=Object.entries(COLORS).map(([ext,hex])=>
+`${ext}: #${hex.toString(16).padStart(6,'0')}`
+).join('\n');
+document.getElementById('colors').textContent=colorList;
+
+console.log('Total chambers:',chambers.length);
+console.log('Depth 0 chambers:',depth0.length);
+console.log('Depth 0 with artifacts:',depth0.filter(c=>c.artifacts.length>0).length);
+console.log('Depth 0 with species:',depth0.filter(c=>Object.keys(c.species).length>0).length);
+}
+
+test();
+</script>
+</body></html>

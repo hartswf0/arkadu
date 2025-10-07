@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<title>ARKADU Ekphrasis Topology — Operative Semantic Chains</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0e1a;color:#4dd9cc;font-family:monospace;overflow:hidden}
+#canvas{display:block}
+.hud{position:fixed;top:20px;left:20px;background:rgba(0,0,0,.95);border:1px solid #4dd9cc;
+padding:16px;width:360px;z-index:100;font-size:11px;border-radius:8px;max-height:90vh;overflow-y:auto}
+.stat{margin:6px 0;padding:8px;background:rgba(77,217,204,.05);border-radius:4px}
+.label{color:#6b8a96;font-size:9px;text-transform:uppercase}
+.value{color:#4dd9cc;font-size:11px;font-weight:bold;margin-top:2px}
+.legend{margin-top:12px;padding-top:12px;border-top:1px solid rgba(77,217,204,.2)}
+.legend-item{display:flex;align-items:center;gap:8px;margin:6px 0;font-size:10px}
+.legend-dot{width:12px;height:12px;border-radius:50%}
+
+.controls{position:fixed;bottom:20px;left:20px;background:rgba(0,0,0,.95);
+border:1px solid #4dd9cc;padding:16px;width:360px;border-radius:8px;z-index:100}
+.btn{padding:8px 12px;margin:4px;background:rgba(77,217,204,.1);border:1px solid rgba(77,217,204,.3);
+color:#4dd9cc;cursor:pointer;font-size:10px;display:inline-block;border-radius:4px;transition:all .2s}
+.btn:hover{background:rgba(77,217,204,.2);border-color:#4dd9cc}
+.btn.active{background:#4dd9cc;color:#000;border-color:#4dd9cc}
+.control-group{margin:12px 0}
+.control-label{font-size:10px;color:#6b8a96;margin-bottom:6px}
+
+.inspector{position:fixed;top:20px;right:20px;background:rgba(0,0,0,.95);
+border:1px solid #d97b8f;padding:16px;width:450px;max-height:85vh;overflow-y:auto;
+z-index:100;border-radius:8px;transform:translateX(500px);transition:transform .3s}
+.inspector.open{transform:translateX(0)}
+.close{position:absolute;top:16px;right:16px;cursor:pointer;color:#d97b8f;font-size:18px}
+.inspector-title{font-size:13px;color:#d97b8f;font-weight:bold;margin-bottom:12px;
+border-bottom:2px solid #d97b8f;padding-bottom:8px}
+.info-block{margin:10px 0;padding:10px;background:rgba(77,217,204,.05);border-radius:6px;font-size:10px}
+.chain-step{padding:8px;margin:6px 0;background:rgba(157,123,232,.08);border-left:3px solid #9d7be8;
+border-radius:4px;font-size:10px}
+.prompt-text{font-style:italic;color:#e8b849;margin:6px 0;padding:6px;
+background:rgba(232,184,73,.08);border-radius:4px}
+
+.loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+flex-direction:column;gap:20px;background:#000;z-index:200;color:#4dd9cc}
+.loading.hidden{display:none}
+.progress{width:400px;height:3px;background:rgba(77,217,204,.2);margin:10px 0}
+.progress-bar{height:100%;background:#4dd9cc;width:0%;transition:width .3s;box-shadow:0 0 10px #4dd9cc}
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+
+<div class="loading" id="loading">
+<div>⬢ LOADING OPERATIVE EKPHRASIS CHAINS ⬢</div>
+<div class="progress"><div class="progress-bar" id="progress"></div></div>
+<div id="status">Initializing...</div>
+</div>
+
+<div class="hud">
+<div style="font-size:14px;color:#4dd9cc;font-weight:bold;margin-bottom:12px;letter-spacing:2px">
+EKPHRASIS TOPOLOGY
+</div>
+<div class="stat"><div class="label">Total Nodes</div><div class="value" id="totalNodes">0</div></div>
+<div class="stat"><div class="label">Dependency Edges</div><div class="value" id="totalEdges">0</div></div>
+<div class="stat"><div class="label">JSON Prompts</div><div class="value" id="jsonFiles">0</div></div>
+<div class="stat"><div class="label">Python Scripts</div><div class="value" id="pythonFiles">0</div></div>
+<div class="stat"><div class="label">Operative Chains</div><div class="value" id="chainCount">0</div></div>
+
+<div class="legend">
+<div style="font-size:10px;color:#6b8a96;font-weight:bold;margin-bottom:8px">NODE TYPES</div>
+<div class="legend-item">
+<div class="legend-dot" style="background:#9d7be8"></div>
+<span>JSON Prompts (operativeEkphrasis)</span>
+</div>
+<div class="legend-item">
+<div class="legend-dot" style="background:#e8b849"></div>
+<span>Python Scripts (generators)</span>
+</div>
+<div class="legend-item">
+<div class="legend-dot" style="background:#d97b8f"></div>
+<span>Media Outputs (generated)</span>
+</div>
+<div class="legend-item">
+<div class="legend-dot" style="background:#4dd9cc"></div>
+<span>Other Files</span>
+</div>
+</div>
+</div>
+
+<div class="controls">
+<div class="control-group">
+<div class="control-label">Visualization Mode</div>
+<div class="btn active" id="btnForce">Force Graph</div>
+<div class="btn" id="btnLayers">Layer Stack</div>
+<div class="btn" id="btnRadial">Radial</div>
+</div>
+<div class="control-group">
+<div class="control-label">Filter by Type</div>
+<div class="btn active" id="filterJSON">JSON</div>
+<div class="btn active" id="filterPython">Python</div>
+<div class="btn active" id="filterMedia">Media</div>
+<div class="btn active" id="filterOther">Other</div>
+</div>
+<div class="control-group">
+<div class="control-label">Show Chains Only</div>
+<div class="btn" id="btnChainsOnly">Chains Mode</div>
+</div>
+</div>
+
+<div class="inspector" id="inspector">
+<div class="close" onclick="closeInspector()">×</div>
+<div class="inspector-title">NODE DETAILS</div>
+<div id="inspectorContent"></div>
+</div>
+
+<script>
+const CAN=document.getElementById('canvas');
+const CTX=CAN.getContext('2d');
+let DPR=window.devicePixelRatio||1;
+let W,H;
+
+const STATE={
+jsonFiles:[],
+pythonFiles:[],
+dependencyGraph:{nodes:[],edges:[]},
+mediaManifest:null,
+layout:'force',
+filters:new Set(['json','python','media','other']),
+chainsOnly:false,
+zoom:1,
+panX:0,
+panY:0,
+dragging:false,
+lastX:0,
+lastY:0,
+selectedNode:null,
+nodes:[],
+edges:[],
+animFrame:0
+};
+
+const COLORS={
+json:0x9d7be8,
+python:0xe8b849,
+media:0xd97b8f,
+other:0x4dd9cc
+};
+
+async function load(){
+try{
+updateProgress('Loading JSON files metadata...',10);
+const jsonResp=await fetch('deep/json_files.json');
+STATE.jsonFiles=await jsonResp.json();
+console.log(`Loaded ${STATE.jsonFiles.length} JSON files`);
+
+updateProgress('Loading Python files metadata...',30);
+const pyResp=await fetch('deep/python_files.json');
+STATE.pythonFiles=await pyResp.json();
+console.log(`Loaded ${STATE.pythonFiles.length} Python files`);
+
+updateProgress('Loading dependency graph...',50);
+const depResp=await fetch('deep/dependency_graph.json');
+STATE.dependencyGraph=await depResp.json();
+console.log(`Loaded ${STATE.dependencyGraph.nodes.length} nodes, ${STATE.dependencyGraph.edges.length} edges`);
+
+updateProgress('Loading media manifest...',70);
+const mediaResp=await fetch('deep/media_manifest.json');
+STATE.mediaManifest=await mediaResp.json();
+console.log('Media manifest loaded');
+
+updateProgress('Building topology...',85);
+buildTopology();
+
+updateProgress('Complete',100);
+document.getElementById('loading').classList.add('hidden');
+
+resize();
+updateHUD();
+animate();
+}catch(e){
+console.error('Load error:',e);
+document.getElementById('status').innerHTML=`<span style="color:#d97b8f">ERROR: ${e.message}</span>`;
+}}
+
+function updateProgress(msg,pct){
+document.getElementById('status').textContent=msg;
+document.getElementById('progress').style.width=pct+'%';
+}
+
+function buildTopology(){
+// Build node map from dependency graph
+const nodeMap={};
+STATE.dependencyGraph.nodes.forEach(n=>{
+const path=n.label||n.path||n.id;
+if(!path){
+console.warn('Node missing label/path:',n);
+return;
+}
+const ext=path.split('.').pop().toLowerCase();
+let type=n.type||'other';
+if(type==='python')type='python';
+else if(type==='json')type='json';
+else if(ext==='json')type='json';
+else if(ext==='py')type='python';
+else if(['png','jpg','mp4','mp3','wav','mov'].includes(ext))type='media';
+
+nodeMap[n.id]={
+id:n.id,
+path:path,
+type:type,
+color:COLORS[type],
+x:Math.random()*2000-1000,
+y:Math.random()*1500-750,
+vx:0,
+vy:0,
+metadata:n
+};
+});
+
+// Enrich with JSON metadata
+STATE.jsonFiles.forEach(jf=>{
+if(!jf.path)return;
+const node=Object.values(nodeMap).find(n=>n.path===jf.path);
+if(node){
+node.metadata={
+type:'json',
+entryCount:jf.entry_count,
+hasPrompts:jf.has_prompts,
+prompts:jf.prompts,
+sample:jf.data?jf.data[0]:null,
+structure:jf.structure
+};
+}
+});
+
+// Enrich with Python metadata
+STATE.pythonFiles.forEach(pf=>{
+if(!pf.path)return;
+const node=Object.values(nodeMap).find(n=>n.path===pf.path);
+if(node){
+node.metadata={
+type:'python',
+generates:pf.generates,
+reads:pf.reads,
+imports:pf.imports,
+fileReferences:pf.file_references,
+subprocessCalls:pf.subprocess_calls,
+docstring:pf.docstring
+};
+}
+});
+
+STATE.nodes=Object.values(nodeMap);
+STATE.edges=STATE.dependencyGraph.edges.map(e=>({
+source:nodeMap[e.source],
+target:nodeMap[e.target],
+type:e.type||'depends'
+})).filter(e=>e.source&&e.target);
+
+// TOO MANY EDGES - sample for visualization
+if(STATE.edges.length>5000){
+console.warn(`${STATE.edges.length} edges is too many! Sampling 5000 for visualization.`);
+const sample=[];
+for(let i=0;i<5000;i++){
+sample.push(STATE.edges[Math.floor(Math.random()*STATE.edges.length)]);
+}
+STATE.edgesForViz=sample;
+}else{
+STATE.edgesForViz=STATE.edges;
+}
+
+// Simple radial layout by type
+const byType={json:[],python:[],media:[],other:[]};
+STATE.nodes.forEach(n=>byType[n.type].push(n));
+
+let angle=0;
+Object.entries(byType).forEach(([type,nodes])=>{
+const angleStep=Math.PI*2/nodes.length;
+nodes.forEach((n,i)=>{
+const r=300+(Math.random()*200);
+const a=angle+i*angleStep;
+n.x=Math.cos(a)*r;
+n.y=Math.sin(a)*r;
+});
+angle+=Math.PI/2;
+});
+
+// Count operative chains (JSON with prompts → Python → Media)
+const chainCount=STATE.jsonFiles.filter(jf=>jf.has_prompts).length;
+document.getElementById('chainCount').textContent=chainCount;
+
+console.log(`Built topology: ${STATE.nodes.length} nodes, ${STATE.edges.length} edges`);
+console.log(`Using ${STATE.edgesForViz.length} edges for visualization`);
+}
+
+function draw(){
+CTX.fillStyle='#0a0e1a';
+CTX.fillRect(0,0,W,H);
+
+CTX.save();
+CTX.translate(W/(2*DPR)+STATE.panX,H/(2*DPR)+STATE.panY);
+CTX.scale(STATE.zoom,STATE.zoom);
+
+// Draw sampled edges (not all 127k!)
+if(STATE.edgesForViz){
+STATE.edgesForViz.forEach(e=>{
+if(!shouldShow(e.source)||!shouldShow(e.target))return;
+CTX.strokeStyle='rgba(77,217,204,0.08)';
+CTX.lineWidth=0.5;
+CTX.beginPath();
+CTX.moveTo(e.source.x,e.source.y);
+CTX.lineTo(e.target.x,e.target.y);
+CTX.stroke();
+});
+}
+
+// Draw nodes
+STATE.nodes.forEach(n=>{
+if(!shouldShow(n))return;
+const col=n.color;
+const r=n.metadata&&n.metadata.hasPrompts?8:5;
+
+CTX.fillStyle='#'+col.toString(16).padStart(6,'0');
+CTX.beginPath();
+CTX.arc(n.x,n.y,r,0,Math.PI*2);
+CTX.fill();
+
+if(n.metadata&&n.metadata.hasPrompts){
+CTX.strokeStyle='rgba(232,184,73,0.6)';
+CTX.lineWidth=2;
+CTX.stroke();
+}
+
+if(n===STATE.selectedNode){
+CTX.strokeStyle='#fff';
+CTX.lineWidth=3;
+CTX.beginPath();
+CTX.arc(n.x,n.y,r+4,0,Math.PI*2);
+CTX.stroke();
+}
+});
+
+CTX.restore();
+}
+
+function shouldShow(node){
+if(!node)return false;
+if(!STATE.filters.has(node.type))return false;
+if(STATE.chainsOnly&&node.metadata&&!node.metadata.hasPrompts&&node.type!=='python'&&node.type!=='media')return false;
+return true;
+}
+
+function animate(){
+requestAnimationFrame(animate);
+
+// NO FORCE SIMULATION - too many nodes/edges!
+// Just redraw when needed
+draw();
+}
+
+function updateHUD(){
+document.getElementById('totalNodes').textContent=STATE.nodes.length.toLocaleString();
+document.getElementById('totalEdges').textContent=STATE.edges.length.toLocaleString();
+document.getElementById('jsonFiles').textContent=STATE.jsonFiles.length;
+document.getElementById('pythonFiles').textContent=STATE.pythonFiles.length;
+}
+
+function resize(){
+W=window.innerWidth;
+H=window.innerHeight;
+CAN.width=W*DPR;
+CAN.height=H*DPR;
+CAN.style.width=W+'px';
+CAN.style.height=H+'px';
+CTX.scale(DPR,DPR);
+}
+
+window.addEventListener('resize',()=>{resize();draw();});
+
+CAN.addEventListener('wheel',e=>{
+e.preventDefault();
+const delta=e.deltaY>0?0.95:1.05;
+STATE.zoom=Math.max(0.1,Math.min(10,STATE.zoom*delta));
+});
+
+CAN.addEventListener('mousedown',e=>{
+STATE.dragging=true;
+STATE.lastX=e.clientX;
+STATE.lastY=e.clientY;
+});
+
+CAN.addEventListener('mousemove',e=>{
+if(!STATE.dragging)return;
+STATE.panX+=e.clientX-STATE.lastX;
+STATE.panY+=e.clientY-STATE.lastY;
+STATE.lastX=e.clientX;
+STATE.lastY=e.clientY;
+});
+
+CAN.addEventListener('mouseup',()=>STATE.dragging=false);
+
+CAN.addEventListener('click',e=>{
+const rect=CAN.getBoundingClientRect();
+const mx=((e.clientX-rect.left)/STATE.zoom-(W/(2*DPR)+STATE.panX)/STATE.zoom)*STATE.zoom;
+const my=((e.clientY-rect.top)/STATE.zoom-(H/(2*DPR)+STATE.panY)/STATE.zoom)*STATE.zoom;
+
+let closest=null;
+let minDist=Infinity;
+STATE.nodes.forEach(n=>{
+if(!shouldShow(n))return;
+const dx=n.x-mx;
+const dy=n.y-my;
+const d=Math.sqrt(dx*dx+dy*dy);
+if(d<20&&d<minDist){
+minDist=d;
+closest=n;
+}
+});
+
+if(closest){
+inspectNode(closest);
+STATE.selectedNode=closest;
+}
+});
+
+function inspectNode(node){
+let html=`
+<div class="info-block">
+<div class="label">Path</div>
+<div class="value" style="font-size:9px;word-break:break-all">${node.path}</div>
+<div class="label">Type</div>
+<div class="value">${node.type.toUpperCase()}</div>
+</div>`;
+
+if(node.metadata){
+if(node.metadata.type==='json'){
+html+=`
+<div class="info-block">
+<div class="label">Entries</div><div class="value">${node.metadata.entryCount||0}</div>
+<div class="label">Has Prompts</div><div class="value">${node.metadata.hasPrompts?'YES':'NO'}</div>
+</div>`;
+
+if(node.metadata.sample){
+html+=`<div style="font-size:11px;color:#9d7be8;font-weight:bold;margin:12px 0">SAMPLE ENTRY</div>`;
+const s=node.metadata.sample;
+if(s.operativeEkphrasis){
+html+=`<div class="prompt-text"><strong>Operative Ekphrasis:</strong><br>${s.operativeEkphrasis}</div>`;
+}
+if(s.content){
+html+=`<div class="chain-step"><strong>Content:</strong> ${s.content}</div>`;
+}
+if(s.syntagmaType){
+html+=`<div class="chain-step"><strong>Syntagma:</strong> ${s.syntagmaType}</div>`;
+}
+if(s.cineosisFunction){
+html+=`<div class="chain-step"><strong>Cineosis:</strong> ${s.cineosisFunction}</div>`;
+}
+}
+
+if(node.metadata.prompts&&node.metadata.prompts.length>0){
+html+=`<div style="font-size:11px;color:#e8b849;font-weight:bold;margin:12px 0">PROMPTS (${node.metadata.prompts.length})</div>`;
+node.metadata.prompts.slice(0,3).forEach(p=>{
+html+=`<div class="prompt-text">${p}</div>`;
+});
+if(node.metadata.prompts.length>3){
+html+=`<div style="font-size:9px;color:#6b8a96;margin-top:6px">+${node.metadata.prompts.length-3} more prompts</div>`;
+}
+}
+}
+
+if(node.metadata.type==='python'){
+html+=`<div class="info-block">`;
+if(node.metadata.docstring){
+html+=`<div class="label">Docstring</div><div class="value" style="font-size:9px">${node.metadata.docstring}</div>`;
+}
+html+=`</div>`;
+
+if(node.metadata.generates&&node.metadata.generates.length>0){
+html+=`<div style="font-size:11px;color:#d97b8f;font-weight:bold;margin:12px 0">GENERATES (${node.metadata.generates.length})</div>`;
+node.metadata.generates.slice(0,5).forEach(g=>{
+html+=`<div class="chain-step">${g}</div>`;
+});
+}
+
+if(node.metadata.reads&&node.metadata.reads.length>0){
+html+=`<div style="font-size:11px;color:#4dd9cc;font-weight:bold;margin:12px 0">READS (${node.metadata.reads.length})</div>`;
+node.metadata.reads.slice(0,5).forEach(r=>{
+html+=`<div class="chain-step">${r}</div>`;
+});
+}
+
+if(node.metadata.subprocessCalls&&node.metadata.subprocessCalls.length>0){
+html+=`<div style="font-size:11px;color:#e8b849;font-weight:bold;margin:12px 0">SUBPROCESS CALLS</div>`;
+node.metadata.subprocessCalls.slice(0,3).forEach(c=>{
+html+=`<div class="chain-step" style="font-size:9px">${c}</div>`;
+});
+}
+}
+}
+
+// Show connections
+const inEdges=STATE.edges.filter(e=>e.target===node);
+const outEdges=STATE.edges.filter(e=>e.source===node);
+
+if(inEdges.length>0){
+html+=`<div style="font-size:11px;color:#4dd9cc;font-weight:bold;margin:12px 0">
+INCOMING (${inEdges.length})</div>`;
+inEdges.slice(0,5).forEach(e=>{
+html+=`<div class="chain-step" style="font-size:9px;border-color:#4dd9cc">${e.source.path}</div>`;
+});
+}
+
+if(outEdges.length>0){
+html+=`<div style="font-size:11px;color:#d97b8f;font-weight:bold;margin:12px 0">
+OUTGOING (${outEdges.length})</div>`;
+outEdges.slice(0,5).forEach(e=>{
+html+=`<div class="chain-step" style="font-size:9px;border-color:#d97b8f">${e.target.path}</div>`;
+});
+}
+
+document.getElementById('inspectorContent').innerHTML=html;
+document.getElementById('inspector').classList.add('open');
+}
+
+function closeInspector(){
+document.getElementById('inspector').classList.remove('open');
+STATE.selectedNode=null;
+}
+
+// Controls
+document.getElementById('filterJSON').onclick=function(){
+this.classList.toggle('active');
+if(STATE.filters.has('json'))STATE.filters.delete('json');
+else STATE.filters.add('json');
+};
+
+document.getElementById('filterPython').onclick=function(){
+this.classList.toggle('active');
+if(STATE.filters.has('python'))STATE.filters.delete('python');
+else STATE.filters.add('python');
+};
+
+document.getElementById('filterMedia').onclick=function(){
+this.classList.toggle('active');
+if(STATE.filters.has('media'))STATE.filters.delete('media');
+else STATE.filters.add('media');
+};
+
+document.getElementById('filterOther').onclick=function(){
+this.classList.toggle('active');
+if(STATE.filters.has('other'))STATE.filters.delete('other');
+else STATE.filters.add('other');
+};
+
+document.getElementById('btnChainsOnly').onclick=function(){
+this.classList.toggle('active');
+STATE.chainsOnly=!STATE.chainsOnly;
+};
+
+load();
+</script>
+</body></html>

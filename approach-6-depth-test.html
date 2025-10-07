@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<title>Approach 6: Voronoi Warfare - Ecological Evolution</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0e1a;color:#4dd9cc;font-family:monospace;display:flex;height:100vh}
+#sidebar{width:320px;background:rgba(0,0,0,.95);border-right:1px solid #4dd9cc;
+overflow-y:auto;padding:20px}
+#main{flex:1;position:relative}
+canvas{display:block;cursor:pointer}
+.tree-item{padding:6px 8px;margin:2px 0;cursor:pointer;border-radius:3px;font-size:10px;
+transition:all .2s}
+.tree-item:hover{background:rgba(77,217,204,.15)}
+.tree-item.active{background:rgba(77,217,204,.25);font-weight:bold}
+.tree-item.has-children::before{content:'▸ ';color:#4dd9cc}
+.tree-item.expanded::before{content:'▾ '}
+.depth-0{color:#4dd9cc}
+.depth-1{color:#6be8df}
+.depth-2{color:#6bbd8f}
+.depth-3{color:#e8b849}
+.depth-4{color:#d97b8f}
+.depth-5{color:#9d7be8}
+.depth-6{color:#4dd9cc;opacity:0.8}
+.depth-7{color:#6be8df;opacity:0.8}
+.depth-8{color:#6bbd8f;opacity:0.8}
+.depth-9{color:#e8b849;opacity:0.8}
+.depth-10{color:#d97b8f;opacity:0.8}
+.depth-11{color:#9d7be8;opacity:0.8}
+.stats{background:rgba(77,217,204,.1);padding:12px;margin:10px 0;border-radius:5px;font-size:11px}
+.stat-line{margin:4px 0}
+.controls{margin:15px 0;display:flex;gap:8px;flex-wrap:wrap}
+button{padding:8px 12px;background:rgba(77,217,204,.1);border:1px solid #4dd9cc;
+color:#4dd9cc;cursor:pointer;border-radius:4px;font-size:10px;font-family:monospace}
+button:hover{background:rgba(77,217,204,.25)}
+button.war-btn{background:rgba(255,107,107,.2);border-color:#ff6b6b;color:#ff6b6b}
+button.war-btn:hover{background:rgba(255,107,107,.35)}
+.phase-indicator{padding:10px;margin:10px 0;border-radius:5px;text-align:center;font-weight:bold;
+font-size:11px;border:2px solid}
+.phase-voronoi{background:rgba(107,138,150,.1);border-color:#6b8a96;color:#6b8a96}
+.phase-war{background:rgba(255,107,107,.1);border-color:#ff6b6b;color:#ff6b6b}
+.phase-peace{background:rgba(77,217,204,.1);border-color:#4dd9cc;color:#4dd9cc}
+.territory-panel{position:fixed;top:20px;right:20px;width:380px;background:rgba(0,0,0,.95);
+border:1px solid #e8b849;padding:18px;border-radius:8px;max-height:85vh;overflow-y:auto}
+.territory-header{color:#e8b849;font-size:15px;font-weight:bold;margin-bottom:15px;
+border-bottom:1px solid rgba(232,184,73,0.3);padding-bottom:10px}
+.species-card{background:rgba(77,217,204,.05);padding:10px;margin:8px 0;border-left:3px solid;
+border-radius:4px;font-size:10px}
+.species-name{font-weight:bold;margin-bottom:4px}
+.species-behavior{color:#6b8a96;font-size:9px;margin:4px 0;line-height:1.4}
+.species-stats{display:flex;gap:10px;margin-top:6px;font-size:9px}
+.stat-badge{background:rgba(0,0,0,.5);padding:3px 6px;border-radius:3px}
+.progress-bar{background:rgba(77,217,204,.1);height:12px;border-radius:6px;overflow:hidden;margin-top:4px}
+.progress-fill{height:100%;transition:width .3s;font-size:8px;font-weight:bold;display:flex;
+align-items:center;justify-content:center;color:#000}
+.warfare-stats{background:rgba(255,107,107,.1);padding:10px;margin:10px 0;border-radius:5px;
+border:1px solid rgba(255,107,107,.3);font-size:10px}
+.warfare-stat{display:flex;justify-content:space-between;margin:4px 0}
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+<h3>⚔️ APPROACH 6: Voronoi Warfare</h3>
+<div class="stats">
+<div class="stat-line"><strong>Max Depth:</strong> <span id="maxDepth">0</span></div>
+<div class="stat-line"><strong>Total Nodes:</strong> <span id="totalNodes">0</span></div>
+<div class="stat-line"><strong>Current View:</strong> <span id="currentView">ROOT</span></div>
+<div class="stat-line"><strong>Depth:</strong> <span id="currentDepth">0</span></div>
+<div class="stat-line"><strong>Children:</strong> <span id="childCount">0</span></div>
+</div>
+
+<div id="phaseIndicator" class="phase-indicator phase-voronoi">🎲 PHASE 1: Random Voronoi</div>
+
+<div class="controls">
+<button onclick="loadRealData()" style="background:rgba(232,184,73,.2);border-color:#e8b849">🗂️ LOAD ARKADU</button>
+<button onclick="generateMock()">Mock Data</button>
+<button onclick="viewRoot()">↑ ROOT</button>
+</div>
+
+<div class="controls">
+<button class="war-btn" onclick="startWarfare()">▶ Start Warfare</button>
+<button onclick="stepWarfare()">➡ Step</button>
+<button onclick="resetVoronoi()">↻ Reset</button>
+<button onclick="togglePause()">⏸ Pause</button>
+</div>
+
+<div class="warfare-stats" id="warfareStats">
+<div class="warfare-stat"><span>Generation:</span><span id="generation">0</span></div>
+<div class="warfare-stat"><span>Predations:</span><span id="predations">0</span></div>
+<div class="warfare-stat"><span>Colonizations:</span><span id="colonizations">0</span></div>
+<div class="warfare-stat"><span>Retreats:</span><span id="retreats">0</span></div>
+<div class="warfare-stat"><span>Starving:</span><span id="starving" style="color:#ff6b6b">0</span></div>
+<div class="warfare-stat"><span>Satisfied:</span><span id="satisfied" style="color:#0f0">0</span></div>
+</div>
+
+<div style="margin:15px 0;padding:12px;background:rgba(232,184,73,.1);border-radius:5px;border:1px solid rgba(232,184,73,0.3)">
+<div style="color:#e8b849;font-size:10px;font-weight:bold;margin-bottom:8px">⚔️ WARFARE RULES</div>
+<div style="font-size:9px;color:#6b8a96;line-height:1.6">
+<div>🦁 <strong>Predation:</strong> Eat weaker neighbors</div>
+<div>🌱 <strong>Colonize:</strong> Spread into gaps</div>
+<div>🐟 <strong>Flock:</strong> Stay together for defense</div>
+<div>🏃 <strong>Retreat:</strong> Give land when overpopulated</div>
+<div style="margin-top:6px;font-size:8px;font-style:italic">
+Random Voronoi → Territorial warfare → Data equilibrium
+</div>
+</div>
+</div>
+
+<div id="treeView"></div>
+</div>
+
+<div id="main">
+<canvas id="canvas"></canvas>
+</div>
+
+<div class="territory-panel" id="territoryPanel" style="display:none">
+<div class="territory-header" id="territoryName">Territory</div>
+<div id="speciesCards"></div>
+</div>
+
+<script>
+const GRID_SIZE=120;
+let canvas,ctx,W,H;
+let currentNode=null,rootData=null;
+let grid,species,state;
+let animationInterval=null;
+
+// Species behavior profiles (from file type characteristics)
+const SPECIES_PROFILES={
+  mp4:{aggression:9,defense:8,colonize:2,flock:3,retreat:2,
+       behavior:'🦁 Apex Predator • Eats neighbors aggressively',icon:'🎬'},
+  png:{aggression:3,defense:5,colonize:5,flock:9,retreat:4,
+       behavior:'🐟 Schooling • Flocks together for defense',icon:'🖼️'},
+  wav:{aggression:6,defense:6,colonize:4,flock:4,retreat:3,
+       behavior:'🐺 Pack Hunter • Balanced territorial control',icon:'🎵'},
+  jpg:{aggression:4,defense:4,colonize:7,flock:6,retreat:5,
+       behavior:'🦊 Opportunist • Spreads into gaps quickly',icon:'📸'},
+  json:{aggression:2,defense:3,colonize:8,flock:2,retreat:6,
+        behavior:'🦋 Symbiont • Spreads everywhere peacefully',icon:'📋'},
+  py:{aggression:5,defense:4,colonize:6,flock:3,retreat:4,
+      behavior:'🦠 Mutator • Converts neighbors via code',icon:'🐍'},
+  txt:{aggression:1,defense:2,colonize:9,flock:1,retreat:7,
+       behavior:'🌱 Pioneer • Colonizes empty space fast',icon:'📄'},
+  other:{aggression:4,defense:5,colonize:5,flock:4,retreat:5,
+         behavior:'🦎 Generalist • Adapts to surroundings',icon:'🔮'}
+};
+
+function init(){
+  canvas=document.getElementById('canvas');
+  ctx=canvas.getContext('2d');
+  resize();
+  window.addEventListener('resize',resize);
+  generateMock();
+}
+
+function resize(){
+  W=window.innerWidth-340;
+  H=window.innerHeight;
+  canvas.width=W;
+  canvas.height=H;
+  if(currentNode)render();
+}
+
+async function loadRealData(){
+  try{
+    console.log('Loading ARKADU data...');
+    const r=await fetch('sys/primitive.jsonl');
+    const t=await r.text();
+    const artifacts=t.trim().split('\n').map(l=>JSON.parse(l));
+    console.log(`Loaded ${artifacts.length} artifacts`);
+    
+    // Build hierarchy from artifacts
+    buildHierarchyFromArtifacts(artifacts);
+  }catch(e){
+    console.error('Error loading data:',e);
+    alert('Could not load primitive.jsonl. Using mock data.');
+    generateMock();
+  }
+}
+
+function buildHierarchyFromArtifacts(artifacts){
+  const dirMap={};
+  
+  // Build directory structure
+  artifacts.forEach(art=>{
+    const parts=art.path.split('/');
+    for(let d=0;d<parts.length-1;d++){
+      const id=parts.slice(0,d+1).join('/');
+      if(!dirMap[id]){
+        dirMap[id]={
+          name:parts[d],
+          depth:d,
+          files:0,
+          mb:0,
+          species:{}
+        };
+      }
+      dirMap[id].files++;
+      dirMap[id].mb+=art.size/(1024*1024);
+      const ext=art.path.split('.').pop().toLowerCase();
+      if(!dirMap[id].species[ext])dirMap[id].species[ext]=0;
+      dirMap[id].species[ext]++;
+    }
+  });
+  
+  // Get root level (depth 0)
+  const rootDirs=Object.entries(dirMap)
+    .filter(([id,data])=>data.depth===0)
+    .map(([id,data])=>({name:id,files:data.files,mb:data.mb,species:data.species}));
+  
+  rootData={
+    name:'ARKADU',
+    totalFiles:artifacts.length,
+    totalBytes:artifacts.reduce((s,a)=>s+a.size,0),
+    children:rootDirs
+  };
+  
+  currentNode=rootData;
+  updateStats();
+  resetVoronoi();
+}
+
+function generateMock(){
+  rootData={
+    name:'ARKADU',
+    totalFiles:500,
+    totalBytes:52750000000,
+    children:[
+      {name:'CAT',files:150,mb:7300,species:{mp4:100,png:2000,jpg:500,wav:50}},
+      {name:'DOG',files:120,mb:3400,species:{mp4:80,png:1500,wav:40,txt:100}},
+      {name:'LIZARD',files:200,mb:25200,species:{mp4:400,png:1000,wav:200}},
+      {name:'MANTA',files:80,mb:10000,species:{mp4:150,png:800,json:50}},
+      {name:'JELLYFISH',files:100,mb:4100,species:{png:1200,wav:100,py:50}},
+      {name:'HORSE',files:60,mb:2800,species:{mp4:50,png:600,wav:80}}
+    ]
+  };
+  currentNode=rootData;
+  updateStats();
+  resetVoronoi();
+}
+
+function resetVoronoi(){
+  if(!currentNode||!currentNode.children||currentNode.children.length===0)return;
+  
+  grid=new Uint8Array(GRID_SIZE*GRID_SIZE).fill(255);
+  
+  // Extract species from children
+  const allSpecies=new Map();
+  currentNode.children.forEach(child=>{
+    if(child.species){
+      Object.entries(child.species).forEach(([ext,count])=>{
+        if(!allSpecies.has(ext))allSpecies.set(ext,0);
+        allSpecies.set(ext,allSpecies.get(ext)+count);
+      });
+    }
+  });
+  
+  const total=Array.from(allSpecies.values()).reduce((a,b)=>a+b,0);
+  
+  species=Array.from(allSpecies.entries()).map(([ext,count],i)=>{
+    const profile=SPECIES_PROFILES[ext]||SPECIES_PROFILES.other;
+    return{
+      id:i,
+      ext,
+      name:ext.toUpperCase(),
+      target:count/total,
+      current:0,
+      hunger:0, // NEW: tracks generations of deficit
+      satisfied:false, // NEW: true when at target
+      color:getSpeciesColor(ext),
+      ...profile
+    };
+  });
+  
+  // PHASE 1: Random Voronoi (with CA offset option)
+  const numSeeds=Math.min(15,species.length*3);
+  voronoiSeeds=[]; // Store for CA seeding
+  
+  for(let i=0;i<numSeeds;i++){
+    const x=Math.random()*GRID_SIZE;
+    const y=Math.random()*GRID_SIZE;
+    const speciesId=Math.floor(Math.random()*species.length);
+    voronoiSeeds.push({x,y,speciesId});
+  }
+  
+  // Fill grid using Voronoi
+  for(let y=0;y<GRID_SIZE;y++){
+    for(let x=0;x<GRID_SIZE;x++){
+      let minDist=Infinity,nearest=null;
+      voronoiSeeds.forEach(s=>{
+        const dist=Math.hypot(x-s.x,y-s.y);
+        if(dist<minDist){minDist=dist;nearest=s}
+      });
+      if(nearest)grid[y*GRID_SIZE+x]=nearest.speciesId;
+    }
+  }
+  
+  state={
+    iter:0,
+    phase:'voronoi',
+    running:false,
+    paused:false,
+    predations:0,
+    colonizations:0,
+    retreats:0,
+    starvationThreshold:100, // generations before desperation
+    assertEquilibriumAfter:1500 // force stop after this many
+  };
+  
+  updatePhaseIndicator();
+  updateWarfareStats();
+  updateTerritoryPanel();
+  render();
+}
+
+let voronoiSeeds=[];
+
+function stepWarfare(){
+  if(!grid||!species)return;
+  
+  // Count current territories
+  species.forEach(s=>s.current=0);
+  for(let i=0;i<grid.length;i++){
+    if(grid[i]<255)species[grid[i]].current++;
+  }
+  
+  const totalCells=GRID_SIZE*GRID_SIZE;
+  
+  // HUNGER/SATISFACTION SYSTEM
+  species.forEach(s=>{
+    const currentPct=s.current/totalCells;
+    const deficit=s.target-currentPct;
+    
+    if(Math.abs(deficit)<0.01){
+      s.satisfied=true;
+      s.hunger=0;
+    }else{
+      s.satisfied=false;
+      if(deficit>0){
+        s.hunger++; // Each generation hungry increases hunger
+      }else{
+        s.hunger=Math.max(0,s.hunger-1); // Reduce if overshooting
+      }
+    }
+  });
+  
+  // Check if some are satisfied while others starving
+  const satisfiedCount=species.filter(s=>s.satisfied).length;
+  const starvingCount=species.filter(s=>s.hunger>state.starvationThreshold).length;
+  
+  // MANUAL ASSERTION: Force equilibrium after timeout
+  if(state.iter>state.assertEquilibriumAfter){
+    console.log('ASSERTION: Forcing equilibrium after',state.iter,'generations');
+    state.phase='peace';
+    updatePhaseIndicator();
+    updateWarfareStats();
+    updateTerritoryPanel();
+    render();
+    return true;
+  }
+  
+  const balanced=species.filter(s=>s.satisfied).length;
+  state.phase=balanced===species.length?'peace':'war';
+  updatePhaseIndicator();
+  
+  // Apply warfare rules
+  const actions=[];
+  
+  for(let y=1;y<GRID_SIZE-1;y++){
+    for(let x=1;x<GRID_SIZE-1;x++){
+      const idx=y*GRID_SIZE+x;
+      const cellSpecies=grid[idx];
+      if(cellSpecies===255)continue;
+      
+      const sp=species[cellSpecies];
+      const currentPct=sp.current/totalCells;
+      const deficit=sp.target-currentPct;
+      
+      const neighbors=[
+        {x:x-1,y:y,idx:idx-1},{x:x+1,y:y,idx:idx+1},
+        {x:x,y:y-1,idx:idx-GRID_SIZE},{x:x,y:y+1,idx:idx+GRID_SIZE}
+      ];
+      
+      // PREDATION (with hunger boost)
+      if(deficit>0.01){
+        // Hunger multiplier: starving species get VERY aggressive
+        const hungerBoost=sp.hunger>state.starvationThreshold?3:1;
+        const desperationBoost=starvingCount>0&&satisfiedCount>species.length/2?2:1;
+        
+        neighbors.forEach(n=>{
+          const ns=grid[n.idx];
+          if(ns<255&&ns!==cellSpecies){
+            const prey=species[ns];
+            
+            // Don't attack satisfied species if we're not desperate
+            if(prey.satisfied&&sp.hunger<state.starvationThreshold)return;
+            
+            let attackChance=(sp.aggression/10)*(deficit*5)*hungerBoost*desperationBoost;
+            const vulnerable=prey.defense<sp.aggression||
+                            (prey.current/totalCells-prey.target>0.01);
+            if(vulnerable&&Math.random()<attackChance){
+              actions.push({type:'predation',idx:n.idx,species:cellSpecies});
+            }
+          }
+        });
+      }else if(sp.satisfied){
+        // SATISFIED SPECIES STOP EATING
+        return; // Skip rest of loop for this cell
+      }
+      
+      // COLONIZATION
+      if(deficit>0&&sp.colonize>5){
+        neighbors.forEach(n=>{
+          const ns=grid[n.idx];
+          if(ns===255||(ns<255&&species[ns].defense<sp.colonize)){
+            const colonizeChance=(sp.colonize/10)*(deficit*3);
+            if(Math.random()<colonizeChance){
+              actions.push({type:'colonize',idx:n.idx,species:cellSpecies});
+            }
+          }
+        });
+      }
+      
+      // RETREAT
+      if(deficit<-0.01){
+        const retreatChance=(sp.retreat/10)*Math.abs(deficit)*2;
+        if(Math.random()<retreatChance){
+          const needy=neighbors.filter(n=>{
+            const ns=grid[n.idx];
+            return ns<255&&ns!==cellSpecies&&
+                   (species[ns].current/totalCells)<species[ns].target;
+          });
+          if(needy.length>0){
+            const n=needy[Math.floor(Math.random()*needy.length)];
+            actions.push({type:'retreat',idx:idx,species:grid[n.idx]});
+          }
+        }
+      }
+      
+      // FLOCKING
+      if(sp.flock>6){
+        const sameNeighbors=neighbors.filter(n=>grid[n.idx]===cellSpecies).length;
+        if(sameNeighbors<2&&Math.random()<sp.flock/20){
+          const moveN=neighbors[Math.floor(Math.random()*neighbors.length)];
+          if(moveN&&grid[moveN.idx]!==cellSpecies){
+            actions.push({type:'flock',from:idx,to:moveN.idx,species:cellSpecies});
+          }
+        }
+      }
+    }
+  }
+  
+  // Execute actions
+  const executeCount=Math.min(actions.length,300);
+  for(let i=0;i<executeCount;i++){
+    const action=actions[Math.floor(Math.random()*actions.length)];
+    if(!action)continue;
+    
+    if(action.type==='predation'){
+      grid[action.idx]=action.species;
+      state.predations++;
+    }else if(action.type==='colonize'){
+      grid[action.idx]=action.species;
+      state.colonizations++;
+    }else if(action.type==='retreat'){
+      grid[action.idx]=action.species;
+      state.retreats++;
+    }else if(action.type==='flock'){
+      const temp=grid[action.from];
+      grid[action.from]=grid[action.to];
+      grid[action.to]=temp;
+    }
+  }
+  
+  state.iter++;
+  updateWarfareStats();
+  updateTerritoryPanel();
+  render();
+  
+  return state.phase==='peace';
+}
+
+function startWarfare(){
+  if(state.running)return;
+  state.running=true;
+  state.paused=false;
+  
+  animationInterval=setInterval(()=>{
+    if(state.paused)return;
+    const done=stepWarfare();
+    if(done||state.iter>1000){
+      clearInterval(animationInterval);
+      state.running=false;
+    }
+  },50);
+}
+
+function togglePause(){
+  state.paused=!state.paused;
+}
+
+function render(){
+  if(!grid||!species)return;
+  
+  ctx.fillStyle='#0a0e1a';
+  ctx.fillRect(0,0,W,H);
+  
+  const cellW=W/GRID_SIZE;
+  const cellH=H/GRID_SIZE;
+  
+  // Draw territories
+  for(let y=0;y<GRID_SIZE;y++){
+    for(let x=0;x<GRID_SIZE;x++){
+      const speciesId=grid[y*GRID_SIZE+x];
+      if(speciesId<255){
+        ctx.fillStyle=species[speciesId].color;
+        ctx.fillRect(x*cellW,y*cellH,cellW,cellH);
+      }
+    }
+  }
+  
+  // Draw borders
+  ctx.strokeStyle='rgba(77,217,204,0.3)';
+  ctx.lineWidth=1;
+  for(let y=0;y<GRID_SIZE-1;y++){
+    for(let x=0;x<GRID_SIZE-1;x++){
+      const id=grid[y*GRID_SIZE+x];
+      if(grid[y*GRID_SIZE+x+1]!==id){
+        ctx.beginPath();
+        ctx.moveTo((x+1)*cellW,y*cellH);
+        ctx.lineTo((x+1)*cellW,(y+1)*cellH);
+        ctx.stroke();
+      }
+      if(grid[(y+1)*GRID_SIZE+x]!==id){
+        ctx.beginPath();
+        ctx.moveTo(x*cellW,(y+1)*cellH);
+        ctx.lineTo((x+1)*cellW,(y+1)*cellH);
+        ctx.stroke();
+      }
+    }
+  }
+}
+
+function getSpeciesColor(ext){
+  const colors={
+    mp4:'#FF6B6B',png:'#4ECDC4',wav:'#45B7D1',jpg:'#FFA07A',
+    json:'#98D8C8',py:'#F7DC6F',txt:'#BB8FCE',other:'#85C1E2'
+  };
+  return colors[ext]||colors.other;
+}
+
+function updatePhaseIndicator(){
+  const el=document.getElementById('phaseIndicator');
+  if(state.phase==='voronoi'){
+    el.className='phase-indicator phase-voronoi';
+    el.textContent='🎲 PHASE 1: Random Voronoi';
+  }else if(state.phase==='war'){
+    el.className='phase-indicator phase-war';
+    el.textContent='⚔️ PHASE 2: Territorial Warfare';
+  }else{
+    el.className='phase-indicator phase-peace';
+    el.textContent='☮️ PHASE 3: Equilibrium Reached';
+  }
+}
+
+function updateWarfareStats(){
+  document.getElementById('generation').textContent=state.iter;
+  document.getElementById('predations').textContent=state.predations;
+  document.getElementById('colonizations').textContent=state.colonizations;
+  document.getElementById('retreats').textContent=state.retreats;
+  
+  if(species){
+    const starving=species.filter(s=>s.hunger>state.starvationThreshold).length;
+    const satisfied=species.filter(s=>s.satisfied).length;
+    document.getElementById('starving').textContent=starving;
+    document.getElementById('satisfied').textContent=satisfied;
+  }
+}
+
+function updateTerritoryPanel(){
+  if(!species)return;
+  
+  species.forEach(s=>s.current=0);
+  for(let i=0;i<grid.length;i++){
+    if(grid[i]<255)species[grid[i]].current++;
+  }
+  
+  const totalCells=GRID_SIZE*GRID_SIZE;
+  
+  const html=species.map(sp=>{
+    const current=(sp.current/totalCells*100).toFixed(2);
+    const target=(sp.target*100).toFixed(2);
+    const diff=parseFloat(current)-parseFloat(target);
+    const status=Math.abs(diff)<1?'✓':diff>0?'↑':'↓';
+    
+    const hungerStatus=sp.hunger>state.starvationThreshold?
+      `<span style="color:#ff6b6b">🔥 STARVING (${sp.hunger} gen)</span>`:
+      sp.satisfied?
+      `<span style="color:#0f0">✓ SATISFIED</span>`:
+      sp.hunger>50?
+      `<span style="color:#e8b849">⚠️ Hungry (${sp.hunger})</span>`:
+      `<span style="color:#4dd9cc">Normal</span>`;
+    
+    return`
+      <div class="species-card" style="border-color:${sp.color}">
+        <div class="species-name" style="color:${sp.color}">${status} ${sp.icon} ${sp.name}</div>
+        <div class="species-behavior">${sp.behavior}</div>
+        <div class="species-stats">
+          <span class="stat-badge">ATK:${sp.aggression}</span>
+          <span class="stat-badge">DEF:${sp.defense}</span>
+          <span class="stat-badge">COL:${sp.colonize}</span>
+          <span class="stat-badge">FLK:${sp.flock}</span>
+        </div>
+        <div style="margin-top:6px;font-size:9px;color:#6b8a96">
+          ${current}% / ${target}% (${diff>0?'+':''}${diff.toFixed(1)}%)
+        </div>
+        <div style="margin-top:4px;font-size:9px;font-weight:bold">
+          ${hungerStatus}
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" style="width:${Math.min(100,(current/target)*100)}%;background:${sp.color}">
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+  
+  document.getElementById('speciesCards').innerHTML=html;
+  document.getElementById('territoryPanel').style.display='block';
+  document.getElementById('territoryName').textContent=currentNode.name+' Warfare';
+}
+
+function updateStats(){
+  if(!currentNode)return;
+  document.getElementById('currentView').textContent=currentNode.name;
+  document.getElementById('currentDepth').textContent=currentNode.depth||0;
+  document.getElementById('childCount').textContent=
+    (currentNode.children?currentNode.children.length:0);
+}
+
+function viewRoot(){
+  currentNode=rootData;
+  updateStats();
+  resetVoronoi();
+}
+
+window.addEventListener('load',init);
+</script>
+</body>
+</html>

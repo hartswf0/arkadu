@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<title>ARKADU Nested Chambers — Spatial Containment</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0e1a;color:#4dd9cc;font-family:monospace;overflow:hidden}
+#canvas{display:block;cursor:grab}
+#canvas.dragging{cursor:grabbing}
+.hud{position:fixed;top:20px;left:20px;background:rgba(0,0,0,.95);border:1px solid #4dd9cc;
+padding:16px;width:320px;z-index:100;font-size:11px;border-radius:8px}
+.stat{margin:6px 0;padding:6px;background:rgba(77,217,204,.05);border-radius:4px}
+.label{color:#6b8a96;font-size:9px;text-transform:uppercase}
+.value{color:#4dd9cc;font-size:11px;font-weight:bold;margin-top:2px}
+.inspector{position:fixed;top:20px;right:20px;background:rgba(0,0,0,.95);
+border:1px solid #d97b8f;padding:16px;width:380px;max-height:80vh;overflow-y:auto;
+z-index:100;border-radius:8px;transform:translateX(420px);transition:transform .3s}
+.inspector.open{transform:translateX(0)}
+.close{position:absolute;top:16px;right:16px;cursor:pointer;color:#d97b8f;font-size:18px}
+.info-block{margin:10px 0;padding:10px;background:rgba(77,217,204,.05);border-radius:6px;font-size:10px}
+.loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+flex-direction:column;gap:20px;background:#000;z-index:200;color:#4dd9cc}
+.loading.hidden{display:none}
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+
+<div class="loading" id="loading">
+<div>⬢ BUILDING NESTED HIERARCHY ⬢</div>
+<div id="status">Loading...</div>
+</div>
+
+<div class="hud">
+<div style="font-size:14px;color:#4dd9cc;font-weight:bold;margin-bottom:12px">
+NESTED CHAMBERS
+</div>
+<div class="stat"><div class="label">View Depth</div><div class="value" id="viewDepth">0-3</div></div>
+<div class="stat"><div class="label">Visible Chambers</div><div class="value" id="visibleCount">0</div></div>
+<div class="stat"><div class="label">Total Artifacts</div><div class="value" id="totalArtifacts">0</div></div>
+<div class="stat"><div class="label">Zoom</div><div class="value" id="zoomLevel">1.0x</div></div>
+<div style="font-size:9px;color:#6b8a96;margin-top:12px">
+<strong>CONTROLS</strong><br>
+• Drag to pan<br>
+• Scroll to zoom<br>
+• Click to inspect<br>
+• +/- to change depth
+</div>
+</div>
+
+<div class="inspector" id="inspector">
+<div class="close" onclick="closeInspector()">×</div>
+<div style="font-size:13px;color:#d97b8f;font-weight:bold;margin-bottom:12px">CHAMBER</div>
+<div id="inspectorContent"></div>
+</div>
+
+<script>
+const CAN=document.getElementById('canvas');
+const CTX=CAN.getContext('2d');
+let DPR=window.devicePixelRatio||1;
+let W,H;
+
+const STATE={
+artifacts:[],
+chambers:[],
+chamberMap:{},
+rootChambers:[],
+maxDepth:3,
+zoom:1,
+panX:0,
+panY:0,
+dragging:false,
+lastX:0,
+lastY:0,
+selectedChamber:null
+};
+
+const SPECIES_COLORS={
+jpg:'#d97b8f',jpeg:'#d97b8f',png:'#d97b8f',gif:'#d97b8f',webp:'#d97b8f',
+mp4:'#e8b849',mov:'#e8b849',avi:'#e8b849',webm:'#e8b849',
+mp3:'#9d7be8',wav:'#9d7be8',flac:'#9d7be8',ogg:'#9d7be8',
+json:'#6bbd8f',txt:'#6bbd8f',md:'#6bbd8f',
+py:'#4dd9cc',js:'#4dd9cc',html:'#4dd9cc',css:'#4dd9cc'
+};
+
+function noise(x,y,seed=0){
+const n=Math.sin(x*12.9898+y*78.233+seed)*43758.5453;
+return n-Math.floor(n);
+}
+
+async function load(){
+try{
+document.getElementById('status').textContent='Loading artifacts...';
+const r=await fetch('sys/primitive.jsonl');
+const t=await r.text();
+STATE.artifacts=t.trim().split('\n').map(l=>JSON.parse(l));
+console.log(`Loaded ${STATE.artifacts.length} artifacts`);
+
+document.getElementById('status').textContent='Building nested hierarchy...';
+buildNested();
+
+document.getElementById('status').textContent='Complete!';
+document.getElementById('loading').classList.add('hidden');
+
+resize();
+updateHUD();
+animate();
+}catch(e){
+console.error(e);
+document.getElementById('status').innerHTML=`<span style="color:#d97b8f">ERROR: ${e.message}</span>`;
+}}
+
+function buildNested(){
+STATE.chamberMap={};
+
+// Build all chambers
+STATE.artifacts.forEach(art=>{
+const parts=art.path.split('/');
+for(let d=0;d<parts.length-1;d++){
+const id=parts.slice(0,d+1).join('/');
+if(!STATE.chamberMap[id]){
+STATE.chamberMap[id]={
+id:id,
+name:parts[d],
+depth:d,
+parent:d>0?parts.slice(0,d).join('/'):null,
+children:[],
+artifacts:[],
+totalCount:0,
+totalSize:0,
+species:{}
+};
+}
+}
+
+const leafId=parts.slice(0,-1).join('/');
+if(STATE.chamberMap[leafId]){
+STATE.chamberMap[leafId].artifacts.push(art);
+const ext=(art.ext||'').replace(/^\./,'')||'unknown';
+STATE.chamberMap[leafId].species[ext]=(STATE.chamberMap[leafId].species[ext]||0)+1;
+}
+});
+
+// Link children
+Object.values(STATE.chamberMap).forEach(ch=>{
+if(ch.parent&&STATE.chamberMap[ch.parent]){
+const p=STATE.chamberMap[ch.parent];
+if(!p.children.includes(ch.id)){
+p.children.push(ch.id);
+}
+}
+});
+
+// Aggregate up
+function aggregate(ch){
+ch.totalCount=ch.artifacts.length;
+ch.totalSize=ch.artifacts.reduce((s,a)=>s+(a.size||0),0);
+ch.children.forEach(cid=>{
+const child=STATE.chamberMap[cid];
+if(child){
+aggregate(child);
+ch.totalCount+=child.totalCount;
+ch.totalSize+=child.totalSize;
+Object.entries(child.species).forEach(([sp,cnt])=>{
+ch.species[sp]=(ch.species[sp]||0)+cnt;
+});
+}
+});
+}
+
+STATE.chambers=Object.values(STATE.chamberMap);
+STATE.chambers.forEach(aggregate);
+
+// Get roots
+STATE.rootChambers=STATE.chambers.filter(ch=>!ch.parent);
+
+// Layout nested
+layoutNested();
+
+console.log(`Built ${STATE.chambers.length} chambers, ${STATE.rootChambers.length} roots`);
+}
+
+function layoutNested(){
+// Start with roots in grid
+const roots=STATE.rootChambers;
+const cols=Math.ceil(Math.sqrt(roots.length));
+const worldSize=4000;
+const cellSize=worldSize/cols;
+
+roots.forEach((ch,i)=>{
+const col=i%cols;
+const row=Math.floor(i/cols);
+ch.x=-worldSize/2+col*cellSize+cellSize/2;
+ch.y=-worldSize/2+row*cellSize+cellSize/2;
+ch.width=cellSize*0.9;
+ch.height=cellSize*0.9;
+ch.blob=generateBlob(ch.width/2,i);
+ch.color=getDominantColor(ch.species);
+});
+
+// Layout children within parents
+function layoutChildren(parent){
+if(parent.children.length===0)return;
+
+const children=parent.children.map(cid=>STATE.chamberMap[cid]).filter(Boolean);
+const cols=Math.ceil(Math.sqrt(children.length));
+const padding=parent.width*0.1;
+const availW=parent.width-padding*2;
+const availH=parent.height-padding*2;
+const cellW=availW/cols;
+const cellH=availH/Math.ceil(children.length/cols);
+
+children.forEach((ch,i)=>{
+const col=i%cols;
+const row=Math.floor(i/cols);
+const jitterX=(noise(i,0,parent.depth+1)-0.5)*cellW*0.2;
+const jitterY=(noise(i,1,parent.depth+1)-0.5)*cellH*0.2;
+
+ch.x=parent.x-availW/2+col*cellW+cellW/2+jitterX;
+ch.y=parent.y-availH/2+row*cellH+cellH/2+jitterY;
+ch.width=cellW*0.85;
+ch.height=cellH*0.85;
+ch.blob=generateBlob(Math.min(ch.width,ch.height)/2,i+parent.depth*1000);
+ch.color=getDominantColor(ch.species);
+
+layoutChildren(ch);
+});
+}
+
+roots.forEach(layoutChildren);
+}
+
+function getDominantColor(species){
+if(!species||Object.keys(species).length===0)return '#4dd9cc';
+
+const sorted=Object.entries(species).sort((a,b)=>b[1]-a[1]);
+const dominant=sorted[0][0];
+return SPECIES_COLORS[dominant]||'#4dd9cc';
+}
+
+function generateBlob(size,seed){
+const points=12;
+const angles=[];
+const radii=[];
+for(let i=0;i<points;i++){
+const angle=(i/points)*Math.PI*2;
+const r=size*(0.75+noise(i,seed,0)*0.4);
+angles.push(angle);
+radii.push(r);
+}
+return {angles,radii};
+}
+
+function drawBlob(x,y,blob,color,alpha=0.15,stroke=true){
+if(!blob)return;
+CTX.beginPath();
+for(let i=0;i<blob.angles.length;i++){
+const a=blob.angles[i];
+const r=blob.radii[i];
+const px=x+Math.cos(a)*r;
+const py=y+Math.sin(a)*r;
+if(i===0)CTX.moveTo(px,py);
+else CTX.lineTo(px,py);
+}
+CTX.closePath();
+
+CTX.fillStyle=hexToRgba(color,alpha);
+CTX.fill();
+
+if(stroke){
+CTX.strokeStyle=hexToRgba(color,0.6);
+CTX.lineWidth=2;
+CTX.stroke();
+}
+}
+
+function draw(){
+CTX.fillStyle='#0a0e1a';
+CTX.fillRect(0,0,W*DPR,H*DPR);
+
+CTX.save();
+CTX.scale(DPR,DPR);
+CTX.translate(W/2+STATE.panX,H/2+STATE.panY);
+CTX.scale(STATE.zoom,STATE.zoom);
+
+let visibleCount=0;
+
+// Draw chambers depth-first (parents before children)
+function drawChamber(ch,parentAlpha=1){
+if(ch.depth>STATE.maxDepth)return;
+
+const alpha=Math.max(0.1,parentAlpha*0.85);
+const selected=ch===STATE.selectedChamber;
+
+// Draw this chamber
+drawBlob(ch.x,ch.y,ch.blob,ch.color,alpha*0.2,true);
+
+if(selected){
+CTX.strokeStyle='#fff';
+CTX.lineWidth=4;
+CTX.beginPath();
+for(let i=0;i<ch.blob.angles.length;i++){
+const a=ch.blob.angles[i];
+const r=ch.blob.radii[i]+8;
+const px=ch.x+Math.cos(a)*r;
+const py=ch.y+Math.sin(a)*r;
+if(i===0)CTX.moveTo(px,py);
+else CTX.lineTo(px,py);
+}
+CTX.closePath();
+CTX.stroke();
+}
+
+// Label
+if(ch.depth<=STATE.maxDepth-1){
+CTX.fillStyle=ch.color;
+CTX.font='bold 12px monospace';
+CTX.textAlign='center';
+CTX.textBaseline='middle';
+CTX.fillText(ch.name,ch.x,ch.y-ch.height/2+20);
+
+CTX.fillStyle='#6b8a96';
+CTX.font='9px monospace';
+CTX.fillText(`${ch.totalCount} files`,ch.x,ch.y-ch.height/2+34);
+}
+
+visibleCount++;
+
+// Draw children
+ch.children.forEach(cid=>{
+const child=STATE.chamberMap[cid];
+if(child)drawChamber(child,alpha);
+});
+}
+
+STATE.rootChambers.forEach(ch=>drawChamber(ch,1));
+
+document.getElementById('visibleCount').textContent=visibleCount;
+
+CTX.restore();
+}
+
+function animate(){
+requestAnimationFrame(animate);
+draw();
+}
+
+function formatSize(bytes){
+if(bytes<1024)return bytes+'B';
+if(bytes<1024*1024)return(bytes/1024).toFixed(1)+'KB';
+if(bytes<1024*1024*1024)return(bytes/1024/1024).toFixed(1)+'MB';
+return(bytes/1024/1024/1024).toFixed(2)+'GB';
+}
+
+function hexToRgba(hex,alpha){
+const h=hex.replace('#','');
+const r=parseInt(h.slice(0,2),16);
+const g=parseInt(h.slice(2,4),16);
+const b=parseInt(h.slice(4,6),16);
+return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function updateHUD(){
+document.getElementById('viewDepth').textContent=`0-${STATE.maxDepth}`;
+document.getElementById('totalArtifacts').textContent=STATE.artifacts.length.toLocaleString();
+document.getElementById('zoomLevel').textContent=STATE.zoom.toFixed(2)+'x';
+}
+
+function resize(){
+W=window.innerWidth;
+H=window.innerHeight;
+CAN.width=W*DPR;
+CAN.height=H*DPR;
+CAN.style.width=W+'px';
+CAN.style.height=H+'px';
+}
+
+window.addEventListener('resize',()=>{resize();});
+
+CAN.addEventListener('wheel',e=>{
+e.preventDefault();
+const delta=e.deltaY>0?0.9:1.1;
+STATE.zoom=Math.max(0.1,Math.min(10,STATE.zoom*delta));
+updateHUD();
+},{passive:false});
+
+CAN.addEventListener('mousedown',e=>{
+STATE.dragging=true;
+STATE.lastX=e.clientX;
+STATE.lastY=e.clientY;
+CAN.classList.add('dragging');
+});
+
+CAN.addEventListener('mousemove',e=>{
+if(!STATE.dragging)return;
+STATE.panX+=e.clientX-STATE.lastX;
+STATE.panY+=e.clientY-STATE.lastY;
+STATE.lastX=e.clientX;
+STATE.lastY=e.clientY;
+});
+
+CAN.addEventListener('mouseup',()=>{
+STATE.dragging=false;
+CAN.classList.remove('dragging');
+});
+
+CAN.addEventListener('click',e=>{
+if(STATE.dragging)return;
+
+const rect=CAN.getBoundingClientRect();
+const mx=(e.clientX-rect.left-W/2-STATE.panX)/STATE.zoom;
+const my=(e.clientY-rect.top-H/2-STATE.panY)/STATE.zoom;
+
+let clicked=null;
+let minDepth=-1;
+
+function checkClick(ch){
+if(ch.depth>STATE.maxDepth)return;
+
+const dx=ch.x-mx;
+const dy=ch.y-my;
+const d=Math.sqrt(dx*dx+dy*dy);
+const maxR=Math.max(...ch.blob.radii);
+
+if(d<maxR&&ch.depth>minDepth){
+clicked=ch;
+minDepth=ch.depth;
+}
+
+ch.children.forEach(cid=>{
+const child=STATE.chamberMap[cid];
+if(child)checkClick(child);
+});
+}
+
+STATE.rootChambers.forEach(checkClick);
+
+if(clicked){
+STATE.selectedChamber=clicked;
+inspectChamber(clicked);
+}
+});
+
+function inspectChamber(ch){
+let html=`
+<div class="info-block">
+<div class="label">Name</div><div class="value" style="color:${ch.color}">${ch.name}</div>
+<div class="label">Depth</div><div class="value">${ch.depth}</div>
+<div class="label">Artifacts</div><div class="value">${ch.totalCount.toLocaleString()}</div>
+<div class="label">Size</div><div class="value">${formatSize(ch.totalSize)}</div>
+<div class="label">Children</div><div class="value">${ch.children.length}</div>
+<div class="label">Dominant Species</div><div class="value" style="color:${ch.color}">${Object.entries(ch.species).sort((a,b)=>b[1]-a[1])[0]?.[0]||'none'}</div>
+</div>`;
+
+if(Object.keys(ch.species).length>0){
+html+=`<div style="font-size:11px;color:#e8b849;font-weight:bold;margin:12px 0">
+SPECIES COMPOSITION</div>`;
+Object.entries(ch.species).sort((a,b)=>b[1]-a[1]).slice(0,8).forEach(([sp,cnt])=>{
+const pct=(cnt/ch.totalCount*100).toFixed(1);
+const col=SPECIES_COLORS[sp]||'#888';
+html+=`<div style="padding:5px;margin:3px 0;background:${hexToRgba(col,0.08)};
+border-left:3px solid ${col};font-size:10px">
+<strong>${sp.toUpperCase()}</strong>: ${cnt} (${pct}%)
+</div>`;
+});
+}
+
+document.getElementById('inspectorContent').innerHTML=html;
+document.getElementById('inspector').classList.add('open');
+}
+
+function closeInspector(){
+document.getElementById('inspector').classList.remove('open');
+STATE.selectedChamber=null;
+}
+
+window.addEventListener('keydown',e=>{
+if(e.key==='+'||e.key==='='){
+STATE.maxDepth=Math.min(10,STATE.maxDepth+1);
+updateHUD();
+}else if(e.key==='-'||e.key==='_'){
+STATE.maxDepth=Math.max(0,STATE.maxDepth-1);
+updateHUD();
+}
+});
+
+load();
+</script>
+</body></html>

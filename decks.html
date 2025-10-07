@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>ARKADU DECKS</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--void:#0a0e1a;--deck:#0f1419;--grid:#1a3a52;--text:#b8dbd9;--dim:#6b8a96;--blue:#4dd9cc;--coral:#d97b8f;--amber:#e8b849;--purple:#9d7be8}
+body{background:var(--void);color:var(--text);font-family:'Courier New',monospace;overflow:hidden;height:100vh}
+.app{display:grid;grid-template-columns:220px 1fr 280px;grid-template-rows:48px 1fr 36px;height:100vh;gap:1px;background:var(--grid)}
+.hdr{grid-column:1/-1;background:var(--deck);padding:0 16px;display:flex;align-items:center;justify-content:space-between}
+.brand{font-size:15px;font-weight:bold;color:var(--blue);letter-spacing:1px}
+.mode-toggle{display:flex;gap:6px;background:var(--void);padding:3px;border-radius:5px}
+.mode-btn{padding:5px 10px;background:transparent;border:1px solid var(--grid);color:var(--text);cursor:pointer;font-size:10px;font-family:inherit;border-radius:4px}
+.mode-btn.active{background:var(--blue);color:var(--void)}
+.stats{font-size:10px;color:var(--dim);display:flex;gap:10px}
+.nav{background:var(--deck);overflow-y:auto}
+.nav-sec{padding:14px;border-bottom:1px solid var(--grid)}
+.nav-title{font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--dim);margin-bottom:8px;font-weight:bold}
+.chamber-item{padding:7px;margin:3px 0;cursor:pointer;border-left:2px solid transparent;font-size:11px;display:flex;justify-content:space-between}
+.chamber-item:hover{background:rgba(77,217,204,.1);border-left-color:var(--blue)}
+.chamber-item.active{background:rgba(77,217,204,.2);border-left-color:var(--blue);color:var(--blue)}
+.chamber-count{font-size:9px;color:var(--dim)}
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chip{padding:3px 7px;border:1px solid var(--grid);border-radius:10px;font-size:9px;cursor:pointer;text-transform:uppercase}
+.chip:hover{border-color:var(--blue)}
+.chip.active{background:var(--blue);color:var(--void)}
+.stage{background:var(--void);position:relative;overflow:hidden}
+.depth-mode,.parallel-mode{position:absolute;inset:0}
+.parallel-mode{display:none}
+.parallel-mode.active{display:block}
+.carousel{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+.dk{position:absolute;width:85%;height:85%;transition:all .5s cubic-bezier(.4,0,.2,1);background:var(--deck);border:1px solid var(--grid);border-radius:8px;overflow:hidden}
+.dk[data-pos="prev"]{transform:translateX(-30%) scale(.85);opacity:.3;pointer-events:none}
+.dk[data-pos="curr"]{transform:translateX(0) scale(1);opacity:1;z-index:10}
+.dk[data-pos="next"]{transform:translateX(30%) scale(.85);opacity:.3;pointer-events:none}
+.canvas{position:relative;width:100%;height:100%;background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:20px 20px;overflow:auto}
+.dk-label{position:absolute;top:10px;left:10px;background:rgba(10,14,26,.9);padding:7px 11px;border-radius:5px;font-size:10px;border:1px solid var(--grid);z-index:100}
+.controls{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);display:flex;gap:7px;z-index:100}
+.ctrl{padding:7px 14px;background:var(--deck);border:1px solid var(--grid);color:var(--text);cursor:pointer;font-family:inherit;font-size:11px;border-radius:5px}
+.ctrl:hover:not(:disabled){border-color:var(--blue)}
+.ctrl:disabled{opacity:.3;cursor:not-allowed}
+.ctrl.primary{border-color:var(--blue)}
+.cluster{position:absolute;display:flex;flex-wrap:wrap;gap:3px;padding:10px;border:1px solid var(--grid);border-radius:7px;background:rgba(15,20,25,.8);max-width:180px}
+.cluster-label{position:absolute;top:-16px;left:7px;font-size:9px;font-weight:bold;text-transform:uppercase}
+.grain{width:6px;height:6px;border-radius:2px;cursor:pointer}
+.grain:hover{transform:scale(2)}
+.grain[data-s="png"],.grain[data-s="jpg"]{background:var(--blue)}
+.grain[data-s="mp4"]{background:var(--coral)}
+.grain[data-s="mp3"],.grain[data-s="py"]{background:var(--amber)}
+.grain[data-s="json"]{background:var(--purple)}
+.portal{position:absolute;min-width:160px;padding:10px;border:2px dashed var(--coral);border-radius:7px;background:rgba(217,123,143,.1);cursor:pointer;font-size:10px}
+.portal:hover{background:rgba(217,123,143,.2)}
+.portal::before{content:'→';margin-right:7px;color:var(--coral);font-weight:bold}
+.insp{background:var(--deck);overflow-y:auto;padding:14px}
+.insp-title{font-size:11px;color:var(--blue);font-weight:bold;margin-bottom:10px;padding-bottom:7px;border-bottom:1px solid var(--grid)}
+.insp-sec{margin-bottom:14px;font-size:10px;line-height:1.6}
+.insp-sec label{display:block;color:var(--dim);font-size:9px;text-transform:uppercase;margin-top:7px;margin-bottom:3px}
+.ftr{grid-column:1/-1;background:var(--deck);padding:0 14px;display:flex;align-items:center;justify-content:space-between;font-size:10px;color:var(--dim)}
+.breadcrumb{color:var(--blue)}
+.loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:var(--void);color:var(--blue);font-size:13px;z-index:1000}
+.loading.hidden{display:none}
+.parallel-world{position:absolute;inset:40px;perspective:1000px;display:flex;align-items:center;justify-content:center;gap:40px}
+.parallel-dk{width:320px;height:420px;background:var(--deck);border:1px solid var(--grid);border-radius:8px;overflow:hidden;cursor:pointer;transition:all .3s}
+.parallel-dk.focused{border-color:var(--blue);box-shadow:0 0 20px rgba(77,217,204,.3)}
+.parallel-dk:not(.focused){opacity:.5}
+.parallel-dk:not(.focused):hover{opacity:.8}
+</style>
+</head><body>
+<div class="app">
+<header class="hdr">
+<div class="brand">ARKADU DECKS</div>
+<div class="mode-toggle">
+<button class="mode-btn active" onclick="setMode('depth')" id="mD">DEPTH</button>
+<button class="mode-btn" onclick="setMode('parallel')" id="mP">PARALLEL</button>
+</div>
+<div class="stats"><span id="sc">0 chambers</span><span id="sa">0 artifacts</span><span id="sd">depth 0</span></div>
+</header>
+<aside class="nav">
+<div class="nav-sec"><div class="nav-title">Kingdoms</div><div id="chList"></div></div>
+<div class="nav-sec"><div class="nav-title">Species Filter</div><div class="chips" id="chips"></div></div>
+</aside>
+<main class="stage">
+<div class="loading" id="load">Loading ARKADU data...</div>
+<div class="depth-mode" id="depthMode"><div class="carousel" id="car"></div><div class="controls">
+<button class="ctrl" id="bPrev">◀ PREV</button><button class="ctrl primary" id="bUp">↑ UP</button><button class="ctrl" id="bNext">NEXT ▶</button></div></div>
+<div class="parallel-mode" id="parMode"><div class="parallel-world" id="parWorld"></div><div class="controls">
+<button class="ctrl" id="bpL">◀</button><button class="ctrl primary" id="bpE">ENTER</button><button class="ctrl" id="bpR">▶</button></div></div>
+</main>
+<aside class="insp"><div class="insp-title">INSPECTOR</div><div id="insp"><div style="color:var(--dim);font-style:italic;font-size:10px">Select grain or chamber</div></div></aside>
+<footer class="ftr"><div class="breadcrumb" id="bc">/</div><div id="st">Ready</div></footer>
+</div>
+<script>
+const S={mode:'depth',chambers:[],artifacts:[],current:null,path:[],filters:new Set(),selected:null};
+const SPEC=['png','jpg','mp4','mp3','json','py','html','txt'];
+async function loadData(){try{console.log('Loading...');const r=await fetch('/sys/primitive.jsonl');const t=await r.text();S.artifacts=t.trim().split('\n').map(l=>JSON.parse(l));console.log(`Loaded ${S.artifacts.length} artifacts`);buildChambers();init();}catch(e){console.error(e);document.getElementById('load').innerHTML=`<div style="color:var(--coral)">ERROR: ${e.message}<br>Use http://localhost:8001/decks.html</div>`;}}
+function buildChambers(){const m={};S.artifacts.forEach(a=>{const p=a.path.split('/');for(let d=1;d<=Math.min(p.length-1,3);d++){const cp=p.slice(0,d).join('/');if(!m[cp]){m[cp]={id:cp,name:p[d-1],depth:d-1,parent:d>1?p.slice(0,d-1).join('/'):null,subchambers:[],artifacts:[],species:{}};}if(d===p.length-1){m[cp].artifacts.push(a);const s=a.ext||'unknown';m[cp].species[s]=(m[cp].species[s]||0)+1;}}});Object.values(m).forEach(c=>{if(c.parent&&m[c.parent]){if(!m[c.parent].subchambers.includes(c.id))m[c.parent].subchambers.push(c.id);}});S.chambers=Object.values(m);console.log(`Built ${S.chambers.length} chambers`);}
+function init(){document.getElementById('load').classList.add('hidden');const k=S.chambers.filter(c=>c.depth===0).sort((a,b)=>b.artifacts.length-a.artifacts.length);S.current=k[0]?.id||S.chambers[0]?.id;S.path=[S.current];renderChList();renderChips();renderDepth();updateStats();setupCtrls();}
+function renderChList(){const k=S.chambers.filter(c=>c.depth===0).sort((a,b)=>b.artifacts.length-a.artifacts.length);document.getElementById('chList').innerHTML=k.map(c=>`<div class="chamber-item ${S.current===c.id?'active':''}" onclick="jumpTo('${c.id}')"><span>${c.name}</span><span class="chamber-count">${c.artifacts.length}</span></div>`).join('');}
+function renderChips(){const cnt={};S.artifacts.forEach(a=>{const s=a.ext||'unknown';cnt[s]=(cnt[s]||0)+1;});const srt=SPEC.filter(s=>cnt[s]);document.getElementById('chips').innerHTML=srt.map(s=>`<div class="chip ${S.filters.has(s)?'active':''}" data-s="${s}" onclick="toggleFilt('${s}')">${s} (${cnt[s]})</div>`).join('');}
+function toggleFilt(s){if(S.filters.has(s))S.filters.delete(s);else S.filters.add(s);renderChips();S.mode==='depth'?renderDepth():renderPar();}
+function getCh(id){return S.chambers.find(c=>c.id===id);}
+function renderDepth(){const car=document.getElementById('car');car.innerHTML='';const curr=getCh(S.current);if(!curr)return;car.appendChild(makeDk(curr,'curr'));if(curr.parent){const par=getCh(curr.parent);if(par)car.appendChild(makeDk(par,'prev'));}if(curr.subchambers.length>0){const ch=getCh(curr.subchambers[0]);if(ch)car.appendChild(makeDk(ch,'next'));}updateBc();updateStats();}
+function makeDk(ch,pos){const dk=document.createElement('div');dk.className='dk';dk.dataset.pos=pos;dk.dataset.ch=ch.id;const cv=document.createElement('div');cv.className='canvas';const lbl=document.createElement('div');lbl.className='dk-label';lbl.innerHTML=`<strong>DECK ${ch.depth}</strong> — ${ch.name}`;cv.appendChild(lbl);const sp={...ch.species};if(S.filters.size>0)Object.keys(sp).forEach(s=>{if(!S.filters.has(s))delete sp[s];});let x=80,y=100,rh=0;Object.entries(sp).forEach(([s,cnt],i)=>{const cl=document.createElement('div');cl.className='cluster';cl.style.left=x+'px';cl.style.top=y+'px';const clbl=document.createElement('div');clbl.className='cluster-label';clbl.textContent=`${s.toUpperCase()} (${cnt})`;clbl.style.color=getCol(s);cl.appendChild(clbl);const gc=Math.min(cnt,100);for(let j=0;j<gc;j++){const g=document.createElement('div');g.className='grain';g.dataset.s=s;g.dataset.ch=ch.id;g.dataset.i=j;g.title=`${s} #${j}`;g.onclick=e=>{e.stopPropagation();selGrain(ch,s,j);};cl.appendChild(g);}cv.appendChild(cl);const cw=Math.max(160,Math.ceil(Math.sqrt(gc))*9);const chr=Math.ceil(gc/Math.ceil(Math.sqrt(gc)))*9+28;rh=Math.max(rh,chr);x+=cw+35;if(x>750){x=80;y+=rh+55;rh=0;}});if(ch.subchambers.length>0){y+=rh+75;ch.subchambers.forEach((sid,idx)=>{const sub=getCh(sid);if(!sub)return;const p=document.createElement('div');p.className='portal';p.style.left=(80+idx*200)+'px';p.style.top=y+'px';p.textContent=sub.name;p.onclick=()=>descend(sid);cv.appendChild(p);});}dk.appendChild(cv);return dk;}
+function renderPar(){const w=document.getElementById('parWorld');w.innerHTML='';const d=S.path.length-1;let chs;if(d===0)chs=S.chambers.filter(c=>c.depth===0).sort((a,b)=>b.artifacts.length-a.artifacts.length);else{const par=getCh(S.path[S.path.length-2]);chs=par&&par.subchambers?par.subchambers.map(id=>getCh(id)).filter(Boolean):[];}chs.slice(0,5).forEach((c,i)=>{const dk=document.createElement('div');dk.className='parallel-dk';if(c.id===S.current)dk.classList.add('focused');dk.onclick=()=>{S.current=c.id;renderPar();updateBc();};const cv=document.createElement('div');cv.className='canvas';cv.style.padding='14px';cv.innerHTML=`<div style="font-size:13px;font-weight:bold;color:var(--blue);margin-bottom:8px">${c.name}</div><div style="font-size:10px;color:var(--dim)">${c.artifacts.length} artifacts</div><div style="font-size:9px;color:var(--dim);margin-top:6px">${Object.keys(c.species).join(', ')}</div>`;dk.appendChild(cv);w.appendChild(dk);});}
+function getCol(s){const cols={png:'var(--blue)',jpg:'var(--blue)',mp4:'var(--coral)',mp3:'var(--amber)',json:'var(--purple)',py:'var(--amber)',html:'var(--green)',txt:'var(--dim)'};return cols[s]||'var(--dim)';}
+function jumpTo(id){S.current=id;S.path=[id];renderChList();renderDepth();}
+function descend(id){S.current=id;S.path.push(id);renderDepth();}
+function goUp(){const curr=getCh(S.current);if(curr&&curr.parent){S.current=curr.parent;S.path.pop();renderDepth();}}
+function goPrev(){const curr=getCh(S.current);if(curr&&curr.parent)goUp();}
+function goNext(){const curr=getCh(S.current);if(curr&&curr.subchambers.length>0)descend(curr.subchambers[0]);}
+function setMode(m){S.mode=m;document.getElementById('depthMode').style.display=m==='depth'?'block':'none';document.getElementById('parMode').classList.toggle('active',m==='parallel');document.getElementById('mD').classList.toggle('active',m==='depth');document.getElementById('mP').classList.toggle('active',m==='parallel');if(m==='parallel')renderPar();}
+function setupCtrls(){document.getElementById('bPrev').onclick=goPrev;document.getElementById('bUp').onclick=goUp;document.getElementById('bNext').onclick=goNext;document.getElementById('bpL').onclick=()=>{const curr=getCh(S.current);if(curr&&curr.parent){S.current=curr.parent;S.path.pop();renderPar();}};document.getElementById('bpE').onclick=()=>{const curr=getCh(S.current);if(curr&&curr.subchambers.length>0){S.current=curr.subchambers[0];S.path.push(S.current);renderPar();}};document.getElementById('bpR').onclick=goNext;document.addEventListener('keydown',e=>{if(e.key==='ArrowLeft')goPrev();if(e.key==='ArrowRight')goNext();if(e.key==='ArrowUp')goUp();});}
+function updateBc(){document.getElementById('bc').textContent=S.path.join(' > ')||'/';}
+function updateStats(){document.getElementById('sc').textContent=S.chambers.length+' chambers';document.getElementById('sa').textContent=S.artifacts.length.toLocaleString()+' artifacts';const curr=getCh(S.current);document.getElementById('sd').textContent='depth '+(curr?curr.depth:0);}
+function selGrain(ch,sp,i){S.selected={chamber:ch.id,species:sp,index:i};const arts=ch.artifacts.filter(a=>(a.ext||'unknown')===sp);const art=arts[i]||arts[0];if(!art)return;document.getElementById('insp').innerHTML=`<div class="insp-sec"><label>Artifact</label>${art.name}</div><div class="insp-sec"><label>Species</label>${sp.toUpperCase()}</div><div class="insp-sec"><label>Size</label>${(art.size/1024).toFixed(1)} KB</div><div class="insp-sec"><label>Chamber</label>${ch.name}</div><div class="insp-sec"><label>Path</label>${art.path}</div>`;document.getElementById('st').textContent='Selected: '+art.name;}
+loadData();
+</script>
+</body></html>

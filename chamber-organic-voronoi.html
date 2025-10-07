@@ -1,0 +1,1156 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<title>ARKADU Organic Voronoi — Nested Irregular Topology</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0e1a;color:#4dd9cc;font-family:monospace;overflow:hidden}
+#canvas{display:block;cursor:pointer}
+.hud{position:fixed;top:20px;left:20px;background:rgba(0,0,0,.95);border:1px solid #4dd9cc;
+padding:16px;width:340px;z-index:100;font-size:11px;border-radius:8px}
+.nav-controls{display:flex;gap:10px;margin:12px 0;align-items:center}
+.nav-btn{flex:1;padding:8px;background:rgba(77,217,204,.1);border:1px solid #4dd9cc;
+color:#4dd9cc;cursor:pointer;border-radius:4px;font-size:10px;transition:all .2s;font-family:monospace}
+.nav-btn:hover{background:rgba(77,217,204,.25)}
+.nav-btn:disabled{opacity:0.3;cursor:not-allowed}
+.tree-sidebar{position:fixed;top:20px;right:420px;width:300px;max-height:80vh;overflow-y:auto;
+background:rgba(0,0,0,.95);border:1px solid #4dd9cc;padding:12px;border-radius:8px;z-index:100;
+transform:translateX(340px);transition:transform .3s}
+.tree-sidebar.open{transform:translateX(0)}
+.tree-toggle{position:fixed;top:20px;right:420px;background:rgba(0,0,0,.95);border:1px solid #4dd9cc;
+padding:8px 12px;cursor:pointer;border-radius:4px;color:#4dd9cc;font-size:11px;z-index:101}
+.tree-item{padding:4px 8px;margin:2px 0;cursor:pointer;border-radius:3px;font-size:10px}
+.tree-item:hover{background:rgba(77,217,204,.15)}
+.tree-item.active{background:rgba(77,217,204,.25);font-weight:bold}
+.tree-item.parent{color:#6b8a96}
+.tree-item.has-children::before{content:'▸ ';color:#4dd9cc}
+.tree-item.expanded::before{content:'▾ '}
+.tree-children{margin-left:12px;border-left:1px solid rgba(77,217,204,.2);padding-left:8px}
+.stat{margin:6px 0;padding:6px;background:rgba(77,217,204,.05);border-radius:4px}
+.label{color:#6b8a96;font-size:9px;text-transform:uppercase}
+.value{color:#4dd9cc;font-size:11px;font-weight:bold;margin-top:2px}
+.breadcrumb{display:inline-block;padding:6px 10px;margin:2px;background:rgba(77,217,204,.1);
+border-radius:4px;font-size:10px;cursor:pointer;transition:all .2s}
+.breadcrumb:hover{background:rgba(77,217,204,.25)}
+.breadcrumb.active{background:#4dd9cc;color:#000;font-weight:bold}
+.inspector{position:fixed;top:20px;right:20px;background:rgba(0,0,0,.95);
+border:1px solid #d97b8f;padding:16px;width:380px;max-height:80vh;overflow-y:auto;
+z-index:100;border-radius:8px;transform:translateX(420px);transition:transform .3s}
+.inspector.open{transform:translateX(0)}
+.close{position:absolute;top:16px;right:16px;cursor:pointer;color:#d97b8f;font-size:18px}
+.info-block{margin:10px 0;padding:10px;background:rgba(77,217,204,.05);border-radius:6px;font-size:10px}
+.loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+flex-direction:column;gap:20px;background:#000;z-index:200;color:#4dd9cc;transition:opacity .3s}
+.loading.hidden{opacity:0;pointer-events:none}
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+
+<div class="loading" id="loading">
+<div>⬢ BUILDING ORGANIC TOPOLOGY ⬢</div>
+<div id="status">Loading...</div>
+</div>
+
+<div class="hud">
+<div style="font-size:14px;color:#4dd9cc;font-weight:bold;margin-bottom:12px">
+ORGANIC VORONOI
+</div>
+<div id="breadcrumbs" style="margin-bottom:12px"></div>
+<div class="stat"><div class="label">Current</div><div class="value" id="currentChamber">ROOT</div></div>
+<div class="stat"><div class="label">Depth</div><div class="value" id="currentDepth">0</div></div>
+<div class="stat"><div class="label">Visible</div><div class="value" id="visibleCount">0</div></div>
+<div class="nav-controls">
+<button class="nav-btn" id="upBtn" onclick="goUp()" disabled>↑ UP</button>
+<button class="nav-btn" id="downBtn" onclick="goDown()" disabled>↓ DOWN</button>
+</div>
+<div style="font-size:9px;color:#6b8a96;margin-top:8px">
+<strong>CONTROLS</strong><br>
+• Buttons: ↑ UP / ↓ DOWN<br>
+• Click: enter/exit chambers<br>
+• Keys: ← → ↑ ↓ arrows<br>
+• Tree: click to jump<br>
+• Auto-centered geometry
+</div>
+</div>
+
+<div class="tree-toggle" id="treeToggle" onclick="toggleTree()">📁 TREE</div>
+
+<div class="tree-sidebar" id="treeSidebar">
+<div style="font-size:12px;color:#4dd9cc;font-weight:bold;margin-bottom:8px">FILE TREE</div>
+<div id="treeContent"></div>
+</div>
+
+<div class="inspector" id="inspector">
+<div class="close" onclick="closeInspector()">×</div>
+<div style="font-size:13px;color:#d97b8f;font-weight:bold;margin-bottom:12px">CHAMBER</div>
+<div id="inspectorContent"></div>
+</div>
+
+<script>
+const CAN=document.getElementById('canvas');
+const CTX=CAN.getContext('2d');
+let DPR=window.devicePixelRatio||1;
+let W,H;
+
+const STATE={
+artifacts:[],
+chambers:[],
+chamberMap:{},
+rootChambers:[],
+currentChamber:null,
+viewStack:[],
+hoverChamber:null,
+animating:false,
+animProgress:0,
+oldView:null,
+newView:null,
+parentBoundary:null,
+treeOpen:false,
+scale:1,
+offsetX:0,
+offsetY:0
+};
+
+const SPECIES_COLORS={
+jpg:'#d97b8f',jpeg:'#d97b8f',png:'#d97b8f',gif:'#d97b8f',webp:'#d97b8f',
+mp4:'#e8b849',mov:'#e8b849',avi:'#e8b849',webm:'#e8b849',
+mp3:'#9d7be8',wav:'#9d7be8',flac:'#9d7be8',ogg:'#9d7be8',
+json:'#6bbd8f',txt:'#6bbd8f',md:'#6bbd8f',
+py:'#4dd9cc',js:'#4dd9cc',html:'#4dd9cc',css:'#4dd9cc'
+};
+
+function noise(x,y,seed=0){
+const n=Math.sin(x*12.9898+y*78.233+seed)*43758.5453;
+return n-Math.floor(n);
+}
+
+async function load(){
+try{
+document.getElementById('status').textContent='Loading artifacts...';
+const r=await fetch('sys/primitive.jsonl');
+const t=await r.text();
+STATE.artifacts=t.trim().split('\n').map(l=>JSON.parse(l));
+console.log(`Loaded ${STATE.artifacts.length} artifacts`);
+
+document.getElementById('status').textContent='Building hierarchy...';
+buildHierarchy();
+
+document.getElementById('status').textContent='Complete!';
+document.getElementById('loading').classList.add('hidden');
+
+resize();
+viewRoot();
+animate();
+}catch(e){
+console.error(e);
+document.getElementById('status').innerHTML=`<span style="color:#d97b8f">ERROR: ${e.message}</span>`;
+}}
+
+function buildHierarchy(){
+STATE.chamberMap={};
+
+STATE.artifacts.forEach(art=>{
+const parts=art.path.split('/');
+for(let d=0;d<parts.length-1;d++){
+const id=parts.slice(0,d+1).join('/');
+if(!STATE.chamberMap[id]){
+STATE.chamberMap[id]={
+id:id,
+name:parts[d],
+depth:d,
+parent:d>0?parts.slice(0,d).join('/'):null,
+children:[],
+artifacts:[],
+totalCount:0,
+totalSize:0,
+species:{}
+};
+}
+}
+
+const leafId=parts.slice(0,-1).join('/');
+if(STATE.chamberMap[leafId]){
+STATE.chamberMap[leafId].artifacts.push(art);
+const ext=(art.ext||'').replace(/^\./,'')||'unknown';
+STATE.chamberMap[leafId].species[ext]=(STATE.chamberMap[leafId].species[ext]||0)+1;
+}
+});
+
+Object.values(STATE.chamberMap).forEach(ch=>{
+if(ch.parent&&STATE.chamberMap[ch.parent]){
+const p=STATE.chamberMap[ch.parent];
+if(!p.children.includes(ch.id)){
+p.children.push(ch.id);
+}
+}
+});
+
+function aggregate(ch){
+ch.totalCount=ch.artifacts.length;
+ch.totalSize=ch.artifacts.reduce((s,a)=>s+(a.size||0),0);
+ch.children.forEach(cid=>{
+const child=STATE.chamberMap[cid];
+if(child){
+aggregate(child);
+ch.totalCount+=child.totalCount;
+ch.totalSize+=child.totalSize;
+Object.entries(child.species).forEach(([sp,cnt])=>{
+ch.species[sp]=(ch.species[sp]||0)+cnt;
+});
+}
+});
+}
+
+STATE.chambers=Object.values(STATE.chamberMap);
+STATE.chambers.forEach(aggregate);
+STATE.rootChambers=STATE.chambers.filter(ch=>!ch.parent);
+
+console.log(`Built ${STATE.chambers.length} chambers`);
+buildTree();
+}
+
+function viewRoot(){
+STATE.oldView=getCurrentView();
+STATE.currentChamber=null;
+STATE.viewStack=[];
+const boundary={x:W/2,y:H/2,radius:Math.min(W,H)*0.45};
+layoutOrganic(STATE.rootChambers,boundary);
+STATE.newView=getCurrentView();
+startTransition();
+updateBreadcrumbs();
+updateHUD();
+updateNavButtons();
+updateTreeSelection();
+}
+
+function viewChamber(chamber){
+STATE.oldView=getCurrentView();
+STATE.currentChamber=chamber;
+STATE.viewStack.push(chamber);
+
+if(chamber.children.length>0){
+// Has children - show them INSIDE this chamber's shape
+const children=chamber.children.map(cid=>STATE.chamberMap[cid]).filter(Boolean);
+
+// Use parent's actual geometry as boundary
+if(chamber.blob){
+layoutOrganicWithinParent(children,chamber);
+}else{
+// Fallback to circle
+const boundary={x:W/2,y:H/2,radius:Math.min(W,H)*0.45};
+layoutOrganic(children,boundary);
+}
+}else if(chamber.artifacts.length>0){
+// Leaf chamber - show artifacts
+const boundary={x:chamber.center.x,y:chamber.center.y,radius:Math.min(W,H)*0.45};
+layoutArtifacts(chamber.artifacts,boundary);
+}
+
+STATE.newView=getCurrentView();
+startTransition();
+updateBreadcrumbs();
+updateHUD();
+if(typeof updateNavButtons==='function')updateNavButtons();
+if(typeof updateTreeSelection==='function')updateTreeSelection();
+if(typeof autoCenterGeometry==='function')autoCenterGeometry();
+}
+
+function goUp(){
+if(STATE.viewStack.length>0){
+STATE.oldView=getCurrentView();
+STATE.artifactShapes=null;
+STATE.viewStack.pop();
+
+if(STATE.viewStack.length===0){
+STATE.currentChamber=null;
+const boundary={x:W/2,y:H/2,radius:Math.min(W,H)*0.45};
+layoutOrganic(STATE.rootChambers,boundary);
+}else{
+const parent=STATE.viewStack[STATE.viewStack.length-1];
+STATE.currentChamber=parent;
+if(parent.children.length>0){
+const children=parent.children.map(cid=>STATE.chamberMap[cid]).filter(Boolean);
+const boundary={x:W/2,y:H/2,radius:Math.min(W,H)*0.45};
+layoutOrganic(children,boundary);
+}else if(parent.artifacts.length>0){
+const boundary={x:W/2,y:H/2,radius:Math.min(W,H)*0.45};
+layoutArtifacts(parent.artifacts,boundary);
+}
+}
+
+STATE.newView=getCurrentView();
+startTransition();
+updateBreadcrumbs();
+updateHUD();
+updateNavButtons();
+updateTreeSelection();
+}
+}
+
+function goDown(){
+if(STATE.artifactShapes)return;
+
+const visible=STATE.currentChamber?
+STATE.currentChamber.children.map(cid=>STATE.chamberMap[cid]).filter(Boolean):
+STATE.rootChambers;
+
+if(visible.length>0){
+viewChamber(visible[0]);
+}
+}
+
+function autoCenterGeometry(){
+if(!STATE.currentChamber||!STATE.currentChamber.blob)return;
+
+// Get parent shape bounds
+const blob=STATE.currentChamber.blob;
+let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+
+for(let i=0;i<blob.angles.length;i++){
+const px=blob.cx+Math.cos(blob.angles[i])*blob.radii[i];
+const py=blob.cy+Math.sin(blob.angles[i])*blob.radii[i];
+minX=Math.min(minX,px);
+maxX=Math.max(maxX,px);
+minY=Math.min(minY,py);
+maxY=Math.max(maxY,py);
+}
+
+const shapeW=maxX-minX;
+const shapeH=maxY-minY;
+const shapeCX=(minX+maxX)/2;
+const shapeCY=(minY+maxY)/2;
+
+// Target is center circle
+const targetR=Math.min(W,H)*0.45;
+const targetCX=W/2;
+const targetCY=H/2;
+
+// Calculate scale to fit
+const scaleW=(targetR*2)/shapeW;
+const scaleH=(targetR*2)/shapeH;
+STATE.scale=Math.min(scaleW,scaleH)*0.9;
+
+// Calculate offset to center
+STATE.offsetX=targetCX-shapeCX*STATE.scale;
+STATE.offsetY=targetCY-shapeCY*STATE.scale;
+}
+
+function layoutOrganic(chambers,boundary){
+if(chambers.length===0)return;
+
+const totalSize=chambers.reduce((s,ch)=>s+ch.totalSize,0);
+const {x:cx,y:cy,radius:r}=boundary;
+
+// Store parent boundary for context
+STATE.parentBoundary=boundary;
+STATE.parentShape=null;
+
+// Weighted seed placement
+const seeds=[];
+let angleOffset=0;
+chambers.forEach((ch,i)=>{
+const weight=Math.sqrt(ch.totalSize/totalSize);
+const angle=angleOffset+noise(i,0,1)*0.4;
+const dist=r*(0.4+noise(i,1,1)*0.35);
+seeds.push({
+x:cx+Math.cos(angle)*dist,
+y:cy+Math.sin(angle)*dist,
+chamber:ch,
+index:i
+});
+angleOffset+=(Math.PI*2*weight);
+});
+
+// Generate proper space-filling Voronoi cells
+chambers.forEach((ch,i)=>{
+const seed=seeds[i];
+const voronoiPoly=computeVoronoiCell(seed,seeds,boundary);
+ch.blob=voronoiPoly;
+ch.center={x:seed.x,y:seed.y};
+ch.boundary={x:seed.x,y:seed.y,radius:r/Math.sqrt(chambers.length)};
+ch.color=getDominantColor(ch.species);
+});
+}
+
+function layoutOrganicWithinParent(chambers,parent){
+if(chambers.length===0)return;
+
+const totalSize=chambers.reduce((s,ch)=>s+ch.totalSize,0);
+
+// Store parent shape for context
+STATE.parentShape=parent;
+STATE.parentBoundary=null;
+
+// Get bounding box of parent shape
+const parentPoly=parent.blob;
+let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+for(let i=0;i<parentPoly.angles.length;i++){
+const px=parentPoly.cx+Math.cos(parentPoly.angles[i])*parentPoly.radii[i];
+const py=parentPoly.cy+Math.sin(parentPoly.angles[i])*parentPoly.radii[i];
+minX=Math.min(minX,px);
+maxX=Math.max(maxX,px);
+minY=Math.min(minY,py);
+maxY=Math.max(maxY,py);
+}
+
+const cx=(minX+maxX)/2;
+const cy=(minY+maxY)/2;
+const r=Math.max(maxX-minX,maxY-minY)/2;
+
+// Place seeds within parent bounds
+const seeds=[];
+let angleOffset=0;
+chambers.forEach((ch,i)=>{
+const weight=Math.sqrt(ch.totalSize/totalSize);
+const angle=angleOffset+noise(i,0,1)*0.4;
+const dist=r*(0.3+noise(i,1,1)*0.4);
+seeds.push({
+x:cx+Math.cos(angle)*dist,
+y:cy+Math.sin(angle)*dist,
+chamber:ch,
+index:i
+});
+angleOffset+=(Math.PI*2*weight);
+});
+
+// Generate Voronoi cells constrained to parent polygon
+chambers.forEach((ch,i)=>{
+const seed=seeds[i];
+const voronoiPoly=computeVoronoiCellInPolygon(seed,seeds,parentPoly);
+ch.blob=voronoiPoly;
+ch.center={x:seed.x,y:seed.y};
+ch.boundary={x:seed.x,y:seed.y,radius:r/Math.sqrt(chambers.length)};
+ch.color=getDominantColor(ch.species);
+});
+}
+
+function computeVoronoiCellInPolygon(seed,allSeeds,parentPoly){
+// Sample points to find Voronoi boundaries within parent polygon
+const samples=48;
+const points=[];
+
+for(let i=0;i<samples;i++){
+const angle=(i/samples)*Math.PI*2;
+let dist=0;
+
+// Ray cast to find boundary
+for(let step=1;step<100;step++){
+const testDist=step*5;
+const px=seed.x+Math.cos(angle)*testDist;
+const py=seed.y+Math.sin(angle)*testDist;
+
+// Check if inside parent polygon
+if(!pointInPolygon(px,py,parentPoly)){
+dist=testDist*0.85;
+break;
+}
+
+// Check Voronoi boundary
+let closestSeed=seed;
+let minDist=Infinity;
+allSeeds.forEach(s=>{
+const d=Math.sqrt((px-s.x)**2+(py-s.y)**2);
+if(d<minDist){
+minDist=d;
+closestSeed=s;
+}
+});
+
+if(closestSeed!==seed){
+dist=testDist*0.85;
+break;
+}
+
+if(step===99)dist=testDist;
+}
+
+points.push({angle,dist});
+}
+
+// Smooth
+const smoothed=[];
+for(let i=0;i<points.length;i++){
+const prev=points[(i-1+points.length)%points.length];
+const curr=points[i];
+const next=points[(i+1)%points.length];
+const smoothDist=(prev.dist+curr.dist*2+next.dist)/4;
+smoothed.push({angle:curr.angle,dist:smoothDist});
+}
+
+return{
+cx:seed.x,
+cy:seed.y,
+angles:smoothed.map(p=>p.angle),
+radii:smoothed.map(p=>p.dist)
+};
+}
+
+function pointInPolygon(x,y,poly){
+// Ray casting algorithm
+let inside=false;
+const {cx,cy,angles,radii}=poly;
+
+for(let i=0,j=angles.length-1;i<angles.length;j=i++){
+const xi=cx+Math.cos(angles[i])*radii[i];
+const yi=cy+Math.sin(angles[i])*radii[i];
+const xj=cx+Math.cos(angles[j])*radii[j];
+const yj=cy+Math.sin(angles[j])*radii[j];
+
+if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi)){
+inside=!inside;
+}
+}
+return inside;
+}
+
+function computeVoronoiCell(seed,allSeeds,boundary){
+// Sample points around the seed to find Voronoi boundaries
+const samples=48;
+const points=[];
+
+for(let i=0;i<samples;i++){
+const angle=(i/samples)*Math.PI*2;
+let dist=boundary.radius*2;
+
+// Ray cast to find nearest boundary
+for(let step=0;step<50;step++){
+const testDist=(step/50)*boundary.radius*1.5;
+const px=seed.x+Math.cos(angle)*testDist;
+const py=seed.y+Math.sin(angle)*testDist;
+
+// Check if this point is closer to another seed
+let closestSeed=seed;
+let minDist=Infinity;
+
+allSeeds.forEach(s=>{
+const d=Math.sqrt((px-s.x)**2+(py-s.y)**2);
+if(d<minDist){
+minDist=d;
+closestSeed=s;
+}
+});
+
+// If we crossed into another cell's territory, back up
+if(closestSeed!==seed){
+dist=testDist*0.85;
+break;
+}
+}
+
+// Also constrain to boundary circle
+const dx=seed.x+Math.cos(angle)*dist-boundary.x;
+const dy=seed.y+Math.sin(angle)*dist-boundary.y;
+const boundDist=Math.sqrt(dx*dx+dy*dy);
+if(boundDist>boundary.radius*0.95){
+dist=dist*(boundary.radius*0.95/boundDist);
+}
+
+points.push({angle,dist});
+}
+
+// Smooth the polygon
+const smoothed=[];
+for(let i=0;i<points.length;i++){
+const prev=points[(i-1+points.length)%points.length];
+const curr=points[i];
+const next=points[(i+1)%points.length];
+const smoothDist=(prev.dist+curr.dist*2+next.dist)/4;
+smoothed.push({angle:curr.angle,dist:smoothDist});
+}
+
+return{
+cx:seed.x,
+cy:seed.y,
+angles:smoothed.map(p=>p.angle),
+radii:smoothed.map(p=>p.dist)
+};
+}
+
+function layoutArtifacts(artifacts,boundary){
+const {x:cx,y:cy,radius:r}=boundary;
+const cols=Math.ceil(Math.sqrt(artifacts.length));
+const spacing=Math.min(r*2/cols,60);
+
+STATE.artifactShapes=artifacts.map((art,i)=>{
+const col=i%cols;
+const row=Math.floor(i/cols);
+const jx=(noise(i,0,2)-0.5)*spacing*0.3;
+const jy=(noise(i,1,2)-0.5)*spacing*0.3;
+const x=cx-r+col*spacing+spacing/2+jx;
+const y=cy-r+row*spacing+spacing/2+jy;
+const size=Math.max(10,Math.min(25,spacing*0.6));
+const ext=(art.ext||'').replace(/^\./,'')||'unknown';
+return{
+x,y,
+size,
+blob:generateOrganicCell(x,y,size,i+1000),
+color:SPECIES_COLORS[ext]||'#888',
+ext,
+name:art.path.split('/').pop(),
+artifact:art,
+isArtifact:true
+};
+});
+}
+
+function getCurrentView(){
+if(STATE.artifactShapes){
+return STATE.artifactShapes;
+}
+
+const visible=STATE.currentChamber?
+STATE.currentChamber.children.map(cid=>STATE.chamberMap[cid]).filter(Boolean):
+STATE.rootChambers;
+
+return visible.map(ch=>({...ch,blob:{...ch.blob}}));
+}
+
+function startTransition(){
+STATE.animating=true;
+STATE.animProgress=0;
+}
+
+function easeInOutCubic(t){
+return t<0.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
+}
+
+function generateOrganicCell(cx,cy,radius,seed){
+const points=8+Math.floor(noise(seed,0,3)*4);
+const angles=[];
+const radii=[];
+for(let i=0;i<points;i++){
+const angle=(i/points)*Math.PI*2+noise(i,seed,4)*0.3;
+const r=radius*(0.7+noise(i,seed,5)*0.5);
+angles.push(angle);
+radii.push(r);
+}
+return {cx,cy,angles,radii};
+}
+
+function getDominantColor(species){
+if(!species||Object.keys(species).length===0)return '#4dd9cc';
+const sorted=Object.entries(species).sort((a,b)=>b[1]-a[1]);
+return SPECIES_COLORS[sorted[0][0]]||'#4dd9cc';
+}
+
+function drawBlob(blob,color,alpha,strokeAlpha=0.6){
+if(!blob)return;
+const {cx,cy,angles,radii}=blob;
+CTX.beginPath();
+for(let i=0;i<angles.length;i++){
+const a=angles[i];
+const r=radii[i];
+const px=cx+Math.cos(a)*r;
+const py=cy+Math.sin(a)*r;
+if(i===0)CTX.moveTo(px,py);
+else CTX.lineTo(px,py);
+}
+CTX.closePath();
+
+CTX.fillStyle=hexToRgba(color,alpha);
+CTX.fill();
+
+CTX.strokeStyle=hexToRgba(color,strokeAlpha);
+CTX.lineWidth=1.5;
+CTX.stroke();
+}
+
+function draw(){
+CTX.fillStyle='#0a0e1a';
+CTX.fillRect(0,0,W*DPR,H*DPR);
+
+CTX.save();
+CTX.scale(DPR,DPR);
+
+// Draw parent shape as context (clickable ghost)
+if(STATE.parentShape&&STATE.currentChamber){
+const ps=STATE.parentShape.blob;
+CTX.strokeStyle='rgba(77,217,204,0.3)';
+CTX.lineWidth=3;
+CTX.setLineDash([8,4]);
+CTX.beginPath();
+for(let i=0;i<ps.angles.length;i++){
+const px=ps.cx+Math.cos(ps.angles[i])*ps.radii[i];
+const py=ps.cy+Math.sin(ps.angles[i])*ps.radii[i];
+if(i===0)CTX.moveTo(px,py);
+else CTX.lineTo(px,py);
+}
+CTX.closePath();
+CTX.stroke();
+CTX.setLineDash([]);
+
+// Label parent
+CTX.fillStyle='rgba(77,217,204,0.5)';
+CTX.font='11px monospace';
+CTX.textAlign='center';
+CTX.fillText(`↑ ${STATE.parentShape.name}`,ps.cx,ps.cy-ps.radii[0]-15);
+}else if(STATE.parentBoundary&&STATE.currentChamber){
+const pb=STATE.parentBoundary;
+CTX.strokeStyle='rgba(77,217,204,0.2)';
+CTX.lineWidth=2;
+CTX.setLineDash([5,5]);
+CTX.beginPath();
+CTX.arc(pb.x,pb.y,pb.radius,0,Math.PI*2);
+CTX.stroke();
+CTX.setLineDash([]);
+}
+
+if(STATE.animating){
+// Animate between views
+const t=easeInOutCubic(STATE.animProgress);
+const oldAlpha=1-t;
+const newAlpha=t;
+
+// Draw old view fading out
+if(STATE.oldView){
+STATE.oldView.forEach(item=>{
+if(!item.blob)return;
+if(item.isArtifact){
+drawBlob(item.blob,item.color,0.25*oldAlpha,0.6*oldAlpha);
+}else{
+drawBlob(item.blob,item.color,0.18*oldAlpha,0.6*oldAlpha);
+}
+});
+}
+
+// Draw new view fading in
+if(STATE.newView){
+STATE.newView.forEach(item=>{
+if(!item.blob)return;
+const hover=item.isArtifact?
+(item.artifact?.path===STATE.hoverChamber?.artifact?.path):
+(item.id===STATE.hoverChamber?.id);
+
+if(item.isArtifact){
+drawBlob(item.blob,item.color,(hover?0.4:0.25)*newAlpha,(hover?1:0.6)*newAlpha);
+if(item.size>15&&newAlpha>0.5){
+CTX.globalAlpha=newAlpha;
+CTX.fillStyle=item.color;
+CTX.font='9px monospace';
+CTX.textAlign='center';
+CTX.textBaseline='middle';
+CTX.fillText(item.ext,item.x,item.y);
+CTX.globalAlpha=1;
+}
+}else{
+drawBlob(item.blob,item.color,(hover?0.3:0.18)*newAlpha,(hover?1:0.6)*newAlpha);
+if(item.blob.radii[0]>30&&newAlpha>0.3){
+CTX.globalAlpha=newAlpha;
+CTX.fillStyle=item.color;
+CTX.font='bold 12px monospace';
+CTX.textAlign='center';
+CTX.textBaseline='middle';
+CTX.fillText(item.name,item.center.x,item.center.y-8);
+
+CTX.fillStyle='#6b8a96';
+CTX.font='9px monospace';
+CTX.fillText(`${item.totalCount}`,item.center.x,item.center.y+6);
+
+if(item.children.length>0){
+CTX.fillStyle='#4dd9cc';
+CTX.fillText(`${item.children.length} →`,item.center.x,item.center.y+18);
+}else if(item.artifacts.length>0){
+CTX.fillStyle='#e8b849';
+CTX.fillText(`🔬 ${item.artifacts.length}`,item.center.x,item.center.y+18);
+}
+CTX.globalAlpha=1;
+}
+}
+});
+}
+}else{
+// Draw static view
+if(STATE.artifactShapes){
+STATE.artifactShapes.forEach(item=>{
+const hover=item===STATE.hoverChamber;
+drawBlob(item.blob,item.color,hover?0.4:0.25,hover?1:0.6);
+
+if(item.size>15){
+CTX.fillStyle=item.color;
+CTX.font='9px monospace';
+CTX.textAlign='center';
+CTX.textBaseline='middle';
+CTX.fillText(item.ext,item.x,item.y);
+}
+});
+}else{
+const visible=STATE.currentChamber?
+STATE.currentChamber.children.map(cid=>STATE.chamberMap[cid]).filter(Boolean):
+STATE.rootChambers;
+
+// First pass: fill cells completely
+visible.forEach(ch=>{
+if(!ch.blob)return;
+const hover=ch===STATE.hoverChamber;
+drawBlob(ch.blob,ch.color,hover?0.3:0.18,false);
+});
+
+// Second pass: draw borders to show tessellation
+visible.forEach(ch=>{
+if(!ch.blob)return;
+const hover=ch===STATE.hoverChamber;
+CTX.strokeStyle=hexToRgba(ch.color,hover?1:0.7);
+CTX.lineWidth=hover?3:1.5;
+const {cx,cy,angles,radii}=ch.blob;
+CTX.beginPath();
+for(let i=0;i<angles.length;i++){
+const px=cx+Math.cos(angles[i])*radii[i];
+const py=cy+Math.sin(angles[i])*radii[i];
+if(i===0)CTX.moveTo(px,py);
+else CTX.lineTo(px,py);
+}
+CTX.closePath();
+CTX.stroke();
+
+if(ch.blob.radii[0]>30){
+CTX.fillStyle=ch.color;
+CTX.font='bold 12px monospace';
+CTX.textAlign='center';
+CTX.textBaseline='middle';
+CTX.fillText(ch.name,ch.center.x,ch.center.y-8);
+
+CTX.fillStyle='#6b8a96';
+CTX.font='9px monospace';
+CTX.fillText(`${ch.totalCount}`,ch.center.x,ch.center.y+6);
+
+if(ch.children.length>0){
+CTX.fillStyle='#4dd9cc';
+CTX.fillText(`${ch.children.length} →`,ch.center.x,ch.center.y+18);
+}else if(ch.artifacts.length>0){
+CTX.fillStyle='#e8b849';
+CTX.fillText(`🔬 ${ch.artifacts.length}`,ch.center.x,ch.center.y+18);
+}
+}
+});
+}
+}
+
+CTX.restore();
+}
+
+function animate(){
+requestAnimationFrame(animate);
+
+if(STATE.animating){
+STATE.animProgress+=0.05;
+if(STATE.animProgress>=1){
+STATE.animating=false;
+STATE.animProgress=1;
+STATE.oldView=null;
+}
+}
+
+draw();
+}
+
+function pointInBlob(x,y,blob){
+if(!blob)return false;
+const {cx,cy,angles,radii}=blob;
+const dx=x-cx;
+const dy=y-cy;
+const angle=Math.atan2(dy,dx);
+const dist=Math.sqrt(dx*dx+dy*dy);
+
+// Find nearest angle
+let minDiff=Infinity;
+let nearestR=0;
+for(let i=0;i<angles.length;i++){
+const diff=Math.abs(angle-angles[i]);
+if(diff<minDiff){
+minDiff=diff;
+nearestR=radii[i];
+}
+}
+
+return dist<nearestR;
+}
+
+function formatSize(bytes){
+if(bytes<1024)return bytes+'B';
+if(bytes<1024*1024)return(bytes/1024).toFixed(1)+'KB';
+if(bytes<1024*1024*1024)return(bytes/1024/1024).toFixed(1)+'MB';
+return(bytes/1024/1024/1024).toFixed(2)+'GB';
+}
+
+function hexToRgba(hex,alpha){
+const h=hex.replace('#','');
+const r=parseInt(h.slice(0,2),16);
+const g=parseInt(h.slice(2,4),16);
+const b=parseInt(h.slice(4,6),16);
+return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function updateBreadcrumbs(){
+let html='<div class="breadcrumb '+(STATE.currentChamber?'':'active')+'" onclick="viewRoot()">ROOT</div>';
+STATE.viewStack.forEach((ch,i)=>{
+const isLast=i===STATE.viewStack.length-1;
+html+=`<div class="breadcrumb ${isLast?'active':''}" onclick="goToDepth(${i})">${ch.name}</div>`;
+});
+document.getElementById('breadcrumbs').innerHTML=html;
+}
+
+window.goToDepth=function(index){
+STATE.viewStack=STATE.viewStack.slice(0,index+1);
+const ch=STATE.viewStack[index];
+viewChamber(ch);
+};
+
+function updateHUD(){
+const current=STATE.currentChamber;
+document.getElementById('currentChamber').textContent=current?current.name:'ROOT';
+if(STATE.artifactShapes){
+document.getElementById('currentDepth').textContent='artifacts';
+document.getElementById('visibleCount').textContent=STATE.artifactShapes.length;
+}else{
+document.getElementById('currentDepth').textContent=current?current.depth:0;
+const count=current?current.children.length:STATE.rootChambers.length;
+document.getElementById('visibleCount').textContent=count;
+}
+}
+
+function updateNavButtons(){
+const upBtn=document.getElementById('upBtn');
+const downBtn=document.getElementById('downBtn');
+
+upBtn.disabled=STATE.viewStack.length===0;
+
+if(STATE.artifactShapes){
+downBtn.disabled=true;
+}else{
+const visible=STATE.currentChamber?
+STATE.currentChamber.children.map(cid=>STATE.chamberMap[cid]).filter(Boolean):
+STATE.rootChambers;
+downBtn.disabled=visible.length===0;
+}
+}
+
+function buildTree(){
+const content=document.getElementById('treeContent');
+let html='';
+
+function renderChamber(ch,depth=0){
+const indent=depth*12;
+const hasChildren=ch.children.length>0;
+const classes=['tree-item'];
+if(hasChildren)classes.push('has-children');
+
+html+=`<div class="${classes.join(' ')}" style="margin-left:${indent}px" 
+data-chamber-id="${ch.id}" onclick="jumpToChamber('${ch.id}')">
+${ch.name} <span style="color:#6b8a96;font-size:9px">(${ch.totalCount})</span>
+</div>`;
+}
+
+STATE.rootChambers.forEach(ch=>renderChamber(ch,0));
+content.innerHTML=html;
+}
+
+function updateTreeSelection(){
+document.querySelectorAll('.tree-item').forEach(el=>el.classList.remove('active'));
+if(STATE.currentChamber){
+const el=document.querySelector(`[data-chamber-id="${STATE.currentChamber.id}"]`);
+if(el)el.classList.add('active');
+}
+}
+
+window.jumpToChamber=function(id){
+const chamber=STATE.chamberMap[id];
+if(!chamber)return;
+
+// Build path to this chamber
+const path=[];
+let ch=chamber;
+while(ch){
+path.unshift(ch);
+ch=ch.parent?STATE.chamberMap[ch.parent]:null;
+}
+
+// Navigate to it
+STATE.oldView=getCurrentView();
+STATE.viewStack=path.slice(0,-1);
+STATE.currentChamber=path.length>1?path[path.length-2]:null;
+viewChamber(chamber);
+};
+
+function toggleTree(){
+STATE.treeOpen=!STATE.treeOpen;
+const sidebar=document.getElementById('treeSidebar');
+if(STATE.treeOpen){
+sidebar.classList.add('open');
+}else{
+sidebar.classList.remove('open');
+}
+}
+
+function resize(){
+W=window.innerWidth;
+H=window.innerHeight;
+CAN.width=W*DPR;
+CAN.height=H*DPR;
+CAN.style.width=W+'px';
+CAN.style.height=H+'px';
+
+if(STATE.currentChamber){
+viewChamber(STATE.currentChamber);
+}else if(STATE.rootChambers.length>0){
+viewRoot();
+}
+}
+
+window.addEventListener('resize',resize);
+
+window.addEventListener('keydown',e=>{
+if(STATE.animating)return;
+
+if(e.key==='ArrowRight'||e.key==='ArrowDown'){
+// Go deeper / forward
+if(STATE.artifactShapes)return;
+
+const visible=STATE.currentChamber?
+STATE.currentChamber.children.map(cid=>STATE.chamberMap[cid]).filter(Boolean):
+STATE.rootChambers;
+
+if(visible.length>0){
+viewChamber(visible[0]);
+}
+}else if(e.key==='ArrowLeft'||e.key==='ArrowUp'){
+// Go up / backward
+goUp();
+}
+});
+
+CAN.addEventListener('mousemove',e=>{
+if(STATE.animating)return;
+
+const rect=CAN.getBoundingClientRect();
+const mx=e.clientX-rect.left;
+const my=e.clientY-rect.top;
+
+STATE.hoverChamber=null;
+
+if(STATE.artifactShapes){
+STATE.artifactShapes.forEach(item=>{
+if(pointInBlob(mx,my,item.blob)){
+STATE.hoverChamber=item;
+}
+});
+}else{
+const visible=STATE.currentChamber?
+STATE.currentChamber.children.map(cid=>STATE.chamberMap[cid]).filter(Boolean):
+STATE.rootChambers;
+
+visible.forEach(ch=>{
+if(pointInBlob(mx,my,ch.blob)){
+STATE.hoverChamber=ch;
+}
+});
+}
+});
+
+CAN.addEventListener('click',e=>{
+if(STATE.animating)return;
+
+const rect=CAN.getBoundingClientRect();
+const mx=e.clientX-rect.left;
+const my=e.clientY-rect.top;
+
+let clicked=null;
+
+// Check if clicking parent shape to go up
+if(STATE.parentShape&&STATE.currentChamber){
+if(pointInPolygon(mx,my,STATE.parentShape.blob)){
+// Check if NOT clicking a child
+let clickedChild=false;
+const visible=STATE.currentChamber.children.map(cid=>STATE.chamberMap[cid]).filter(Boolean);
+visible.forEach(ch=>{
+if(pointInBlob(mx,my,ch.blob)){
+clickedChild=true;
+}
+});
+
+if(!clickedChild){
+// Clicked parent boundary - go up
+goUp();
+return;
+}
+}
+}
+
+if(STATE.artifactShapes){
+STATE.artifactShapes.forEach(item=>{
+if(pointInBlob(mx,my,item.blob)){
+clicked=item;
+}
+});
+
+if(clicked){
+inspectArtifact(clicked);
+}else{
+goUp();
+}
+}else{
+const visible=STATE.currentChamber?
+STATE.currentChamber.children.map(cid=>STATE.chamberMap[cid]).filter(Boolean):
+STATE.rootChambers;
+
+visible.forEach(ch=>{
+if(pointInBlob(mx,my,ch.blob)){
+clicked=ch;
+}
+});
+
+if(clicked){
+viewChamber(clicked);
+}else{
+goUp();
+}
+}
+});
+
+function inspectArtifact(item){
+const art=item.artifact;
+let html=`
+<div class="info-block">
+<div class="label">File</div><div class="value" style="font-size:10px;word-break:break-all">${item.name}</div>
+<div class="label">Type</div><div class="value" style="color:${item.color}">${item.ext.toUpperCase()}</div>
+<div class="label">Size</div><div class="value">${formatSize(art.size||0)}</div>
+<div class="label">Full Path</div><div class="value" style="font-size:9px;word-break:break-all">${art.path}</div>
+</div>`;
+
+document.getElementById('inspectorContent').innerHTML=html;
+document.getElementById('inspector').classList.add('open');
+}
+
+function inspectChamber(ch){
+let html=`
+<div class="info-block">
+<div class="label">Name</div><div class="value" style="color:${ch.color}">${ch.name}</div>
+<div class="label">Depth</div><div class="value">${ch.depth}</div>
+<div class="label">Artifacts</div><div class="value">${ch.totalCount.toLocaleString()}</div>
+<div class="label">Size</div><div class="value">${formatSize(ch.totalSize)}</div>
+<div class="label">Children</div><div class="value">${ch.children.length}</div>
+</div>`;
+
+if(Object.keys(ch.species).length>0){
+html+=`<div style="font-size:11px;color:#e8b849;font-weight:bold;margin:12px 0">
+SPECIES COMPOSITION</div>`;
+Object.entries(ch.species).sort((a,b)=>b[1]-a[1]).slice(0,10).forEach(([sp,cnt])=>{
+const pct=(cnt/ch.totalCount*100).toFixed(1);
+const col=SPECIES_COLORS[sp]||'#888';
+html+=`<div style="padding:5px;margin:3px 0;background:${hexToRgba(col,0.08)};
+border-left:3px solid ${col};font-size:10px">
+<strong>${sp.toUpperCase()}</strong>: ${cnt} (${pct}%)
+</div>`;
+});
+}
+
+document.getElementById('inspectorContent').innerHTML=html;
+document.getElementById('inspector').classList.add('open');
+}
+
+function closeInspector(){
+document.getElementById('inspector').classList.remove('open');
+}
+
+load();
+</script>
+</body></html>

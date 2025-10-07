@@ -1,0 +1,44 @@
+#!/bin/bash
+# ARKADU OS Full System Scan
+
+echo "╔════════════════════════════════════════════════════╗"
+echo "║        ARKADU OS v1.0 - Full System Scan          ║"
+echo "╚════════════════════════════════════════════════════╝"
+echo ""
+
+# Create output directory
+mkdir -p ARKADU/sys
+
+# Phase 1: Core scanning
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "[1/3] Primitive Scan - File metadata + pattern detection"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+python3 ARKADU/kern/primitive_scan.py
+echo ""
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "[2/3] Taxonomy Scan - Chamber hierarchy (Kingdom→Species)"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+python3 ARKADU/kern/taxonomy_scan.py
+echo ""
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "[3/3] Ekphrasis Trace - Operative ekphrasis chains"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+python3 ARKADU/kern/ekphrasis_trace.py
+echo ""
+
+# Summary
+echo "╔════════════════════════════════════════════════════╗"
+echo "║                  SCAN COMPLETE                     ║"
+echo "╚════════════════════════════════════════════════════╝"
+echo ""
+echo "Output files:"
+echo "  - ARKADU/sys/primitive.jsonl       (file registry)"
+echo "  - ARKADU/sys/taxonomy.jsonl        (taxonomic IDs)"
+echo "  - ARKADU/sys/chambers.jsonl        (chamber summaries)"
+echo "  - ARKADU/sys/ekphrasis.jsonl       (prompt chains)"
+echo ""
+echo "View report: cat ARKADU/PRIMITIVE-SCAN-REPORT.md"
+echo "View chambers: grep 'depth.*2' ARKADU/sys/chambers.jsonl | head"
+echo ""

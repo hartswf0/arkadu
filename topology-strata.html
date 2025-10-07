@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>ARKADU Topology Strata — Chambers as Organic Terrain</title>
+<style>
+  :root{
+    --void:#0a0e1a; --panel:#0f1419; --grid:#1a3a52; --text:#b8dbd9; --dim:#6b8a96;
+    --blue:#4dd9cc; --coral:#d97b8f; --amber:#e8b849; --purple:#9d7be8; --green:#6bbd8f;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--void);color:var(--text);
+    font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;}
+  #wrap{position:fixed; inset:0; display:grid; grid-template-rows:auto 1fr auto;}
+  header{
+    z-index:10; display:flex; gap:10px; align-items:center; padding:10px 12px;
+    background:linear-gradient(to bottom, rgba(15,20,25,.95), rgba(15,20,25,.75));
+    border-bottom:1px solid var(--grid); backdrop-filter: blur(8px);
+  }
+  h1{font-size:14px; margin:0; color:var(--blue);} 
+  .sub{font-size:11px; color:var(--dim); line-height:1.35}
+  .spacer{flex:1}
+  button{
+    font:inherit; font-size:12px; cursor:pointer; color:var(--text); background:transparent;
+    border:1px solid var(--grid); border-radius:8px; padding:6px 10px;
+  }
+  button:hover{border-color:var(--blue); box-shadow:0 0 0 2px rgba(77,217,204,.08) inset;}
+  #legend{
+    position:fixed; right:12px; top:62px; z-index:10;
+    background:rgba(15,20,25,.92); border:1px solid var(--grid); border-radius:10px; padding:10px 12px; min-width:180px;
+    backdrop-filter: blur(8px); font-size:11px;
+  }
+  .legend-title{font-size:12px; color:var(--blue); margin-bottom:8px; font-weight:bold;}
+  .row{display:flex; align-items:center; gap:8px; margin:4px 0;}
+  .dot{width:12px; height:12px; border-radius:3px; border:1px solid var(--grid)}
+  #canvas{display:block; width:100%; height:100%;}
+  .label{position:absolute;font-size:10px;color:var(--blue);font-weight:bold;pointer-events:none;text-shadow:0 0 4px #000,0 0 8px #000;white-space:nowrap;}
+  .label.kingdom{font-size:13px;}
+  .label.detail{font-size:9px;color:var(--dim);}
+  footer{
+    z-index:10; display:flex; gap:10px; align-items:center; padding:8px 12px;
+    background:linear-gradient(to top, rgba(15,20,25,.95), rgba(15,20,25,.55));
+    border-top:1px solid var(--grid); font-size:11px; color:var(--dim);
+  }
+  .grain{ pointer-events:none; position:fixed; inset:0; z-index:0; opacity:.06;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='.9'/%3E%3C/svg%3E");
+    mix-blend-mode:overlay;
+  }
+  .loading{position:fixed; inset:0; display:flex; align-items:center; justify-content:center; flex-direction:column;
+    gap:16px; background:var(--void); z-index:200; font-size:13px; color:var(--blue);}
+  .loading.hidden{display:none}
+  .progress{width:300px; height:2px; background:rgba(77,217,204,.2); position:relative; overflow:hidden;}
+  .progress-bar{height:100%; background:var(--blue); width:0%; box-shadow:0 0 10px var(--blue); transition:width .3s}
+  @media (max-width:640px){ #legend{top:auto; bottom:60px} }
+</head>
+<body>
+<div id="wrap">
+  <header>
+    <h1>ARKADU Topology Strata</h1>
+    <div class="sub">Chambers as organic terrain · Species stratification · Marching squares contours</div>
+    <div class="spacer"></div>
+    <button id="btnIso">Isometric</button>
+    <button id="btnTop">Top View</button>
+    <button id="btnSide">Side View</button>
+    <button id="btnLabels">Toggle Labels</button>
+    <button id="btnReset">Reset View</button>
+  </header>
+  <canvas id="canvas"></canvas>
+  <footer>
+    Drag to pan · Scroll to zoom · Click chamber to focus · Each mountain = one chamber, stratified by species composition
+    <div class="sub">Isometric view: chamber positions are consistent across all views</div>
+    <div class="sub">Top view: chamber positions are projected onto a 2D plane</div>
+    <div class="sub">Side view: chamber positions are projected onto a 2D plane, with depth as the vertical axis</div>
+    <div class="sub">Toggle labels to show/hide species labels on each mountain</div>
+  </footer>
+</div>
+<div id="legend">
+  <div class="legend-title">Loading...</div>
+</div>
+<div class="grain"></div>
+<div class="loading" id="loading">
+  <div>⬢ LOADING ARKADU DATA ⬢</div>
+  <div class="progress"><div class="progress-bar" id="progress"></div></div>
+  <div id="loadStatus" style="font-size:11px;color:var(--dim)">Initializing...</div>
+</div>
+
+<script>
+(function(){
+  const CAN = document.getElementById('canvas');
+  const CTX = CAN.getContext('2d');
+  let DPR = Math.max(1, window.devicePixelRatio || 1);
+  let W=0, H=0; 
+  let zoom=0.8, panX=0, panY=0; 
+  let dragging=false, lastX=0, lastY=0;
+
+  const COLORS = {
+    png: '#4dd9cc', jpg: '#4dd9cc',
+    mp4: '#d97b8f',
+    mp3: '#e8b849', py: '#e8b849',
+    json: '#9d7be8',
+    html: '#6bbd8f',
+    unknown: '#6b8a96'
+  };
+
+  const STATE = {
+    chambers: [],      // from ARKADU data
+    artifacts: [],
+    mountains: [],     // {chamber, cx, cy, speciesLayers:[{species,count,paths:[]}]}
+    thresholds: [0.15, 0.30, 0.50, 0.75], // iso levels
+    gridStep: 8,       // sampling resolution
+    highlightIdx: -1,
+    filterDepth: null  // null = all, 0/1/2 = specific depth
+  };
+
+  // --- Data Loading ---------------------------------------------------------
+  async function load(){
+    try{
+      updateProgress('Loading artifacts...', 20);
+      const r = await fetch('/sys/primitive.jsonl');
+      const t = await r.text();
+      STATE.artifacts = t.trim().split('\n').map(l => JSON.parse(l));
+      
+      updateProgress('Building chambers...', 50);
+      buildChambers();
+      
+      updateProgress('Generating topology...', 75);
+      generateTopology();
+      
+      updateProgress('Complete', 100);
+      setTimeout(() => document.getElementById('loading').classList.add('hidden'), 500);
+      
+      resize();
+      updateLegend();
+    } catch(e){
+      console.error(e);
+      document.getElementById('loadStatus').innerHTML = `<span style="color:var(--coral)">ERROR: ${e.message}</span>`;
+    }
+  }
+
+  function updateProgress(msg, pct){
+    document.getElementById('loadStatus').textContent = msg.toUpperCase();
+    document.getElementById('progress').style.width = pct + '%';
+  }
+
+  function buildChambers(){
+    const m = {};
+    STATE.artifacts.forEach(a => {
+      const p = a.path.split('/');
+      for(let d = 1; d <= Math.min(p.length-1, 3); d++){
+        const cp = p.slice(0, d).join('/');
+        if(!m[cp]){
+          m[cp] = {
+            id: cp,
+            name: p[d-1],
+            depth: d-1,
+            parent: d>1 ? p.slice(0, d-1).join('/') : null,
+            children: [],
+            artifacts: [],
+            species: {},
+            totalSize: 0
+          };
+        }
+        if(d === p.length-1){
+          m[cp].artifacts.push(a);
+          const s = (a.ext || 'unknown').replace(/^\./, '');
+          m[cp].species[s] = (m[cp].species[s] || 0) + 1;
+          m[cp].totalSize += (a.size || 0);
+        }
+      }
+    });
+    Object.values(m).forEach(c => {
+      if(c.parent && m[c.parent] && !m[c.parent].children.includes(c.id)){
+        m[c.parent].children.push(c.id);
+      }
+    });
+    STATE.chambers = Object.values(m);
+  }
+
+  // --- Topology Generation --------------------------------------------------
+  function generateTopology(){
+    STATE.mountains = [];
+    
+    // Position chambers in space using hash-based organic layout
+    STATE.chambers.forEach((ch, idx) => {
+      if(ch.artifacts.length < 5) return; // skip tiny chambers
+      
+      // Hash-based position (consistent but natural)
+      const hash = hashString(ch.id);
+      const angle = (hash % 360) * (Math.PI / 180);
+      const radius = 150 + ((hash >> 8) % 200) + ch.depth * 80;
+      const cx = 960 + Math.cos(angle) * radius;
+      const cy = 540 + Math.sin(angle) * radius;
+      
+      // Build species layers (sorted by count, descending)
+      const speciesList = Object.entries(ch.species).sort((a,b) => b[1] - a[1]);
+      const speciesLayers = [];
+      
+      speciesList.forEach(([species, count]) => {
+        // Generate point cloud for this species in this chamber
+        const points = [];
+        const spread = Math.sqrt(count) * 2.5;
+        
+        for(let i = 0; i < Math.min(count, 150); i++){
+          // Gaussian distribution around center
+          const r = gaussianRandom() * spread;
+          const theta = Math.random() * Math.PI * 2;
+          points.push({
+            x: cx + Math.cos(theta) * r,
+            y: cy + Math.sin(theta) * r,
+            w: 1
+          });
+        }
+        
+        // Generate field and extract contours
+        const bbox = {
+          x1: cx - spread * 2,
+          y1: cy - spread * 2,
+          x2: cx + spread * 2,
+          y2: cy + spread * 2
+        };
+        
+        const sigma = 12 + ch.depth * 3;
+        const gridObj = sampleFieldGrid(bbox, points, sigma, STATE.gridStep);
+        
+        // Extract contours at each threshold
+        const contours = [];
+        STATE.thresholds.forEach(iso => {
+          const paths = extractContours(gridObj, iso);
+          if(paths.length) contours.push({iso, paths});
+        });
+        
+        speciesLayers.push({species, count, contours, color: COLORS[species] || COLORS.unknown});
+      });
+      
+      STATE.mountains.push({chamber: ch, cx, cy, speciesLayers});
+    });
+  }
+
+  // --- Field Sampling -------------------------------------------------------
+  function hashString(str){
+    let hash = 0;
+    for(let i = 0; i < str.length; i++){
+      hash = ((hash << 5) - hash) + str.charCodeAt(i);
+      hash = hash & hash;
+    }
+    return Math.abs(hash);
+  }
+
+  function gaussianRandom(){
+    let u = 0, v = 0;
+    while(u === 0) u = Math.random();
+    while(v === 0) v = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+
+  function fieldValue(x, y, points, sigma){
+    let v = 0;
+    const s2 = sigma * sigma;
+    for(let i = 0; i < points.length; i++){
+      const dx = x - points[i].x, dy = y - points[i].y;
+      v += points[i].w * Math.exp(-(dx*dx + dy*dy) / (2 * s2));
+    }
+    return v;
+  }
+
+  function sampleFieldGrid(bbox, points, sigma, step){
+    const {x1, y1, x2, y2} = bbox;
+    const nx = Math.max(2, Math.ceil((x2 - x1) / step) + 1);
+    const ny = Math.max(2, Math.ceil((y2 - y1) / step) + 1);
+    const grid = new Float32Array(nx * ny);
+    let vmin = Infinity, vmax = -Infinity;
+    
+    for(let j = 0; j < ny; j++){
+      for(let i = 0; i < nx; i++){
+        const x = x1 + i * step;
+        const y = y1 + j * step;
+        const v = fieldValue(x, y, points, sigma);
+        grid[j * nx + i] = v;
+        if(v < vmin) vmin = v;
+        if(v > vmax) vmax = v;
+      }
+    }
+    
+    // Normalize to [0,1]
+    const denom = (vmax - vmin) || 1;
+    for(let k = 0; k < grid.length; k++){
+      grid[k] = (grid[k] - vmin) / denom;
+    }
+    
+    return {grid, nx, ny, x1, y1, step};
+  }
+
+  // --- Marching Squares -----------------------------------------------------
+  function extractContours(gridObj, iso){
+    const {grid, nx, ny, x1, y1, step} = gridObj;
+    const segments = [];
+    
+    function v(i, j){ return grid[j * nx + i]; }
+    
+    for(let j = 0; j < ny - 1; j++){
+      for(let i = 0; i < nx - 1; i++){
+        const tl = v(i, j) >= iso ? 1 : 0;
+        const tr = v(i+1, j) >= iso ? 1 : 0;
+        const br = v(i+1, j+1) >= iso ? 1 : 0;
+        const bl = v(i, j+1) >= iso ? 1 : 0;
+        const idx = (tl << 3) | (tr << 2) | (br << 1) | bl;
+        
+        if(idx === 0 || idx === 15) continue;
+        
+        const xL = x1 + i * step, yT = y1 + j * step;
+        const a = v(i,j), b = v(i+1,j), c = v(i+1,j+1), d = v(i,j+1);
+        
+        const t = (a, b) => (iso - a) / ((b - a) || 1e-6);
+        const tTop = t(a, b), tRight = t(b, c), tBot = t(d, c), tLeft = t(a, d);
+        
+        const pL = (t01) => ({x: xL, y: yT + t01 * step});
+        const pR = (t01) => ({x: xL + step, y: yT + t01 * step});
+        const pT = (t01) => ({x: xL + t01 * step, y: yT});
+        const pB = (t01) => ({x: xL + t01 * step, y: yT + step});
+        
+        switch(idx){
+          case 1: case 14: segments.push([pB(tBot), pL(tLeft)]); break;
+          case 2: case 13: segments.push([pR(tRight), pB(tBot)]); break;
+          case 3: case 12: segments.push([pR(tRight), pL(tLeft)]); break;
+          case 4: case 11: segments.push([pT(tTop), pR(tRight)]); break;
+          case 5:
+            segments.push([pT(tTop), pL(tLeft)]);
+            segments.push([pR(tRight), pB(tBot)]);
+            break;
+          case 6: case 9: segments.push([pT(tTop), pB(tBot)]); break;
+          case 7: case 8: segments.push([pT(tTop), pL(tLeft)]); break;
+          case 10:
+            segments.push([pT(tTop), pR(tRight)]);
+            segments.push([pL(tLeft), pB(tBot)]);
+            break;
+        }
+      }
+    }
+    
+    // Stitch segments into polylines
+    return stitchSegments(segments);
+  }
+
+  function stitchSegments(segments){
+    const paths = [];
+    const used = new Array(segments.length).fill(false);
+    
+    for(let i = 0; i < segments.length; i++){
+      if(used[i]) continue;
+      used[i] = true;
+      const path = segments[i].slice();
+      let extended = true;
+      
+      while(extended){
+        extended = false;
+        for(let j = i + 1; j < segments.length; j++){
+          if(used[j]) continue;
+          const a = path[path.length - 1];
+          const b = segments[j][0], c = segments[j][1];
+          const dist2 = (p, q) => (p.x - q.x) ** 2 + (p.y - q.y) ** 2;
+          
+          if(dist2(a, b) < 1){
+            path.push(c);
+            used[j] = true;
+            extended = true;
+            continue;
+          }
+          if(dist2(a, c) < 1){
+            path.push(b);
+            used[j] = true;
+            extended = true;
+            continue;
+          }
+        }
+      }
+      
+      if(path.length > 2) paths.push(path);
+    }
+    
+    return paths;
+  }
+
+  // --- Rendering ------------------------------------------------------------
+  function resize(){
+    const r = CAN.getBoundingClientRect();
+    W = Math.floor(r.width * DPR);
+    H = Math.floor(r.height * DPR);
+    CAN.width = W;
+    CAN.height = H;
+    CTX.setTransform(1, 0, 0, 1, 0, 0);
+    CTX.scale(DPR, DPR);
+    draw();
+  }
+
+  function clear(){
+    CTX.setTransform(1, 0, 0, 1, 0, 0);
+    CTX.clearRect(0, 0, CAN.width / DPR, CAN.height / DPR);
+    const w = CAN.width / DPR, h = CAN.height / DPR;
+    const g = CTX.createRadialGradient(w/2, h/2, 0, w/2, h/2, Math.max(w,h));
+    g.addColorStop(0, 'rgba(26,58,82,0.03)');
+    g.addColorStop(1, 'rgba(10,14,26,0)');
+    CTX.fillStyle = g;
+    CTX.fillRect(0, 0, w, h);
+  }
+
+  function draw(){
+    clear();
+    CTX.save();
+    CTX.translate(panX, panY);
+    CTX.scale(zoom, zoom);
+    CTX.transform(1, -0.15, 0, 1, 0, 0); // iso skew
+    
+    STATE.mountains.forEach((mt, idx) => {
+      if(STATE.filterDepth !== null && mt.chamber.depth !== STATE.filterDepth) return;
+      drawMountain(mt, idx === STATE.highlightIdx);
+    });
+    
+    // Highlight ring
+    if(STATE.highlightIdx >= 0){
+      const mt = STATE.mountains[STATE.highlightIdx];
+      CTX.save();
+      CTX.strokeStyle = 'rgba(77,217,204,0.9)';
+      CTX.lineWidth = 2 / zoom;
+      CTX.setLineDash([8 / zoom, 8 / zoom]);
+      CTX.beginPath();
+      CTX.arc(mt.cx, mt.cy, 100, 0, Math.PI * 2);
+      CTX.stroke();
+      CTX.restore();
+    }
+    
+    CTX.restore();
+  }
+
+  function drawMountain(mt, highlighted){
+    let yOffset = 0;
+    
+    // Draw each species layer from bottom to top
+    mt.speciesLayers.slice().reverse().forEach((layer, li) => {
+      const totalLayers = mt.speciesLayers.length;
+      const relativeHeight = layer.count / mt.chamber.artifacts.length;
+      
+      layer.contours.forEach(({iso, paths}) => {
+        CTX.save();
+        CTX.translate(0, -yOffset * 0.5); // vertical stacking
+        
+        const alpha = 0.08 + iso * 0.12 + (highlighted ? 0.08 : 0);
+        const strokeAlpha = 0.25 + iso * 0.15 + (highlighted ? 0.15 : 0);
+        
+        CTX.fillStyle = hexToRgba(layer.color, alpha);
+        CTX.strokeStyle = hexToRgba(layer.color, strokeAlpha);
+        CTX.lineWidth = Math.max(1, 1.5 / zoom);
+        
+        paths.forEach(path => {
+          if(path.length < 3) return;
+          CTX.beginPath();
+          CTX.moveTo(path[0].x, path[0].y);
+          for(let k = 1; k < path.length; k++){
+            CTX.lineTo(path[k].x, path[k].y);
+          }
+          CTX.closePath();
+          CTX.fill();
+          CTX.stroke();
+        });
+        
+        CTX.restore();
+      });
+      
+      yOffset += 25 + relativeHeight * 80;
+    });
+    
+    // Label
+    CTX.save();
+    CTX.translate(mt.cx, mt.cy - yOffset * 0.5 - 20);
+    CTX.fillStyle = 'rgba(77,217,204,0.8)';
+    CTX.font = `${Math.max(10, 12 / zoom)}px monospace`;
+    CTX.textAlign = 'center';
+    CTX.fillText(mt.chamber.name, 0, 0);
+    CTX.restore();
+  }
+
+  function hexToRgba(col, a){
+    if(col.startsWith('#')){
+      const h = col.replace('#', '');
+      const n = h.length === 3 ? h.split('').map(x => x + x).join('') : h;
+      const r = parseInt(n.slice(0, 2), 16);
+      const g = parseInt(n.slice(2, 4), 16);
+      const b = parseInt(n.slice(4, 6), 16);
+      return `rgba(${r},${g},${b},${a})`;
+    }
+    return col;
+  }
+
+  function updateLegend(){
+    const uniqueSpecies = new Set();
+    STATE.chambers.forEach(ch => Object.keys(ch.species).forEach(s => uniqueSpecies.add(s)));
+    const speciesArray = Array.from(uniqueSpecies).sort();
+    
+    const rows = speciesArray.map(s => {
+      const color = COLORS[s] || COLORS.unknown;
+      return `<div class="row"><span class="dot" style="background:${color}"></span><span>${s.toUpperCase()}</span></div>`;
+    }).join('');
+    
+    const stats = `<div style="margin-top:10px; padding-top:8px; border-top:1px solid var(--grid); font-size:10px; color:var(--dim)">
+      ${STATE.chambers.length} chambers · ${STATE.artifacts.length} artifacts · ${STATE.mountains.length} mountains
+    </div>`;
+    
+    document.getElementById('legend').innerHTML = `
+      <div class="legend-title">Species Strata</div>
+      ${rows}
+      ${stats}
+    `;
+  }
+
+  // --- Interaction ----------------------------------------------------------
+  function onWheel(e){
+    e.preventDefault();
+    const scale = (e.deltaY < 0) ? 1.1 : 0.9;
+    const mx = e.clientX, my = e.clientY;
+    const [wx, wy] = screenToWorld(mx, my);
+    zoom *= scale;
+    zoom = Math.min(3, Math.max(0.3, zoom));
+    const [sx, sy] = worldToScreen(wx, wy);
+    panX += (mx - sx);
+    panY += (my - sy);
+    draw();
+  }
+
+  function screenToWorld(x, y){
+    return [(x - panX) / zoom, (y - panY) / zoom];
+  }
+
+  function worldToScreen(x, y){
+    return [x * zoom + panX, y * zoom + panY];
+  }
+
+  function onDown(e){
+    dragging = true;
+    lastX = e.clientX;
+    lastY = e.clientY;
+  }
+
+  function onMove(e){
+    if(!dragging) return;
+    const dx = e.clientX - lastX, dy = e.clientY - lastY;
+    panX += dx;
+    panY += dy;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    draw();
+  }
+
+  function onUp(){
+    dragging = false;
+  }
+
+  function onClick(e){
+    const [wx, wy] = screenToWorld(e.clientX, e.clientY);
+    let best = -1, bestD = 1e9;
+    STATE.mountains.forEach((mt, i) => {
+      if(STATE.filterDepth !== null && mt.chamber.depth !== STATE.filterDepth) return;
+      const dx = wx - mt.cx, dy = wy - mt.cy;
+      const d = dx * dx + dy * dy;
+      if(d < bestD){ bestD = d; best = i; }
+    });
+    if(best >= 0){
+      STATE.highlightIdx = (STATE.highlightIdx === best ? -1 : best);
+      draw();
+    }
+  }
+
+  // --- Controls -------------------------------------------------------------
+  document.getElementById('btnDepth0').onclick = () => {
+    STATE.filterDepth = 0;
+    draw();
+  };
+  document.getElementById('btnDepth1').onclick = () => {
+    STATE.filterDepth = 1;
+    draw();
+  };
+  document.getElementById('btnDepth2').onclick = () => {
+    STATE.filterDepth = 2;
+    draw();
+  };
+  document.getElementById('btnAll').onclick = () => {
+    STATE.filterDepth = null;
+    draw();
+  };
+  document.getElementById('btnReset').onclick = () => {
+    zoom = 0.8;
+    panX = 0;
+    panY = 0;
+    STATE.highlightIdx = -1;
+    draw();
+  };
+
+  // --- Boot -----------------------------------------------------------------
+  function init(){
+    window.addEventListener('resize', resize);
+    CAN.addEventListener('wheel', onWheel, {passive: false});
+    CAN.addEventListener('mousedown', onDown);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    CAN.addEventListener('click', onClick);
+    
+    panX = window.innerWidth / 2 - 960;
+    panY = window.innerHeight / 2 - 540;
+    
+    load();
+  }
+  
+  init();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>APPROACH 8: Infinite Organic Canvas — ARKADU OS</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    html,body{height:100%}
+    :root{
+      --bg-main:#0a0e1a;--bg-panel:#0f1419;--border:#1a3a52;--text:#b8dbd9;--muted:#6b8a96;
+      --blue:#4dd9cc;--coral:#d97b8f;--amber:#e8b849;--purple:#9d7be8;--green:#6bbd8f;
+      --shadow:0 10px 24px rgba(0,0,0,.35);--radius:12px;
+    }
+    body{background:var(--bg-main);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,Ubuntu,Arial,sans-serif;overflow:hidden}
+
+    /* Slim OS layout */
+    .os{display:grid;grid-template-rows:56px 1fr 40px;height:100vh}
+    .hdr{display:flex;align-items:center;justify-content:space-between;padding:0 12px;background:var(--bg-panel);border-bottom:1px solid var(--border)}
+    .brand{display:flex;gap:10px;align-items:center;font-weight:800;color:var(--blue)}
+    .crumbs{font-size:12px;color:var(--muted)}
+    .toolbar{display:flex;gap:8px;align-items:center}
+    .seg{display:flex;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+    .seg button{border:0;background:transparent;color:var(--text);padding:8px 12px;cursor:pointer;font-size:12px}
+    .seg button.active{background:var(--blue);color:#062522}
+    .stats{display:flex;gap:10px;font-size:12px;color:var(--muted)}
+
+    .stage{position:relative;overflow:hidden}
+    /* Infinite canvas foundation */
+    #canvasWrap{position:absolute;inset:0;overflow:hidden}
+    #canvasInner{position:absolute;left:0;top:0;transform-origin:0 0}
+
+    /* Deck placeholder */
+    .panel{position:absolute;inset:0;padding:16px}
+    .grid{position:relative;height:100%;border-radius:var(--radius);background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:20px 20px;box-shadow:var(--shadow);overflow:auto}
+
+    /* Preview */
+    .preview{position:absolute;inset:0;background:var(--bg-main);overflow:auto;padding:20px;display:none}
+    .fileGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:30px}
+    .card{background:var(--bg-panel);border:1px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;transition:all .2s}
+    .card:hover{border-color:var(--blue);background:rgba(77,217,204,.08);transform:translateY(-2px)}
+
+    .ftr{display:flex;align-items:center;justify-content:space-between;padding:0 12px;background:var(--bg-panel);border-top:1px solid var(--border);font-size:12px;color:var(--muted)}
+    .btn{background:#0c131a;border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:10px;font-size:12px;cursor:pointer}
+    .btn.primary{border-color:var(--blue)}
+  </style>
+</head>
+<body>
+<div class="os">
+  <!-- CLEAN HEADER (no bloat) -->
+  <header class="hdr">
+    <div class="brand">ARKADU OS <span class="crumbs" id="crumbs">/</span></div>
+    <div class="toolbar">
+      <div class="seg" id="modeSeg">
+        <button data-mode="deck" class="active">Deck</button>
+        <button data-mode="atlas">Atlas</button>
+        <button data-mode="sideways">Sideways</button>
+        <button data-mode="topo">Topo</button>
+        <button data-mode="preview">Preview</button>
+      </div>
+    </div>
+    <div class="stats">
+      <span id="stCh">— chambers</span>
+      <span id="stAr">— artifacts</span>
+      <span id="stDepth" style="color:var(--blue);font-weight:700">Max Depth: ∞</span>
+    </div>
+  </header>
+
+  <main class="stage">
+    <!-- Infinite canvas base (future Voronoi/WebGL goes here) -->
+    <div id="canvasWrap">
+      <div id="canvasInner">
+        <div class="panel" id="deckPanel"><div class="grid" id="gridDeck"></div></div>
+        <div class="panel" id="atlasPanel" style="display:none"><div class="grid" id="gridAtlas"></div></div>
+        <div class="panel" id="sidePanel" style="display:none"><div class="grid" id="gridSide"></div></div>
+        <div class="panel" id="topoPanel" style="display:none"><div class="grid" id="gridTopo"></div></div>
+        
+        <!-- Preview overlay -->
+        <div class="preview" id="preview">
+          <div style="max-width:1400px;margin:0 auto">
+            <div id="previewHeader" style="margin-bottom:20px;padding-bottom:10px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+              <div>
+                <h2 style="color:var(--blue);margin-bottom:8px" id="previewTitle">Select a text file to preview</h2>
+                <div style="font-size:12px;color:var(--muted)" id="previewMeta"></div>
+              </div>
+              <div id="previewControls" style="display:none;gap:8px">
+                <button id="toggleViewMode" class="btn" style="font-size:12px">View Source</button>
+                <button id="copyContent" class="btn" style="font-size:12px">📋 Copy</button>
+              </div>
+            </div>
+            <div id="previewContainer">
+              <pre id="previewContent" style="background:var(--bg-panel);padding:20px;border-radius:12px;border:1px solid var(--border);color:var(--text);font-family:ui-monospace,monospace;font-size:13px;line-height:1.6;overflow-x:auto;white-space:pre-wrap"></pre>
+              <iframe id="previewIframe" style="display:none;width:100%;height:calc(100vh - 200px);border:1px solid var(--border);border-radius:12px;background:white"></iframe>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="ftr">
+    <div id="status">Ready</div>
+    <div class="controls">
+      <button class="btn" id="btnHideUI">Hide UI</button>
+    </div>
+  </footer>
+</div>
+
+<script>
+/******** DATA ********/
+const DATA = { chambers:[], artifacts:[] };
+
+async function loadDataFromJsonFiles(){
+  try{
+    const r = await fetch('deep/json_files.json');
+    const arr = await r.json(); // [{path,size,content,...}]
+
+    // Build simple chambers from path directory segments
+    const chamberMap = {};
+    function ensureChamber(id, name, depth, parent){
+      if(!chamberMap[id]) chamberMap[id] = { id, name, depth, parent, subchambers:[], artifacts:{}, mtime: Date.now() };
+      return chamberMap[id];
+    }
+
+    arr.forEach(file=>{
+      const parts = file.path.split('/');
+      // handle directories if present
+      for(let d=0; d<parts.length-1; d++){
+        const id = parts.slice(0,d+1).join('/');
+        const parent = d>0 ? parts.slice(0,d).join('/') : null;
+        const ch = ensureChamber(id, parts[d], d, parent);
+        // count json species by default
+        ch.artifacts['json'] = (ch.artifacts['json']||0) + 1;
+        if(parent){
+          const p = chamberMap[parent];
+          if(p && !p.subchambers.includes(id)) p.subchambers.push(id);
+        }
+      }
+      // root-level file (no dir)
+      if(parts.length===1){
+        const root = ensureChamber('__ROOT__', 'root', 0, null);
+        root.artifacts['json'] = (root.artifacts['json']||0) + 1;
+      }
+
+      // push artifact
+      const chamber = parts.length>1 ? parts.slice(0,-1).join('/') : '__ROOT__';
+      DATA.artifacts.push({
+        id: file.path,
+        chamber,
+        species: 'json',
+        size: (file.size/(1024*1024)).toFixed(2),
+        content: file.content || '',
+        mtime: Date.now()
+      });
+    });
+
+    DATA.chambers = Object.values(chamberMap);
+    // Ensure ROOT exists even if no directories were present
+    if(!DATA.chambers.find(c=>c.id==='__ROOT__')){
+      const rootCount = arr.filter(f=>!f.path.includes('/')).length;
+      chamberMap['__ROOT__'] = { id:'__ROOT__', name:'root', depth:0, parent:null, subchambers:[], artifacts:{ json: rootCount }, mtime: Date.now() };
+      DATA.chambers = Object.values(chamberMap);
+    }
+
+    // Choose the chamber with the most artifacts; fallback to ROOT
+    const best = DATA.chambers.reduce((acc,c)=>{
+      const cnt = Object.values(c.artifacts||{}).reduce((a,b)=>a+b,0);
+      if(!acc || cnt > acc.count) return { id:c.id, count:cnt };
+      return acc;
+    }, null);
+    current = (best && best.count>0) ? best.id : '__ROOT__';
+    updateStats();
+    breadcrumb(current);
+    setMode('preview');
+  }catch(e){
+    console.error('Failed to load deep/json_files.json', e);
+    const g = document.getElementById('gridDeck');
+    if(g){
+      g.innerHTML = `<div style="height:100%;display:flex;align-items:center;justify-content:center;padding:40px">
+        <div style="max-width:700px;text-align:center;color:var(--muted)">
+          <div style="font-size:42px;margin-bottom:12px">⚠️</div>
+          <div style="font-weight:700;color:var(--blue);margin-bottom:6px">Could not load deep/json_files.json</div>
+          <div style="font-size:12px">Open this page via a local web server so browser can fetch local files, or ensure the path exists relative to ARKADU/.</div>
+          <div style="margin-top:10px;font-size:11px;opacity:.8">Tip: python3 -m http.server 8000 (then open http://localhost:8000/ARKADU/approach-8-infinite-organic.html)</div>
+        </div>
+      </div>`;
+    }
+    document.getElementById('status').textContent = 'Error loading data';
+  }
+}
+
+/******** STATE ********/
+let mode = 'deck';
+let current = '__ROOT__';
+let uiHidden = false;
+let pan = {x:0, y:0, scale:1};
+
+/******** UTIL ********/
+const byId = id=>document.getElementById(id);
+const getCham = id => DATA.chambers.find(c=>c.id===id) || (id==='__ROOT__'? {id:'__ROOT__', name:'root', depth:0, subchambers:[], artifacts:{json: DATA.artifacts.filter(a=>a.chamber==='__ROOT__').length}} : null);
+const childrenOf = id => getCham(id)?.subchambers || [];
+const sumArtifacts = ch => Object.values(ch.artifacts||{}).reduce((a,b)=>a+b,0);
+
+/******** INIT ********/
+function init(){
+  bindGlobal();
+  loadDataFromJsonFiles();
+  attachPanZoom();
+  // Safety: if nothing renders in 1.5s, hint user
+  setTimeout(()=>{
+    if(!DATA.artifacts.length){
+      const g = document.getElementById('gridDeck');
+      if(g && !g.innerHTML){
+        g.innerHTML = `<div style="height:100%;display:flex;align-items:center;justify-content:center;color:var(--muted)">Loading… if nothing appears, ensure deep/json_files.json is accessible.</div>`;
+      }
+    }
+  }, 1500);
+}
+
+/******** HEADER + MODES ********/
+function setMode(m){
+  mode = m;
+  document.querySelectorAll('#modeSeg button').forEach(b=>b.classList.toggle('active', b.dataset.mode===m));
+  // Show/hide panels
+  byId('deckPanel').style.display = (m==='deck')? 'block':'none';
+  byId('atlasPanel').style.display = (m==='atlas')? 'block':'none';
+  byId('sidePanel').style.display = (m==='sideways')? 'block':'none';
+  byId('topoPanel').style.display = (m==='topo')? 'block':'none';
+  byId('preview').style.display = (m==='preview')? 'block':'none';
+  rerender();
+}
+
+function rerender(){
+  if(mode==='deck') renderDeck();
+  if(mode==='preview') renderPreview();
+}
+
+/******** BREADCRUMBS + STATS ********/
+function breadcrumb(id){
+  byId('crumbs').textContent = '/ ' + (id==='__ROOT__' ? 'root' : id);
+}
+function updateStats(){
+  byId('stCh').textContent = DATA.chambers.length + ' chambers';
+  byId('stAr').textContent = DATA.artifacts.length + ' artifacts';
+  const maxDepth = DATA.chambers.reduce((m,c)=>Math.max(m,c.depth||0),0);
+  byId('stDepth').textContent = 'Max Depth: ' + maxDepth;
+}
+
+/******** SIMPLE DECK (placeholder) ********/
+function renderDeck(){
+  const g = byId('gridDeck');
+  g.innerHTML = '';
+  const ch = getCham(current);
+  const wrap = document.createElement('div');
+  wrap.style.position='relative';
+  wrap.style.padding='60px';
+
+  const title = document.createElement('div');
+  title.style.cssText='font-weight:800;color:var(--blue);margin-bottom:8px';
+  title.textContent = (ch?.name||'root') + ' — ' + sumArtifacts(ch) + ' items';
+  wrap.appendChild(title);
+
+  const btn = document.createElement('button');
+  btn.className='btn primary';
+  btn.textContent='Open Preview';
+  btn.onclick=()=> setMode('preview');
+  wrap.appendChild(btn);
+
+  g.appendChild(wrap);
+  byId('status').textContent = 'Deck ready';
+}
+
+/******** PREVIEW ********/
+function getFileIcon(ext){
+  const icons = { json:'📋', py:'🐍', txt:'📝', md:'📖', html:'🌐', js:'⚡', css:'🎨', sh:'💻', yml:'⚙️', yaml:'⚙️', xml:'📄' };
+  return icons[ext] || '📄';
+}
+function escapeHtml(text){
+  const map = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'};
+  return text.replace(/[&<>"']/g, m => map[m]);
+}
+
+function renderPreview(){
+  byId('status').textContent = 'Preview: Text documents from current chamber';
+  const ch = getCham(current);
+  const textExts = new Set(['json','py','txt','md','html','js','css','sh','yml','yaml','xml']);
+  const files = DATA.artifacts.filter(a=> a.chamber===current && textExts.has(a.species));
+
+  byId('previewTitle').textContent = `${ch?.name||'root'} — ${files.length} text files`;
+  byId('previewMeta').innerHTML = `Chamber: <b>${current}</b> • Depth: <b>${ch?.depth||0}</b> • Total artifacts: <b>${sumArtifacts(ch)}</b>`;
+
+  const container = byId('previewContent');
+  container.innerHTML='';
+  const fileList = document.createElement('div');
+  fileList.className='fileGrid';
+
+  if(files.length===0){
+    // Fallback: show a global list so there's always something visible
+    const global = DATA.artifacts.filter(a=> textExts.has(a.species)).slice(0,120);
+    if(global.length===0){
+      container.innerHTML = `<div style="color:var(--muted);padding:40px;text-align:center"><div style="font-size:48px;margin-bottom:16px">📄</div><div>No text files detected in dataset.</div></div>`;
+      return;
+    }
+    byId('previewTitle').textContent = `All chambers — ${global.length} text files (sample)`;
+    byId('previewMeta').innerHTML = `Current chamber empty. Showing sample across all chambers.`;
+    global.forEach(file=>{
+      const card = document.createElement('div');
+      card.className='card';
+      card.innerHTML = `
+        <div style="display:flex;gap:8px;align-items:start">
+          <div style="font-size:24px">${getFileIcon(file.species)}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:600;color:var(--blue);font-size:13px;margin-bottom:4px;word-break:break-all">${file.id.split('/').pop()}</div>
+            <div style="font-size:11px;color:var(--muted)">${file.species.toUpperCase()} • ${file.size} MB • <span style="opacity:.8">${file.chamber}</span></div>
+          </div>
+        </div>`;
+      card.onclick=()=> loadFilePreviewFromMemory(file);
+      fileList.appendChild(card);
+    });
+    container.appendChild(fileList);
+    return;
+  }
+
+  files.forEach(file=>{
+    const card = document.createElement('div');
+    card.className='card';
+    card.innerHTML = `
+      <div style="display:flex;gap:8px;align-items:start">
+        <div style="font-size:24px">${getFileIcon(file.species)}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;color:var(--blue);font-size:13px;margin-bottom:4px;word-break:break-all">${file.id.split('/').pop()}</div>
+          <div style="font-size:11px;color:var(--muted)">${file.species.toUpperCase()} • ${file.size} MB</div>
+        </div>
+      </div>`;
+    card.onclick=()=> loadFilePreviewFromMemory(file);
+    fileList.appendChild(card);
+  });
+
+  container.appendChild(fileList);
+}
+
+function loadFilePreviewFromMemory(file){
+  byId('previewTitle').textContent = file.id.split('/').pop();
+  byId('previewMeta').innerHTML = `Path: <code style="background:rgba(255,255,255,.05);padding:2px 6px;border-radius:4px">${file.id}</code> • Type: <b>${file.species.toUpperCase()}</b> • Size: <b>${file.size} MB</b>`;
+
+  const content = file.content || '';
+  const pre = byId('previewContent');
+  const iframe = byId('previewIframe');
+  const controls = byId('previewControls');
+
+  controls.style.display = 'none';
+  iframe.style.display = 'none';
+  pre.style.display = 'block';
+
+  // For code-ish files add line numbers
+  if(['py','js','html','css','sh','json','xml','yml','yaml','md','txt'].includes(file.species)){
+    const lines = content.split('\n');
+    const numbered = lines.map((line,i)=>`<span style="color:var(--muted);user-select:none;display:inline-block;width:50px;text-align:right;margin-right:16px">${i+1}</span>${escapeHtml(line)}`).join('\n');
+    pre.innerHTML = numbered;
+  }else{
+    pre.textContent = content;
+  }
+}
+
+/******** PAN-ZOOM FOUNDATION ********/
+function attachPanZoom(){
+  const wrap = byId('canvasWrap');
+  const inner = byId('canvasInner');
+  let dragging=false, sx=0, sy=0, ox=0, oy=0;
+
+  function apply(){ inner.style.transform = `translate(${pan.x}px, ${pan.y}px) scale(${pan.scale})`; }
+
+  wrap.addEventListener('mousedown', e=>{ if(e.target.closest('#preview')) return; dragging=true; sx=e.clientX; sy=e.clientY; ox=pan.x; oy=pan.y; });
+  window.addEventListener('mousemove', e=>{ if(!dragging) return; pan.x = ox + (e.clientX - sx); pan.y = oy + (e.clientY - sy); apply(); });
+  window.addEventListener('mouseup', ()=> dragging=false);
+  wrap.addEventListener('wheel', e=>{ if(e.target.closest('#preview')) return; e.preventDefault(); const scaleFactor = (e.deltaY<0)? 1.08 : 0.92; const rect=inner.getBoundingClientRect(); const cx=e.clientX-rect.left, cy=e.clientY-rect.top; // zoom toward cursor
+    const nx = (pan.x - cx) * scaleFactor + cx; const ny = (pan.y - cy) * scaleFactor + cy; pan.x = nx; pan.y = ny; pan.scale *= scaleFactor; pan.scale = Math.max(0.1, Math.min(8, pan.scale)); apply(); }, {passive:false});
+
+  apply();
+}
+
+/******** GLOBAL BINDINGS ********/
+function bindGlobal(){
+  // Mode buttons
+  document.querySelectorAll('#modeSeg button').forEach(b=>{
+    b.addEventListener('click', ()=> setMode(b.dataset.mode));
+  });
+  // Hide UI
+  byId('btnHideUI').addEventListener('click', ()=>{
+    uiHidden = !uiHidden;
+    document.querySelector('.hdr').style.display = uiHidden? 'none':'flex';
+    document.querySelector('.ftr').style.display = uiHidden? 'none':'flex';
+  });
+}
+
+window.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>

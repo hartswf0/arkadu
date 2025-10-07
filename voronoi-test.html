@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<title>Voronoi Bounded Tessellation Test</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0e1a;color:#4dd9cc;font-family:monospace;padding:20px}
+canvas{border:1px solid #4dd9cc;margin:20px 0;display:block}
+.controls{margin:20px 0;display:flex;gap:10px;flex-wrap:wrap}
+button{padding:10px 20px;background:#4dd9cc;color:#000;border:none;cursor:pointer;
+font-family:monospace;font-weight:bold}
+button:hover{background:#6be8df}
+.info{background:rgba(77,217,204,.1);padding:15px;margin:10px 0;border-radius:5px}
+.test-result{margin:10px 0;padding:10px;border-left:3px solid #4dd9cc;background:rgba(77,217,204,.05)}
+.pass{border-left-color:#6bbd8f;color:#6bbd8f}
+.fail{border-left-color:#d97b8f;color:#d97b8f}
+</style>
+</head>
+<body>
+
+<h1>🧪 VORONOI BOUNDED TESSELLATION TEST SUITE</h1>
+
+<div class="info">
+<strong>Testing:</strong> Voronoi cells constrained to parent polygon<br>
+<strong>Goal:</strong> Children MUST stay inside parent shape, no gaps, no overlaps
+</div>
+
+<div class="controls">
+<button onclick="runTest1()">Test 1: Point in Polygon</button>
+<button onclick="runTest2()">Test 2: Ray Casting</button>
+<button onclick="runTest3()">Test 3: Simple Circle</button>
+<button onclick="runTest4()">Test 4: Irregular Polygon</button>
+<button onclick="runTest5()">Test 5: Full Tessellation</button>
+<button onclick="toggleDebug()">Toggle Debug Mode</button>
+</div>
+
+<canvas id="canvas" width="1200" height="800"></canvas>
+
+<div id="results"></div>
+
+<script>
+const CAN=document.getElementById('canvas');
+const CTX=CAN.getContext('2d');
+const W=1200;
+const H=800;
+let DEBUG=true;
+
+function noise(x,y,seed=0){
+const n=Math.sin(x*12.9898+y*78.233+seed)*43758.5453;
+return n-Math.floor(n);
+}
+
+// TEST 1: Point in Polygon
+function runTest1(){
+log('TEST 1: Point in Polygon Algorithm','testing');
+CTX.fillStyle='#0a0e1a';
+CTX.fillRect(0,0,W,H);
+
+// Create test polygon
+const poly={
+cx:W/2,
+cy:H/2,
+angles:[0,Math.PI/3,Math.PI*2/3,Math.PI,Math.PI*4/3,Math.PI*5/3],
+radii:[200,150,180,200,170,190]
+};
+
+// Draw polygon
+drawPoly(poly,'#4dd9cc',false);
+
+// Test points
+const testPoints=[
+{x:W/2,y:H/2,expected:true,label:'center'},
+{x:W/2+100,y:H/2,expected:true,label:'inside'},
+{x:W/2+300,y:H/2,expected:false,label:'outside'},
+{x:W/2,y:H/2-250,expected:false,label:'far outside'}
+];
+
+let passed=0;
+testPoints.forEach(tp=>{
+const result=pointInPolygon(tp.x,tp.y,poly);
+const match=result===tp.expected;
+if(match)passed++;
+
+CTX.fillStyle=match?'#6bbd8f':'#d97b8f';
+CTX.beginPath();
+CTX.arc(tp.x,tp.y,8,0,Math.PI*2);
+CTX.fill();
+
+CTX.fillStyle='#fff';
+CTX.font='12px monospace';
+CTX.fillText(`${tp.label}: ${result}`,tp.x+15,tp.y);
+});
+
+log(`Point in Polygon: ${passed}/${testPoints.length} tests passed`,passed===testPoints.length?'pass':'fail');
+}
+
+// TEST 2: Ray Casting Visualization
+function runTest2(){
+log('TEST 2: Ray Casting from Seed','testing');
+CTX.fillStyle='#0a0e1a';
+CTX.fillRect(0,0,W,H);
+
+const poly={
+cx:W/2,
+cy:H/2,
+angles:[0,Math.PI/3,Math.PI*2/3,Math.PI,Math.PI*4/3,Math.PI*5/3],
+radii:[200,150,180,200,170,190]
+};
+
+drawPoly(poly,'#4dd9cc',false);
+
+// Seed point
+const seed={x:W/2+50,y:H/2+30};
+CTX.fillStyle='#e8b849';
+CTX.beginPath();
+CTX.arc(seed.x,seed.y,5,0,Math.PI*2);
+CTX.fill();
+
+// Cast rays
+const rays=16;
+for(let i=0;i<rays;i++){
+const angle=(i/rays)*Math.PI*2;
+let hitDist=0;
+
+// Cast ray until we hit boundary
+for(let step=1;step<100;step++){
+const dist=step*3;
+const px=seed.x+Math.cos(angle)*dist;
+const py=seed.y+Math.sin(angle)*dist;
+
+if(!pointInPolygon(px,py,poly)){
+hitDist=dist;
+break;
+}
+}
+
+// Draw ray
+CTX.strokeStyle=`rgba(232,184,73,0.3)`;
+CTX.lineWidth=1;
+CTX.beginPath();
+CTX.moveTo(seed.x,seed.y);
+CTX.lineTo(seed.x+Math.cos(angle)*hitDist,seed.y+Math.sin(angle)*hitDist);
+CTX.stroke();
+
+// Draw hit point
+CTX.fillStyle='#d97b8f';
+CTX.beginPath();
+CTX.arc(seed.x+Math.cos(angle)*hitDist,seed.y+Math.sin(angle)*hitDist,3,0,Math.PI*2);
+CTX.fill();
+}
+
+log('Ray casting visualization complete','pass');
+}
+
+// TEST 3: Simple Circle Boundary
+function runTest3(){
+log('TEST 3: Voronoi in Circle','testing');
+CTX.fillStyle='#0a0e1a';
+CTX.fillRect(0,0,W,H);
+
+const boundary={x:W/2,y:H/2,radius:250};
+
+// Draw boundary circle
+CTX.strokeStyle='#4dd9cc';
+CTX.lineWidth=2;
+CTX.beginPath();
+CTX.arc(boundary.x,boundary.y,boundary.radius,0,Math.PI*2);
+CTX.stroke();
+
+// Create seeds
+const seeds=[
+{x:W/2-60,y:H/2-40},
+{x:W/2+70,y:H/2-30},
+{x:W/2+10,y:H/2+80},
+{x:W/2-50,y:H/2+50}
+];
+
+// Draw seeds
+seeds.forEach((s,i)=>{
+CTX.fillStyle='#e8b849';
+CTX.beginPath();
+CTX.arc(s.x,s.y,5,0,Math.PI*2);
+CTX.fill();
+CTX.fillText(`S${i}`,s.x+10,s.y);
+});
+
+// Generate Voronoi cells for circle
+const cells=seeds.map((seed,idx)=>computeVoronoiCellInCircle(seed,seeds,boundary,idx));
+
+// Check if all cells stay in bounds
+let allBounded=true;
+cells.forEach((cell,idx)=>{
+drawCell(cell,`hsl(${idx*90},60%,50%)`,0.2);
+drawCellBorder(cell,`hsl(${idx*90},60%,70%)`,2);
+
+// Check all points
+for(let i=0;i<cell.angles.length;i++){
+const px=cell.cx+Math.cos(cell.angles[i])*cell.radii[i];
+const py=cell.cy+Math.sin(cell.angles[i])*cell.radii[i];
+const dist=Math.sqrt((px-boundary.x)**2+(py-boundary.y)**2);
+if(dist>boundary.radius+5){
+allBounded=false;
+CTX.fillStyle='#d97b8f';
+CTX.beginPath();
+CTX.arc(px,py,4,0,Math.PI*2);
+CTX.fill();
+}
+}
+});
+
+log(`Circle tessellation: ${allBounded?'BOUNDED':'OUT OF BOUNDS'}`,allBounded?'pass':'fail');
+}
+
+// TEST 4: Irregular Polygon
+function runTest4(){
+log('TEST 4: Voronoi in Irregular Polygon','testing');
+CTX.fillStyle='#0a0e1a';
+CTX.fillRect(0,0,W,H);
+
+// Irregular parent polygon
+const parent={
+cx:W/2,
+cy:H/2,
+angles:[0,0.8,1.8,2.5,3.3,4.2,5.1],
+radii:[250,180,220,200,240,190,230]
+};
+
+drawPoly(parent,'#4dd9cc',true);
+
+// Child seeds
+const seeds=[
+{x:W/2-50,y:H/2-60},
+{x:W/2+80,y:H/2-40},
+{x:W/2+40,y:H/2+70},
+{x:W/2-70,y:H/2+50}
+];
+
+seeds.forEach((s,i)=>{
+CTX.fillStyle='#e8b849';
+CTX.beginPath();
+CTX.arc(s.x,s.y,5,0,Math.PI*2);
+CTX.fill();
+});
+
+// Generate constrained cells
+const cells=seeds.map((seed,idx)=>computeVoronoiCellInPolygon(seed,seeds,parent,idx));
+
+// Render and check
+let violations=0;
+cells.forEach((cell,idx)=>{
+drawCell(cell,`hsl(${idx*90},60%,50%)`,0.2);
+drawCellBorder(cell,`hsl(${idx*90},60%,70%)`,2);
+
+// Check all points are inside parent
+for(let i=0;i<cell.angles.length;i++){
+const px=cell.cx+Math.cos(cell.angles[i])*cell.radii[i];
+const py=cell.cy+Math.sin(cell.angles[i])*cell.radii[i];
+if(!pointInPolygon(px,py,parent)){
+violations++;
+CTX.fillStyle='#d97b8f';
+CTX.beginPath();
+CTX.arc(px,py,4,0,Math.PI*2);
+CTX.fill();
+}
+}
+});
+
+log(`Polygon tessellation: ${violations} boundary violations`,violations===0?'pass':'fail');
+}
+
+// TEST 5: Full Tessellation Coverage
+function runTest5(){
+log('TEST 5: Full Space Coverage Test','testing');
+CTX.fillStyle='#0a0e1a';
+CTX.fillRect(0,0,W,H);
+
+const parent={
+cx:W/2,
+cy:H/2,
+angles:[0,1,2,3,4,5],
+radii:[250,200,230,220,240,210]
+};
+
+drawPoly(parent,'#4dd9cc',true);
+
+const seeds=[
+{x:W/2-70,y:H/2-70},
+{x:W/2+60,y:H/2-60},
+{x:W/2+80,y:H/2+50},
+{x:W/2,y:H/2+90},
+{x:W/2-80,y:H/2+40}
+];
+
+seeds.forEach(s=>{
+CTX.fillStyle='#e8b849';
+CTX.beginPath();
+CTX.arc(s.x,s.y,5,0,Math.PI*2);
+CTX.fill();
+});
+
+const cells=seeds.map((seed,idx)=>computeVoronoiCellInPolygon(seed,seeds,parent,idx));
+
+cells.forEach((cell,idx)=>{
+drawCell(cell,`hsl(${idx*72},60%,50%)`,0.3);
+drawCellBorder(cell,`hsl(${idx*72},60%,70%)`,2);
+});
+
+// Sample grid to check coverage
+let covered=0;
+let uncovered=0;
+const samples=50;
+for(let sx=0;sx<samples;sx++){
+for(let sy=0;sy<samples;sy++){
+const px=parent.cx-200+sx*8;
+const py=parent.cy-200+sy*8;
+
+if(pointInPolygon(px,py,parent)){
+let inAnyCell=false;
+cells.forEach(cell=>{
+if(pointInPolygon(px,py,cell)){
+inAnyCell=true;
+}
+});
+
+if(inAnyCell){
+covered++;
+}else{
+uncovered++;
+CTX.fillStyle='rgba(217,123,143,0.3)';
+CTX.fillRect(px-1,py-1,2,2);
+}
+}
+}
+}
+
+const coverage=(covered/(covered+uncovered)*100).toFixed(1);
+log(`Coverage: ${coverage}% (${covered}/${covered+uncovered} points)`,coverage>95?'pass':'fail');
+}
+
+// HELPERS
+function drawPoly(poly,color,fill){
+CTX.strokeStyle=color;
+CTX.lineWidth=2;
+CTX.beginPath();
+for(let i=0;i<poly.angles.length;i++){
+const px=poly.cx+Math.cos(poly.angles[i])*poly.radii[i];
+const py=poly.cy+Math.sin(poly.angles[i])*poly.radii[i];
+if(i===0)CTX.moveTo(px,py);
+else CTX.lineTo(px,py);
+}
+CTX.closePath();
+CTX.stroke();
+if(fill){
+CTX.fillStyle=color.replace(')',',0.05)').replace('rgb','rgba');
+CTX.fill();
+}
+}
+
+function drawCell(cell,color,alpha){
+CTX.fillStyle=color.replace(')',`,${alpha})`).replace('hsl','hsla');
+CTX.beginPath();
+for(let i=0;i<cell.angles.length;i++){
+const px=cell.cx+Math.cos(cell.angles[i])*cell.radii[i];
+const py=cell.cy+Math.sin(cell.angles[i])*cell.radii[i];
+if(i===0)CTX.moveTo(px,py);
+else CTX.lineTo(px,py);
+}
+CTX.closePath();
+CTX.fill();
+}
+
+function drawCellBorder(cell,color,width){
+CTX.strokeStyle=color;
+CTX.lineWidth=width;
+CTX.beginPath();
+for(let i=0;i<cell.angles.length;i++){
+const px=cell.cx+Math.cos(cell.angles[i])*cell.radii[i];
+const py=cell.cy+Math.sin(cell.angles[i])*cell.radii[i];
+if(i===0)CTX.moveTo(px,py);
+else CTX.lineTo(px,py);
+}
+CTX.closePath();
+CTX.stroke();
+}
+
+function pointInPolygon(x,y,poly){
+let inside=false;
+const {cx,cy,angles,radii}=poly;
+
+for(let i=0,j=angles.length-1;i<angles.length;j=i++){
+const xi=cx+Math.cos(angles[i])*radii[i];
+const yi=cy+Math.sin(angles[i])*radii[i];
+const xj=cx+Math.cos(angles[j])*radii[j];
+const yj=cy+Math.sin(angles[j])*radii[j];
+
+if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi)){
+inside=!inside;
+}
+}
+return inside;
+}
+
+function computeVoronoiCellInCircle(seed,allSeeds,boundary,idx){
+const samples=48;
+const points=[];
+
+for(let i=0;i<samples;i++){
+const angle=(i/samples)*Math.PI*2;
+let dist=0;
+
+for(let step=1;step<100;step++){
+const testDist=step*3;
+const px=seed.x+Math.cos(angle)*testDist;
+const py=seed.y+Math.sin(angle)*testDist;
+
+// Check circle boundary
+const d=Math.sqrt((px-boundary.x)**2+(py-boundary.y)**2);
+if(d>boundary.radius){
+dist=testDist*0.9;
+break;
+}
+
+// Check Voronoi
+let closest=seed;
+let minDist=Infinity;
+allSeeds.forEach(s=>{
+const d=Math.sqrt((px-s.x)**2+(py-s.y)**2);
+if(d<minDist){minDist=d;closest=s;}
+});
+
+if(closest!==seed){
+dist=testDist*0.9;
+break;
+}
+
+if(step===99)dist=testDist;
+}
+
+points.push({angle,dist});
+}
+
+return{
+cx:seed.x,
+cy:seed.y,
+angles:points.map(p=>p.angle),
+radii:points.map(p=>p.dist)
+};
+}
+
+function computeVoronoiCellInPolygon(seed,allSeeds,parentPoly,idx){
+const samples=48;
+const points=[];
+
+for(let i=0;i<samples;i++){
+const angle=(i/samples)*Math.PI*2;
+let dist=0;
+
+for(let step=1;step<100;step++){
+const testDist=step*3;
+const px=seed.x+Math.cos(angle)*testDist;
+const py=seed.y+Math.sin(angle)*testDist;
+
+// Check parent polygon
+if(!pointInPolygon(px,py,parentPoly)){
+dist=testDist*0.85;
+break;
+}
+
+// Check Voronoi
+let closest=seed;
+let minDist=Infinity;
+allSeeds.forEach(s=>{
+const d=Math.sqrt((px-s.x)**2+(py-s.y)**2);
+if(d<minDist){minDist=d;closest=s;}
+});
+
+if(closest!==seed){
+dist=testDist*0.85;
+break;
+}
+
+if(step===99)dist=testDist;
+}
+
+points.push({angle,dist});
+}
+
+return{
+cx:seed.x,
+cy:seed.y,
+angles:points.map(p=>p.angle),
+radii:points.map(p=>p.dist)
+};
+}
+
+function log(msg,type){
+const div=document.createElement('div');
+div.className=`test-result ${type}`;
+div.textContent=msg;
+document.getElementById('results').appendChild(div);
+}
+
+function toggleDebug(){
+DEBUG=!DEBUG;
+log(`Debug mode: ${DEBUG?'ON':'OFF'}`,'testing');
+}
+
+// Run initial test
+runTest1();
+</script>
+
+</body></html>

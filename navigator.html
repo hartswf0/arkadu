@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARKADU Navigator - Hyperlink Explorer</title>
+<style>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+  background: #000;
+  color: #0f0;
+  overflow: hidden;
+}
+
+.container {
+  display: grid;
+  grid-template-columns: 300px 1fr 350px;
+  grid-template-rows: 50px 1fr 35px;
+  height: 100vh;
+  gap: 2px;
+  background: #0f0;
+}
+
+.header {
+  grid-column: 1 / -1;
+  background: #000;
+  border: 2px solid #0f0;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  justify-content: space-between;
+}
+
+.header h1 {
+  font-size: 14px;
+  color: #0f0;
+}
+
+.search-box {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.search-box input {
+  background: #000;
+  border: 1px solid #0f0;
+  color: #0f0;
+  padding: 5px 10px;
+  font-family: inherit;
+  font-size: 12px;
+  width: 300px;
+}
+
+.sidebar {
+  background: #000;
+  border: 2px solid #0f0;
+  overflow-y: auto;
+  padding: 15px;
+}
+
+.sidebar-section {
+  margin-bottom: 20px;
+}
+
+.section-title {
+  color: #0ff;
+  font-size: 11px;
+  font-weight: bold;
+  margin-bottom: 10px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid #0f0;
+}
+
+.file-list {
+  list-style: none;
+}
+
+.file-item {
+  padding: 6px 8px;
+  cursor: pointer;
+  font-size: 11px;
+  border-left: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.file-item:hover {
+  background: rgba(0, 255, 0, 0.1);
+  border-left-color: #0f0;
+}
+
+.file-item.active {
+  background: rgba(0, 255, 0, 0.2);
+  border-left-color: #0ff;
+  color: #0ff;
+}
+
+.file-icon {
+  display: inline-block;
+  width: 16px;
+}
+
+.main-view {
+  background: #000;
+  border: 2px solid #0f0;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.detail-panel {
+  background: #000;
+  border: 2px solid #0f0;
+  overflow-y: auto;
+  padding: 15px;
+}
+
+.footer {
+  grid-column: 1 / -1;
+  background: #000;
+  border: 2px solid #0f0;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+}
+
+.breadcrumb {
+  color: #0a0;
+  font-size: 10px;
+}
+
+.file-header {
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 2px solid #0f0;
+}
+
+.file-title {
+  font-size: 16px;
+  color: #0ff;
+  margin-bottom: 5px;
+}
+
+.file-meta {
+  font-size: 10px;
+  color: #0a0;
+  display: flex;
+  gap: 20px;
+  margin-top: 8px;
+}
+
+.content-section {
+  margin-bottom: 25px;
+}
+
+.content-section h3 {
+  color: #0ff;
+  font-size: 13px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.content-section h3:before {
+  content: "▸";
+  color: #0f0;
+}
+
+.code-block {
+  background: rgba(0, 255, 0, 0.05);
+  border: 1px solid #0f0;
+  padding: 15px;
+  font-size: 11px;
+  overflow-x: auto;
+  max-height: 400px;
+  overflow-y: auto;
+  line-height: 1.5;
+}
+
+.link-list {
+  list-style: none;
+}
+
+.link-item {
+  padding: 8px;
+  margin: 4px 0;
+  background: rgba(0, 255, 0, 0.05);
+  border-left: 3px solid #0f0;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 11px;
+}
+
+.link-item:hover {
+  background: rgba(0, 255, 0, 0.15);
+  border-left-color: #0ff;
+}
+
+.link-type {
+  color: #0a0;
+  font-size: 10px;
+  margin-left: 8px;
+}
+
+.link-path {
+  color: #0f0;
+  display: block;
+  margin-top: 3px;
+  font-size: 10px;
+}
+
+.panel-title {
+  color: #0ff;
+  font-size: 12px;
+  margin-bottom: 15px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #0f0;
+}
+
+.stat-box {
+  background: rgba(0, 255, 0, 0.05);
+  border: 1px solid #0f0;
+  padding: 10px;
+  margin-bottom: 10px;
+}
+
+.stat-label {
+  color: #0a0;
+  font-size: 10px;
+}
+
+.stat-value {
+  color: #0f0;
+  font-size: 14px;
+  font-weight: bold;
+  margin-top: 3px;
+}
+
+.chain-view {
+  background: rgba(0, 255, 0, 0.05);
+  border: 1px solid #0f0;
+  padding: 12px;
+  margin: 8px 0;
+}
+
+.chain-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0;
+  font-size: 11px;
+}
+
+.chain-arrow {
+  color: #0f0;
+  font-weight: bold;
+}
+
+.chain-file {
+  color: #0ff;
+  cursor: pointer;
+  padding: 4px 8px;
+  background: rgba(0, 255, 0, 0.1);
+  border: 1px solid #0f0;
+}
+
+.chain-file:hover {
+  background: rgba(0, 255, 0, 0.2);
+}
+
+.prompt-sample {
+  background: rgba(0, 255, 255, 0.1);
+  border-left: 3px solid #0ff;
+  padding: 10px;
+  margin: 10px 0;
+  font-size: 10px;
+  font-style: italic;
+  color: #0ff;
+}
+
+.empty-state {
+  color: #0a0;
+  font-size: 11px;
+  padding: 20px;
+  text-align: center;
+  font-style: italic;
+}
+
+.tag {
+  display: inline-block;
+  padding: 3px 8px;
+  background: rgba(0, 255, 0, 0.1);
+  border: 1px solid #0f0;
+  font-size: 10px;
+  margin-right: 5px;
+  margin-bottom: 5px;
+}
+
+.highlight {
+  background: rgba(0, 255, 255, 0.2);
+  color: #0ff;
+}
+
+.json-preview {
+  max-height: 200px;
+  overflow-y: auto;
+  font-size: 10px;
+  color: #0a0;
+  line-height: 1.4;
+}
+
+pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header">
+    <h1>ARKADU NAVIGATOR | Hyperlink & Transclusion Explorer</h1>
+    <div class="search-box">
+      <input type="text" id="searchInput" placeholder="Search files, chains, links..." />
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="sidebar-section">
+      <div class="section-title">FILE TYPES</div>
+      <ul class="file-list" id="fileTypeList"></ul>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="section-title">RECENT FILES</div>
+      <ul class="file-list" id="recentFilesList"></ul>
+    </div>
+  </div>
+
+  <div class="main-view" id="mainView">
+    <div class="empty-state">
+      Select a file from the sidebar or search to begin exploring...
+    </div>
+  </div>
+
+  <div class="detail-panel">
+    <div class="panel-title">CONTEXT & CONNECTIONS</div>
+    <div id="detailContent">
+      <div class="empty-state">
+        No file selected
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div class="breadcrumb" id="breadcrumb">Ready</div>
+    <div id="footerStats">Loading data...</div>
+  </div>
+</div>
+
+<script>
+// Global state
+const nav = {
+  python: [],
+  json: [],
+  graph: { nodes: [], edges: [] },
+  chains: [],
+  currentFile: null,
+  history: [],
+  searchIndex: []
+};
+
+// Load all data
+async function loadData() {
+  try {
+    console.log('Loading navigator data...');
+    
+    // Load Python files
+    const pyResp = await fetch('/deep/python_files.json');
+    nav.python = await pyResp.json();
+    console.log(`Loaded ${nav.python.length} Python files`);
+    
+    // Load JSON files
+    const jsonResp = await fetch('/deep/json_files.json');
+    nav.json = await jsonResp.json();
+    console.log(`Loaded ${nav.json.length} JSON files`);
+    
+    // Load dependency graph
+    const graphResp = await fetch('/deep/dependency_graph.json');
+    nav.graph = await graphResp.json();
+    console.log(`Loaded graph: ${nav.graph.nodes.length} nodes, ${nav.graph.edges.length} edges`);
+    
+    // Load ekphrasis chains
+    const chainsResp = await fetch('/sys/ekphrasis.jsonl');
+    const chainsText = await chainsResp.text();
+    nav.chains = chainsText.trim().split('\n').map(line => JSON.parse(line));
+    console.log(`Loaded ${nav.chains.length} ekphrasis chains`);
+    
+    // Build search index
+    buildSearchIndex();
+    
+    // Render UI
+    renderFileTypes();
+    updateFooter();
+    
+  } catch (error) {
+    console.error('Error loading data:', error);
+    document.getElementById('mainView').innerHTML = `
+      <div style="color: #f00; padding: 20px;">
+        <strong>ERROR LOADING DATA</strong><br><br>
+        Make sure you're accessing via HTTP server:<br>
+        <code>http://localhost:8001/navigator.html</code><br><br>
+        ${error.message}
+      </div>
+    `;
+  }
+}
+
+// Build search index
+function buildSearchIndex() {
+  nav.searchIndex = [];
+  
+  // Index Python files
+  nav.python.forEach(f => {
+    nav.searchIndex.push({
+      type: 'python',
+      path: f.path,
+      name: f.name,
+      searchText: `${f.path} ${f.name}`.toLowerCase(),
+      data: f
+    });
+  });
+  
+  // Index JSON files
+  nav.json.forEach(f => {
+    nav.searchIndex.push({
+      type: 'json',
+      path: f.path,
+      name: f.name,
+      searchText: `${f.path} ${f.name}`.toLowerCase(),
+      data: f
+    });
+  });
+  
+  console.log(`Built search index with ${nav.searchIndex.length} entries`);
+}
+
+// Render file types
+function renderFileTypes() {
+  const types = {
+    'Python Scripts': nav.python.length,
+    'JSON Files': nav.json.length,
+    'Ekphrasis Chains': nav.chains.length,
+    'Graph Nodes': nav.graph.nodes.length,
+    'Graph Edges': nav.graph.edges.length
+  };
+  
+  const html = Object.entries(types).map(([name, count]) => `
+    <li class="file-item" onclick="filterByType('${name}')">
+      <span class="file-icon">▸</span> ${name} (${count})
+    </li>
+  `).join('');
+  
+  document.getElementById('fileTypeList').innerHTML = html;
+}
+
+// Filter by type
+function filterByType(type) {
+  if (type === 'Python Scripts') {
+    showFileList(nav.python, 'python');
+  } else if (type === 'JSON Files') {
+    showFileList(nav.json, 'json');
+  } else if (type === 'Ekphrasis Chains') {
+    showChainsList();
+  }
+}
+
+// Show file list
+function showFileList(files, type) {
+  const html = `
+    <div class="file-header">
+      <div class="file-title">${type.toUpperCase()} FILES</div>
+      <div class="file-meta">
+        <span>Total: ${files.length} files</span>
+      </div>
+    </div>
+    <ul class="link-list">
+      ${files.map(f => `
+        <li class="link-item" onclick='openFile("${type}", "${f.path.replace(/'/g, "\\'")}}")'>
+          <strong>${f.name}</strong>
+          <span class="link-type">${formatSize(f.size)}</span>
+          <span class="link-path">${f.path}</span>
+        </li>
+      `).join('')}
+    </ul>
+  `;
+  
+  document.getElementById('mainView').innerHTML = html;
+  document.getElementById('breadcrumb').textContent = `${type} / All Files`;
+}
+
+// Show chains list
+function showChainsList() {
+  const html = `
+    <div class="file-header">
+      <div class="file-title">OPERATIVE EKPHRASIS CHAINS</div>
+      <div class="file-meta">
+        <span>Total: ${nav.chains.length} chains</span>
+        <span>JSON → Python → Media</span>
+      </div>
+    </div>
+    ${nav.chains.map((chain, i) => `
+      <div class="chain-view">
+        <div style="color: #0a0; font-size: 10px; margin-bottom: 8px;">Chain ${i + 1}</div>
+        <div class="chain-step">
+          <span class="chain-file" onclick='openFileByPath("${chain.prompt_file}")'>${getFileName(chain.prompt_file)}</span>
+          <span class="chain-arrow">→</span>
+          <span class="chain-file" onclick='openFileByPath("${chain.script}")'>${getFileName(chain.script)}</span>
+          ${chain.uses_ffmpeg ? '<span class="chain-arrow">→</span><span class="tag">ffmpeg</span>' : ''}
+          ${chain.uses_drawtext ? '<span class="tag">drawtext</span>' : ''}
+        </div>
+        ${chain.sample_prompts && chain.sample_prompts.length > 0 ? `
+          <div class="prompt-sample">
+            "${chain.sample_prompts[0].substring(0, 100)}..."
+          </div>
+        ` : ''}
+      </div>
+    `).join('')}
+  `;
+  
+  document.getElementById('mainView').innerHTML = html;
+  document.getElementById('breadcrumb').textContent = 'Ekphrasis / Chains';
+}
+
+// Open file
+function openFile(type, path) {
+  let file;
+  
+  if (type === 'python') {
+    file = nav.python.find(f => f.path === path);
+  } else if (type === 'json') {
+    file = nav.json.find(f => f.path === path);
+  }
+  
+  if (!file) return;
+  
+  nav.currentFile = { type, file };
+  nav.history.push({ type, path });
+  
+  // Update recent files
+  updateRecentFiles();
+  
+  // Render file view
+  renderFileView(type, file);
+  
+  // Render connections
+  renderConnections(file);
+  
+  document.getElementById('breadcrumb').textContent = file.path;
+}
+
+// Open file by path
+function openFileByPath(path) {
+  let file = nav.python.find(f => f.path === path);
+  if (file) return openFile('python', path);
+  
+  file = nav.json.find(f => f.path === path);
+  if (file) return openFile('json', path);
+}
+
+// Render file view
+function renderFileView(type, file) {
+  let html = `
+    <div class="file-header">
+      <div class="file-title">${file.name}</div>
+      <div class="file-meta">
+        <span>Type: ${type}</span>
+        <span>Size: ${formatSize(file.size)}</span>
+        ${file.lines ? `<span>Lines: ${file.lines}</span>` : ''}
+        ${file.entry_count ? `<span>Entries: ${file.entry_count}</span>` : ''}
+      </div>
+      <div style="margin-top: 10px;">
+        ${file.has_prompts ? '<span class="tag">HAS PROMPTS</span>' : ''}
+        ${file.docstring ? '<span class="tag">DOCUMENTED</span>' : ''}
+        ${file.subprocess_calls && file.subprocess_calls.length > 0 ? '<span class="tag">SUBPROCESS</span>' : ''}
+      </div>
+    </div>
+  `;
+  
+  // Show content based on type
+  if (type === 'python') {
+    html += `
+      <div class="content-section">
+        <h3>Source Code</h3>
+        <div class="code-block"><pre>${escapeHtml(file.source_code || 'No source available')}</pre></div>
+      </div>
+    `;
+    
+    if (file.docstring) {
+      html += `
+        <div class="content-section">
+          <h3>Documentation</h3>
+          <div class="code-block"><pre>${escapeHtml(file.docstring)}</pre></div>
+        </div>
+      `;
+    }
+    
+    if (file.imports && file.imports.length > 0) {
+      html += `
+        <div class="content-section">
+          <h3>Imports (${file.imports.length})</h3>
+          <div>${file.imports.map(imp => `<span class="tag">${imp}</span>`).join('')}</div>
+        </div>
+      `;
+    }
+    
+    if (file.subprocess_calls && file.subprocess_calls.length > 0) {
+      html += `
+        <div class="content-section">
+          <h3>Subprocess Calls (${file.subprocess_calls.length})</h3>
+          ${file.subprocess_calls.map(call => `
+            <div class="code-block" style="margin-bottom: 10px;"><pre>${escapeHtml(call)}</pre></div>
+          `).join('')}
+        </div>
+      `;
+    }
+    
+  } else if (type === 'json') {
+    if (file.content) {
+      const preview = JSON.stringify(file.content, null, 2);
+      html += `
+        <div class="content-section">
+          <h3>Content Preview</h3>
+          <div class="code-block json-preview"><pre>${escapeHtml(preview.substring(0, 10000))}</pre></div>
+        </div>
+      `;
+    }
+    
+    if (file.prompts && file.prompts.length > 0) {
+      html += `
+        <div class="content-section">
+          <h3>Operative Ekphrasis Prompts (${file.prompts.length})</h3>
+          ${file.prompts.slice(0, 10).map(p => `
+            <div class="prompt-sample">"${p.substring(0, 200)}${p.length > 200 ? '...' : ''}"</div>
+          `).join('')}
+          ${file.prompts.length > 10 ? `<div style="color: #0a0; font-size: 10px; margin-top: 10px;">... and ${file.prompts.length - 10} more prompts</div>` : ''}
+        </div>
+      `;
+    }
+  }
+  
+  document.getElementById('mainView').innerHTML = html;
+}
+
+// Render connections in detail panel
+function renderConnections(file) {
+  const node = nav.graph.nodes.find(n => n.path === file.path);
+  
+  if (!node) {
+    document.getElementById('detailContent').innerHTML = `
+      <div class="empty-state">No graph connections found</div>
+    `;
+    return;
+  }
+  
+  // Find outbound edges (what this file references)
+  const outbound = nav.graph.edges.filter(e => e.source === node.id);
+  
+  // Find inbound edges (what references this file)
+  const inbound = nav.graph.edges.filter(e => e.target === node.id);
+  
+  let html = `
+    <div class="stat-box">
+      <div class="stat-label">Outbound Links</div>
+      <div class="stat-value">${outbound.length}</div>
+    </div>
+    
+    <div class="stat-box">
+      <div class="stat-label">Inbound Links</div>
+      <div class="stat-value">${inbound.length}</div>
+    </div>
+  `;
+  
+  if (outbound.length > 0) {
+    html += `
+      <div class="content-section">
+        <h3>References (Outbound)</h3>
+        <ul class="link-list">
+          ${outbound.map(e => {
+            const targetNode = nav.graph.nodes.find(n => n.id === e.target);
+            if (!targetNode) return '';
+            return `
+              <li class="link-item" onclick='openFileByPath("${targetNode.path}")'>
+                <strong>${getFileName(targetNode.path)}</strong>
+                <span class="link-type">${e.type}</span>
+                <span class="link-path">${targetNode.path}</span>
+              </li>
+            `;
+          }).join('')}
+        </ul>
+      </div>
+    `;
+  }
+  
+  if (inbound.length > 0) {
+    html += `
+      <div class="content-section">
+        <h3>Referenced By (Inbound)</h3>
+        <ul class="link-list">
+          ${inbound.map(e => {
+            const sourceNode = nav.graph.nodes.find(n => n.id === e.source);
+            if (!sourceNode) return '';
+            return `
+              <li class="link-item" onclick='openFileByPath("${sourceNode.path}")'>
+                <strong>${getFileName(sourceNode.path)}</strong>
+                <span class="link-type">${e.type}</span>
+                <span class="link-path">${sourceNode.path}</span>
+              </li>
+            `;
+          }).join('')}
+        </ul>
+      </div>
+    `;
+  }
+  
+  // Find chains involving this file
+  const relatedChains = nav.chains.filter(c => 
+    c.prompt_file === file.path || c.script === file.path
+  );
+  
+  if (relatedChains.length > 0) {
+    html += `
+      <div class="content-section">
+        <h3>Ekphrasis Chains (${relatedChains.length})</h3>
+        ${relatedChains.map(chain => `
+          <div class="chain-view">
+            <div class="chain-step">
+              <span class="chain-file" onclick='openFileByPath("${chain.prompt_file}")'>${getFileName(chain.prompt_file)}</span>
+              <span class="chain-arrow">→</span>
+              <span class="chain-file" onclick='openFileByPath("${chain.script}")'>${getFileName(chain.script)}</span>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+  
+  document.getElementById('detailContent').innerHTML = html;
+}
+
+// Update recent files
+function updateRecentFiles() {
+  const recent = nav.history.slice(-10).reverse();
+  const html = recent.map(item => `
+    <li class="file-item" onclick='openFile("${item.type}", "${item.path.replace(/'/g, "\\'")}}")'>
+      <span class="file-icon">▸</span> ${getFileName(item.path)}
+    </li>
+  `).join('');
+  
+  document.getElementById('recentFilesList').innerHTML = html || '<li class="file-item" style="cursor: default;">No recent files</li>';
+}
+
+// Update footer stats
+function updateFooter() {
+  const stats = `
+    ${nav.python.length} Python | 
+    ${nav.json.length} JSON | 
+    ${nav.chains.length} Chains | 
+    ${nav.graph.edges.length} Connections
+  `;
+  document.getElementById('footerStats').textContent = stats;
+}
+
+// Search
+document.getElementById('searchInput').addEventListener('input', (e) => {
+  const query = e.target.value.toLowerCase().trim();
+  
+  if (query.length < 2) return;
+  
+  const results = nav.searchIndex.filter(item => 
+    item.searchText.includes(query)
+  ).slice(0, 50);
+  
+  const html = `
+    <div class="file-header">
+      <div class="file-title">SEARCH RESULTS</div>
+      <div class="file-meta">
+        <span>Found: ${results.length} files</span>
+        <span>Query: "${query}"</span>
+      </div>
+    </div>
+    <ul class="link-list">
+      ${results.map(r => `
+        <li class="link-item" onclick='openFile("${r.type}", "${r.path.replace(/'/g, "\\'")}}")'>
+          <strong>${r.name}</strong>
+          <span class="link-type">${r.type}</span>
+          <span class="link-path">${r.path}</span>
+        </li>
+      `).join('')}
+    </ul>
+  `;
+  
+  document.getElementById('mainView').innerHTML = html;
+  document.getElementById('breadcrumb').textContent = `Search / "${query}"`;
+});
+
+// Helper functions
+function getFileName(path) {
+  return path.split('/').pop();
+}
+
+function formatSize(bytes) {
+  if (bytes >= 1024 * 1024) return (bytes / 1024 / 1024).toFixed(2) + ' MB';
+  if (bytes >= 1024) return (bytes / 1024).toFixed(2) + ' KB';
+  return bytes + ' B';
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// Initialize
+loadData();
+</script>
+
+</body>
+</html>

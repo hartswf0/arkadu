@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARKADU OS - Master Index</title>
+<style>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+  background: #0a0a0a;
+  color: #4dd9cc;
+  padding: 40px;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.container {
+  max-width: 1000px;
+  width: 100%;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 50px;
+  border: 2px solid #4dd9cc;
+  padding: 30px;
+  background: rgba(0,0,0,.6);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 0 30px rgba(77,217,204,.2);
+}
+
+.header h1 {
+  font-size: 32px;
+  color: #4dd9cc;
+  margin-bottom: 10px;
+  text-shadow: 0 0 15px rgba(77,217,204,.6);
+}
+
+.header p {
+  font-size: 14px;
+  color: #6b8a96;
+}
+
+.systems {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+  margin-bottom: 40px;
+}
+
+.system-card {
+  border: 1px solid rgba(77,217,204,.3);
+  padding: 25px;
+  background: rgba(0,0,0,.8);
+  transition: all 0.3s;
+  cursor: pointer;
+  position: relative;
+  backdrop-filter: blur(5px);
+}
+
+.system-card:hover {
+  background: rgba(77,217,204,.08);
+  border-color: #4dd9cc;
+  box-shadow: 0 0 25px rgba(77,217,204,.3);
+  transform: translateY(-5px);
+}
+
+.system-card h2 {
+  color: #e8b849;
+  font-size: 20px;
+  margin-bottom: 15px;
+}
+
+.system-card p {
+  color: #6b8a96;
+  font-size: 12px;
+  line-height: 1.6;
+  margin-bottom: 10px;
+}
+
+.system-card ul {
+  list-style: none;
+  margin-top: 15px;
+}
+
+.system-card li {
+  color: #4dd9cc;
+  font-size: 11px;
+  padding: 3px 0;
+}
+
+.system-card li:before {
+  content: "▸ ";
+  color: #9d7be8;
+}
+
+.launch-btn {
+  position: absolute;
+  bottom: 15px;
+  right: 15px;
+  padding: 8px 16px;
+  background: #4dd9cc;
+  color: #000;
+  border: none;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s;
+  border-radius: 4px;
+}
+
+.launch-btn:hover {
+  background: #e8b849;
+  box-shadow: 0 0 15px rgba(232,184,73,.6);
+}
+
+.status {
+  color: #4dd9cc;
+  font-size: 11px;
+  margin-top: 10px;
+  padding: 8px;
+  background: rgba(77,217,204,.1);
+  border-left: 3px solid #4dd9cc;
+  border-radius: 3px;
+}
+
+.docs {
+  border: 1px solid rgba(77,217,204,.3);
+  padding: 25px;
+  margin-bottom: 30px;
+  background: rgba(0,0,0,.8);
+  backdrop-filter: blur(5px);
+}
+
+.docs h2 {
+  color: #e8b849;
+  font-size: 18px;
+  margin-bottom: 15px;
+}
+
+.doc-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+}
+
+.doc-link {
+  color: #4dd9cc;
+  text-decoration: none;
+  padding: 8px 12px;
+  border: 1px solid rgba(77,217,204,.3);
+  display: block;
+  font-size: 12px;
+  transition: all 0.2s;
+  border-radius: 3px;
+  background: rgba(0,0,0,.4);
+}
+
+.doc-link:hover {
+  background: rgba(77,217,204,.2);
+  border-color: #4dd9cc;
+  color: #e8b849;
+}
+
+.footer {
+  text-align: center;
+  padding: 20px;
+  border-top: 1px solid rgba(77,217,204,.3);
+  color: #6b8a96;
+  font-size: 11px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 15px;
+  margin-top: 30px;
+}
+
+.stat-box {
+  border: 1px solid rgba(77,217,204,.3);
+  padding: 15px;
+  text-align: center;
+  background: rgba(0,0,0,.6);
+  backdrop-filter: blur(5px);
+}
+
+.stat-value {
+  font-size: 24px;
+  color: #e8b849;
+  font-weight: bold;
+  text-shadow: 0 0 10px rgba(232,184,73,.4);
+}
+
+.stat-label {
+  font-size: 10px;
+  color: #6b8a96;
+  margin-top: 5px;
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header">
+    <h1>╔═══════════════════════════════╗</h1>
+    <h1>║     ARKADU OS  v1.0          ║</h1>
+    <h1>╚═══════════════════════════════╝</h1>
+    <p>Media Archaeology Operating System | Complete System Explorer</p>
+    <p>10,097 artifacts · 56.48 GB · 223 ekphrasis chains · 960 nodes</p>
+  </div>
+
+  <h2 style="color:#0ff;margin:30px 0 20px;padding-bottom:10px;border-bottom:1px solid #0f0;font-size:24px">⚔️ ORGANIC SUBDIVISION APPROACHES</h2>
+  <div class="systems">
+    <div class="system-card" onclick="window.open('approach-1-depth-test.html', '_blank')">
+      <h2>🥧 APPROACH 1: Radial Pie Split</h2>
+      <p>Mathematical radial subdivision, perfect for simple charts. Instant, 100% accurate.</p>
+      <div class="status">Speed: Instant | Accuracy: 100% | Organic: ⭐⭐</div>
+      <button class="launch-btn">LAUNCH →</button>
+    </div>
+
+    <div class="system-card" onclick="window.open('approach-2-depth-test.html', '_blank')">
+      <h2>🌊 APPROACH 2: Area Voronoi</h2>
+      <p>Lloyd's relaxation, beautiful but ~18% error. Pure aesthetic.</p>
+      <div class="status">Speed: Medium | Accuracy: ~82% | Organic: ⭐⭐⭐⭐⭐</div>
+      <button class="launch-btn">LAUNCH →</button>
+    </div>
+
+    <div class="system-card" onclick="window.open('approach-3-depth-test.html', '_blank')" style="border-color:#0ff;box-shadow:0 0 20px rgba(0,255,255,.4)">
+      <h2>🪨 APPROACH 3: Organic BSP</h2>
+      <p>Binary space partition with wavy geological cuts. PRODUCTION RECOMMENDED.</p>
+      <div class="status">⭐ Speed: Instant | Accuracy: 100% | Organic: ⭐⭐⭐⭐</div>
+      <button class="launch-btn">LAUNCH →</button>
+    </div>
+
+    <div class="system-card" onclick="window.open('approach-4-depth-test.html', '_blank')">
+      <h2>🌋 APPROACH 4: Sedimentary Layers</h2>
+      <p>Falling sand simulation, horizontal strata by density.</p>
+      <div class="status">Speed: Instant | Accuracy: 100% | Organic: ⭐⭐⭐⭐</div>
+      <button class="launch-btn">LAUNCH →</button>
+    </div>
+
+    <div class="system-card" onclick="window.open('approach-4b-sediment-simple.html', '_blank')" style="border-color:#e8b849;box-shadow:0 0 25px rgba(232,184,73,.5)">
+      <h2>⛏ APPROACH 4B: Excavation OS</h2>
+      <p>Complete operating system for sedimentary archaeology. Navigate, flag, tag, measure layers. HUD interface, mode system, filtering, mobile-responsive. Core sample visualization with full navigation path.</p>
+      <ul>
+        <li>⛏ 4 Excavation Modes: Explore/Flag/Tag/Measure</li>
+        <li>📊 HUD: Real-time stats, depth tracking, annotations</li>
+        <li>⚙ Filtering System: File types, size ranges, annotations</li>
+        <li>🎯 Core Sample: Visual trail of navigation path</li>
+        <li>📱 Mobile-responsive: Adapts to narrow screens with symbols</li>
+        <li>⌨️ Keyboard shortcuts: E/F/T/M modes, arrows navigate</li>
+        <li>🔍 Click-to-ascend on core sample segments</li>
+        <li>📝 Full path reconstruction in nav log</li>
+      </ul>
+      <div class="status">⭐ OS-LEVEL: Professional excavation control system</div>
+      <button class="launch-btn">EXCAVATE →</button>
+    </div>
+
+    <div class="system-card" onclick="window.open('ca-erode-accrete.html', '_blank')">
+      <h2>🦠 APPROACH 5: CA + Marching Squares</h2>
+      <p>Cellular automata erosion/accretion + smooth contour extraction.</p>
+      <div class="status">Speed: Slow | Accuracy: ~99% | Organic: ⭐⭐⭐⭐</div>
+      <button class="launch-btn">LAUNCH →</button>
+    </div>
+
+    <div class="system-card" onclick="window.open('approach-6-depth-test.html', '_blank')" style="border-color:#ff6b6b;box-shadow:0 0 30px rgba(255,107,107,.5)">
+      <h2>⚔️ APPROACH 6: Voronoi Warfare</h2>
+      <p>Random Voronoi → Species warfare → Data equilibrium. BREAKTHROUGH with hunger/satisfaction system.</p>
+      <div class="status">⭐ Speed: Medium | Accuracy: ~99% | Organic: ⭐⭐⭐⭐⭐</div>
+      <button class="launch-btn">LAUNCH →</button>
+    </div>
+
+    <div class="system-card" onclick="window.open('approach-7-depth-test.html', '_blank')" style="border-color:#68e8ff;box-shadow:0 0 25px rgba(104,232,255,.4)">
+      <h2>🌌 APPROACH 7: Fractal Decks + Preview</h2>
+      <p>5-mode navigation: Deck/Atlas/Sideways/Topography/Preview. UNLIMITED depth with 3D mountains. 📄 <b>NEW: Preview Mode</b> — Read actual text files (JSON, PY, TXT, MD, HTML) with syntax highlighting!</p>
+      <div class="status">⭐ Speed: Instant | Depth: ∞ (ALL levels) | Modes: 5 | 📄 Text Preview</div>
+      <button class="launch-btn">LAUNCH →</button>
+    </div>
+
+    <div class="system-card" onclick="window.open('approach-8-infinite-organic.html', '_blank')" style="border-color:#9d7be8;box-shadow:0 0 28px rgba(157,123,232,.45)">
+      <h2>♾️ APPROACH 8: Infinite Organic Canvas</h2>
+      <p>Fractal, free-form, viewportless exploration. Pan/zoom infinite canvas, file <b>Preview</b> built-in, foundations for Voronoi Warfare + WebGL culling. Uses <code>deep/json_files.json</code> for real text previews.</p>
+      <ul>
+        <li>Clean header UI with explicit Preview button</li>
+        <li>Loads data from <code>deep/json_files.json</code></li>
+        <li>Text preview with line numbers (JSON, PY, TXT, MD, HTML, JS, CSS...)</li>
+        <li>Infinite canvas base: pan and scroll zoom</li>
+      </ul>
+      <div class="status">⭐ Base ready: Preview + Infinite canvas scaffold</div>
+      <button class="launch-btn">LAUNCH →</button>
+    </div>
+
+    <div class="system-card" onclick="window.open('approach-comparison-tool.html', '_blank')">
+      <h2>📊 Approach Comparison Tool</h2>
+      <p>Side-by-side comparison of all approaches with metrics.</p>
+      <button class="launch-btn">COMPARE →</button>
+    </div>
+  </div>
+
+  <h2 style="color:#0ff;margin:30px 0 20px;padding-bottom:10px;border-bottom:1px solid #0f0;font-size:24px">🌍 CORE EXPLORATION SYSTEMS</h2>
+  <div class="systems">
+    <div class="system-card" onclick="window.open('strata-deep.html', '_blank')" style="border-color:var(--purple);box-shadow:0 0 40px rgba(157,123,232,.6)">
+      <h2>🗻 STRATIGRAPHIC DEEP SURVEY — Full Topographic System</h2>
+      <p>True geological stratigraphy with contour lines. Full taxonomic depth (Kingdom→Phylum→Class→Order→Family→Genus→Species). Dual metrics: file count AND total size. Parent-child-sibling relationships preserved. Like real topographic maps with elevation lines for each depth layer.</p>
+      <ul>
+        <li>Full hierarchy: all depths, parent/child links</li>
+        <li>Contour lines: adjustable detail (3-15 levels)</li>
+        <li>Dual metrics: sort by count OR size</li>
+        <li>Layer stacking: depth 0 at base, ascending</li>
+        <li>All chamber names labeled at each stratum</li>
+        <li>Aggregated stats: descendants + total size</li>
+        <li>Species breakdown per chamber</li>
+        <li>Click any chamber: full metadata inspection</li>
+        <li>Toggle depth layers: isolate specific strata</li>
+        <li>Pan/zoom: explore massive datasets</li>
+      </ul>
+      <div class="status">⭐ DEEP: True stratigraphic cross-section</div>
+      <button class="launch-btn">SURVEY STRATA →</button>
+    </div>
+
+    <div class="system-card" onclick="window.open('ekphrasis-topology.html', '_blank')" style="border-color:var(--amber);box-shadow:0 0 35px rgba(232,184,73,.5)">
+      <h2>⚡ EKPHRASIS TOPOLOGY — Operative Semantic Chains</h2>
+      <p>Maps the REAL operative ecology: 960 nodes, 223 ekphrasis chains (JSON prompts → Python scripts → Generated media). Shows syntagmaTypes, operativeEkphrasis fields, cineosisFunction metadata. Built from deep/ analytics: json_files.json, python_files.json, dependency_graph.json, media_manifest.json.</p>
+      <ul>
+        <li>960 dependency graph nodes (all files)</li>
+        <li>704 JSON files with prompt metadata</li>
+        <li>256 Python scripts with read/generate tracking</li>
+        <li>223 operative ekphrasis chains visualized</li>
+        <li>Force-directed graph layout</li>
+        <li>Click nodes: see operativeEkphrasis, syntagmaType, cineosisFunction</li>
+        <li>Filter by type: JSON/Python/Media/Other</li>
+        <li>Chains-only mode: isolate prompt→script→output flows</li>
+        <li>Shows what each Python script generates/reads</li>
+        <li>Reveals actual tool chains (ffmpeg, PIL)</li>
+      </ul>
+      <div class="status">⚡ OPERATIVE: Real semantic chains from deep/ analytics</div>
+      <button class="launch-btn">TRACE CHAINS →</button>
+    </div>
+
+    <div class="system-card" onclick="window.open('chamber-organic-voronoi.html', '_blank')" style="border-color:var(--cyan);box-shadow:0 0 30px rgba(77,217,204,.4)">
+      <h2>🗺️ ORGANIC VORONOI — Full-Depth Navigation</h2>
+      <p>Smooth animated transitions between ALL layers. Kingdoms → Phyla → Classes → Orders → Families → Genera → Species → Individual artifacts. LOD system loads as you drill. Leaf chambers show 🔬 indicator. Click to enter artifacts view. Organic irregular cells at every level.</p>
+      <ul>
+        <li>Smooth fade transitions between all depths</li>
+        <li>All the way to individual artifact files</li>
+        <li>🔬 indicator shows leaf chambers with artifacts</li>
+        <li>Click leaf chamber to view all files inside</li>
+        <li>Organic irregular blob shapes throughout</li>
+        <li>Species-based coloring: files + chambers</li>
+        <li>Click artifact to inspect file details</li>
+        <li>Click outside to smoothly go back up</li>
+        <li>Breadcrumb navigation to any level</li>
+        <li>Move effortlessly through 10,094 files</li>
+      </ul>
+      <div class="status">🗺️ ORGANIC: Full granular depth with smooth transitions</div>
+      <button class="launch-btn">EXPLORE ALL LAYERS →</button>
+    </div>
+
+    <div class="system-card" onclick="window.open('ecology-3d.html', '_blank')" style="border-color:var(--blue);box-shadow:0 0 20px rgba(77,217,204,.3)">
+      <h2>🌌 3D ECOLOGY — TRANSECT ENGINE</h2>
+      <p>True 3D spatial environment for ecological transects. Orbit around vertical strata, see chambers-within-chambers through nested glyphs, slice with transect planes. No folders, no clicking—pure spatial comprehension.</p>
+      <ul>
+        <li>Real 3D orbit & zoom navigation</li>
+        <li>Chambers as stacked geological strata</li>
+        <li>Nested glyphs show interior structure</li>
+        <li>Transect slicing at any depth</li>
+        <li>Mycelial threads (ekphrasis chains)</li>
+        <li>Live transclusion panel</li>
+      </ul>
+      <div class="status">⭐ NEW: Spatial ecology engine</div>
+      <button class="launch-btn">LAUNCH →</button>
+    </div>
+
+    <div class="system-card" onclick="window.open('decks.html', '_blank')">
+      <h2>DECKS</h2>
+      <p>Spatial navigation system with two modes: DEPTH (vertical archaeology) and PARALLEL (horizontal multiverse). Navigate chambers as physical layers against the void.</p>
+      <ul>
+        <li>DEPTH mode: Descend through strata</li>
+        <li>PARALLEL mode: Pan between universes</li>
+        <li>Real-time chamber exploration</li>
+        <li>Species clustering visualization</li>
+        <li>10,097 artifacts from real data</li>
+      </ul>
+      <div class="status">✓ NEW: Spatial deck navigation</div>
+      <button class="launch-btn">LAUNCH →</button>
+    </div>
+
+    <div class="system-card" onclick="window.open('navigator.html', '_blank')">
+      <h2>NAVIGATOR</h2>
+      <p>Advanced hyperlink and transclusion explorer. Navigate complete file connections, see inbound/outbound links, explore ekphrasis chains interactively.</p>
+      <ul>
+        <li>Full file transclusion (complete content)</li>
+        <li>Click to navigate (hyperlinks)</li>
+        <li>Inbound/outbound connections</li>
+        <li>Ekphrasis chain visualization</li>
+        <li>Search all files</li>
+      </ul>
+      <div class="status">✓ NEW: Hyperlink explorer</div>
+      <button class="launch-btn">LAUNCH →</button>
+    </div>
+
+    <div class="system-card" onclick="window.open('TRUE-ARKADU.html', '_blank')">
+      <h2>TRUE-ARKADU</h2>
+      <p>Complete file explorer with full source code and content. Read every Python file, every JSON file, navigate all 127,171 dependencies.</p>
+      <ul>
+        <li>256 Python files (full source)</li>
+        <li>704 JSON files (full content)</li>
+        <li>Dependency graph (960 nodes)</li>
+        <li>Window system (click to open)</li>
+        <li>Search & filter</li>
+      </ul>
+      <div class="status">✓ 57.7 MB complete data</div>
+      <button class="launch-btn">LAUNCH →</button>
+    </div>
+
+    <div class="system-card" onclick="window.open('ARKADU-ECOLOGY.html', '_blank')">
+      <h2>ECOLOGY VIEW</h2>
+      <p>Visual ecosystem showing media as living organisms in chambers. Grid worlds, nested hierarchies, flowing particles, species clusters.</p>
+      <ul>
+        <li>4 view modes (Grid, Nested, Flow, Ecology)</li>
+        <li>15 species (file types)</li>
+        <li>320 chambers (directories)</li>
+        <li>Interactive filtering</li>
+        <li>Real-time visualization</li>
+      </ul>
+      <div class="status">✓ Living ecosystem simulation</div>
+      <button class="launch-btn">LAUNCH →</button>
+    </div>
+
+    <div class="system-card" onclick="window.open('shell/terminal.html', '_blank')">
+      <h2>TERMINAL</h2>
+      <p>Statistical analysis interface with system overview, chamber hierarchies, species distribution, and ekphrasis chains.</p>
+      <ul>
+        <li>System status dashboard</li>
+        <li>Chamber browser (by rank)</li>
+        <li>Species analysis</li>
+        <li>Ekphrasis chain viewer</li>
+        <li>Quick statistics</li>
+      </ul>
+      <div class="status">✓ 5.65 MB manifests</div>
+      <button class="launch-btn">LAUNCH →</button>
+    </div>
+  </div>
+
+  <h2 style="color:#0ff;margin:30px 0 20px;padding-bottom:10px;border-bottom:1px solid #0f0;font-size:24px">🔬 ECOLOGY & WARFARE SYSTEMS</h2>
+  <div class="systems">
+    <div class="system-card" onclick="window.open('voronoi-warfare.html', '_blank')">
+      <h2>⚔️ Voronoi Warfare (Standalone)</h2>
+      <p>Original warfare simulation with predation, colonization, retreat, flocking.</p>
+      <button class="launch-btn">LAUNCH →</button>
+    </div>
+
+    <div class="system-card" onclick="window.open('media-ecology-life.html', '_blank')">
+      <h2>🦠 Media Ecology Life</h2>
+      <p>Game of Life where file types are species with physics rules.</p>
+      <button class="launch-btn">LAUNCH →</button>
+    </div>
+
+    <div class="system-card" onclick="window.open('ecology-pro.html', '_blank')">
+      <h2>🌿 Ecology Pro</h2>
+      <p>Advanced ecological visualization with species interactions.</p>
+      <button class="launch-btn">LAUNCH →</button>
+    </div>
+
+    <div class="system-card" onclick="window.open('ecology-spatial.html', '_blank')">
+      <h2>🗺️ Ecology Spatial</h2>
+      <p>Spatial distribution of media species.</p>
+      <button class="launch-btn">LAUNCH →</button>
+    </div>
+
+    <div class="system-card" onclick="window.open('ecology-fluid.html', '_blank')">
+      <h2>💧 Ecology Fluid</h2>
+      <p>Fluid dynamics simulation of media flow.</p>
+      <button class="launch-btn">LAUNCH →</button>
+    </div>
+  </div>
+
+  <h2 style="color:#0ff;margin:30px 0 20px;padding-bottom:10px;border-bottom:1px solid #0f0;font-size:24px">🏛️ CHAMBER EXPLORERS</h2>
+  <div class="systems">
+    <div class="system-card" onclick="window.open('chamber-explorer.html', '_blank')">
+      <h2>🗺️ Chamber Explorer</h2>
+      <p>Navigate through chambers and directories.</p>
+      <button class="launch-btn">LAUNCH →</button>
+    </div>
+
+    <div class="system-card" onclick="window.open('chamber-nested.html', '_blank')">
+      <h2>📦 Chamber Nested</h2>
+      <p>Nested chamber visualization with containment.</p>
+      <button class="launch-btn">LAUNCH →</button>
+    </div>
+
+    <div class="system-card" onclick="window.open('chamber-organic.html', '_blank')">
+      <h2>🌿 Chamber Organic</h2>
+      <p>Organic blob-based chamber shapes.</p>
+      <button class="launch-btn">LAUNCH →</button>
+    </div>
+
+    <div class="system-card" onclick="window.open('chamber-voronoi.html', '_blank')">
+      <h2>🔷 Chamber Voronoi</h2>
+      <p>Voronoi-based chamber tessellation.</p>
+      <button class="launch-btn">LAUNCH →</button>
+    </div>
+  </div>
+
+  <h2 style="color:#0ff;margin:30px 0 20px;padding-bottom:10px;border-bottom:1px solid #0f0;font-size:24px">🏔️ TERRAIN & 3D SYSTEMS</h2>
+  <div class="systems">
+    <div class="system-card" onclick="window.open('terrain-3d-pro.html', '_blank')">
+      <h2>⛰️ Terrain 3D Pro</h2>
+      <p>Advanced 3D terrain with full camera controls.</p>
+      <button class="launch-btn">LAUNCH →</button>
+    </div>
+
+    <div class="system-card" onclick="window.open('terrain-3d.html', '_blank')">
+      <h2>🏔️ Terrain 3D</h2>
+      <p>Basic 3D terrain visualization.</p>
+      <button class="launch-btn">LAUNCH →</button>
+    </div>
+
+    <div class="system-card" onclick="window.open('terrain-clean.html', '_blank')">
+      <h2>🗻 Terrain Clean</h2>
+      <p>Simplified terrain renderer.</p>
+      <button class="launch-btn">LAUNCH →</button>
+    </div>
+
+    <div class="system-card" onclick="window.open('terrain-explorer.html', '_blank')">
+      <h2>🧭 Terrain Explorer</h2>
+      <p>Interactive terrain exploration.</p>
+      <button class="launch-btn">LAUNCH →</button>
+    </div>
+
+    <div class="system-card" onclick="window.open('lidar-scan.html', '_blank')">
+      <h2>📡 LIDAR Scan</h2>
+      <p>Point cloud scanning visualization.</p>
+      <button class="launch-btn">LAUNCH →</button>
+    </div>
+  </div>
+
+  <h2 style="color:#0ff;margin:30px 0 20px;padding-bottom:10px;border-bottom:1px solid #0f0;font-size:24px">🧪 ALGORITHM PROTOTYPES</h2>
+  <div class="systems">
+    <div class="system-card" onclick="window.open('erode-accrete.html', '_blank')">
+      <h2>🌊 Erode-Accrete</h2>
+      <p>Adaptive erosion-accretion algorithm with drift.</p>
+      <button class="launch-btn">LAUNCH →</button>
+    </div>
+
+    <div class="system-card" onclick="window.open('dla-turbo.html', '_blank')">
+      <h2>⚡ DLA Turbo</h2>
+      <p>Diffusion-Limited Aggregation optimizations.</p>
+      <button class="launch-btn">LAUNCH →</button>
+    </div>
+
+    <div class="system-card" onclick="window.open('organic-evolution.html', '_blank')">
+      <h2>🧬 Organic Evolution</h2>
+      <p>Evolutionary algorithm for organic shapes.</p>
+      <button class="launch-btn">LAUNCH →</button>
+    </div>
+
+    <div class="system-card" onclick="window.open('organic-comparison.html', '_blank')">
+      <h2>📊 Organic Comparison</h2>
+      <p>Compare organic subdivision methods.</p>
+      <button class="launch-btn">LAUNCH →</button>
+    </div>
+  </div>
+
+  <h2 style="color:#0ff;margin:30px 0 20px;padding-bottom:10px;border-bottom:1px solid #0f0;font-size:24px">🧰 UTILITIES & TOOLS</h2>
+  <div class="systems">
+    <div class="system-card" onclick="window.open('topology-strata.html', '_blank')">
+      <h2>🗺️ Topology Strata</h2>
+      <p>Topological stratification visualization.</p>
+      <button class="launch-btn">LAUNCH →</button>
+    </div>
+
+    <div class="system-card" onclick="window.open('topology-pro.html', '_blank')">
+      <h2>🔬 Topology Pro</h2>
+      <p>Advanced topology analysis tools.</p>
+      <button class="launch-btn">LAUNCH →</button>
+    </div>
+
+    <div class="system-card" onclick="window.open('voronoi-depth-test.html', '_blank')">
+      <h2>🔷 Voronoi Depth Test</h2>
+      <p>Testing Voronoi with hierarchical data.</p>
+      <button class="launch-btn">LAUNCH →</button>
+    </div>
+
+    <div class="system-card" onclick="window.open('voronoi-test.html', '_blank')">
+      <h2>🧪 Voronoi Test</h2>
+      <p>Basic Voronoi algorithm testing.</p>
+      <button class="launch-btn">LAUNCH →</button>
+    </div>
+
+    <div class="system-card" onclick="window.open('data-test.html', '_blank')">
+      <h2>📊 Data Test</h2>
+      <p>Data loading and parsing verification.</p>
+      <button class="launch-btn">LAUNCH →</button>
+    </div>
+
+    <div class="system-card" onclick="window.open('accuracy-proof.html', '_blank')">
+      <h2>✓ Accuracy Proof</h2>
+      <p>Verify subdivision accuracy metrics.</p>
+      <button class="launch-btn">LAUNCH →</button>
+    </div>
+
+    <div class="system-card" onclick="window.open('network-graph.html', '_blank')">
+      <h2>🕸️ Network Graph</h2>
+      <p>Dependency network visualization.</p>
+      <button class="launch-btn">LAUNCH →</button>
+    </div>
+
+    <div class="system-card" onclick="window.open('viewer.html', '_blank')">
+      <h2>👁️ Viewer</h2>
+      <p>Artifact viewer and browser.</p>
+      <button class="launch-btn">LAUNCH →</button>
+    </div>
+
+    <div class="system-card" onclick="window.open('bonus-frame.html', '_blank')">
+      <h2>🎁 Bonus Frame</h2>
+      <p>Additional visualization frame.</p>
+      <button class="launch-btn">LAUNCH →</button>
+    </div>
+
+    <div class="system-card" onclick="window.open('index.html', '_blank')">
+      <h2>🏠 Main Index</h2>
+      <p>Original ARKADU index page.</p>
+      <button class="launch-btn">LAUNCH →</button>
+    </div>
+  </div>
+
+  <div class="docs">
+    <h2>📚 DOCUMENTATION</h2>
+    <div class="doc-list">
+      <a href="TRUE-ARKADU-GUIDE.md" class="doc-link">TRUE-ARKADU Guide</a>
+      <a href="ECOLOGY-GUIDE.md" class="doc-link">Ecology Guide</a>
+      <a href="SYSTEM-REPORT.md" class="doc-link">System Report</a>
+      <a href="QUICKSTART.md" class="doc-link">Quick Start</a>
+      <a href="PRIMITIVE-SCAN-REPORT.md" class="doc-link">Scan Report</a>
+      <a href="TRUE-ARKADU-STATUS.md" class="doc-link">Status Report</a>
+      <a href="START-HERE.md" class="doc-link">Start Here</a>
+      <a href="EXCAVATION-REPORT.md" class="doc-link">Excavation Report</a>
+    </div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-box">
+      <div class="stat-value">10,097</div>
+      <div class="stat-label">ARTIFACTS</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-value">56.48 GB</div>
+      <div class="stat-label">STORAGE</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-value">320</div>
+      <div class="stat-label">CHAMBERS</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-value">223</div>
+      <div class="stat-label">CHAINS</div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <p>ARKADU OS v1.0 | Media Archaeology Operating System</p>
+    <p>Built: 2025-10-05 | Status: OPERATIONAL</p>
+    <p>Ark + Xanadu | Preservation + Hyperlinking | Complete System</p>
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>🔬 CA ERODE-ACCRETE + Marching Squares</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'SF Mono',Monaco,monospace;background:#000;color:#0f0;padding:20px}
+.container{max-width:1800px;margin:0 auto}
+h1{color:#0ff;font-size:2.5rem;margin-bottom:10px;text-shadow:0 0 20px #0ff}
+.subtitle{color:#0f0;margin-bottom:30px;font-size:1.15rem}
+.main-view{display:grid;grid-template-columns:800px 1fr;gap:30px}
+canvas{border:3px solid #0f0;background:#000;display:block;box-shadow:0 0 30px rgba(0,255,255,.2)}
+.controls{background:#0a0a0a;border:2px solid #0f0;border-radius:10px;padding:20px}
+.control-title{color:#0ff;font-size:1.3rem;font-weight:900;margin-bottom:15px}
+.control-group{margin-bottom:20px;padding-bottom:20px;border-bottom:1px solid #333}
+.control-group:last-child{border-bottom:none}
+.toggle-row{display:flex;align-items:center;gap:15px;margin:10px 0}
+.toggle-label{color:#888;flex:1;font-size:.9rem}
+.toggle{position:relative;width:50px;height:26px;background:#333;border-radius:13px;cursor:pointer;transition:background .3s}
+.toggle.active{background:#0f0}
+.toggle-slider{position:absolute;top:3px;left:3px;width:20px;height:20px;background:#000;border-radius:50%;transition:left .3s}
+.toggle.active .toggle-slider{left:27px}
+.slider-row{display:flex;align-items:center;gap:15px;margin:10px 0}
+.slider-label{color:#888;min-width:140px;font-size:.9rem}
+.slider{flex:1;height:6px;background:#333;border-radius:3px;outline:none;cursor:pointer}
+.slider::-webkit-slider-thumb{width:16px;height:16px;background:#0ff;border-radius:50%;cursor:pointer}
+.slider-value{color:#0ff;font-weight:900;min-width:60px;text-align:right}
+.btn{background:#0f0;color:#000;border:none;padding:10px 20px;border-radius:5px;cursor:pointer;font-weight:900;font-size:1rem;font-family:inherit;width:100%;margin:5px 0}
+.btn:hover{background:#0ff;box-shadow:0 0 15px #0ff}
+.btn-secondary{background:#333;color:#0f0;border:1px solid #0f0}
+.stats{background:#1a1a1a;padding:15px;border:1px solid #333;border-radius:5px;margin-top:15px;font-size:.85rem}
+.stat-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #222}
+.stat-row:last-child{border-bottom:none}
+.stat-label{color:#888}
+.stat-value{color:#0ff;font-weight:bold}
+.phase-indicator{background:#1a1a1a;padding:15px;border:2px solid;border-radius:10px;margin-bottom:15px;text-align:center;font-size:1.1rem;font-weight:900}
+.phase-erode{border-color:#f00;color:#f00}
+.phase-accrete{border-color:#0f0;color:#0f0}
+.phase-balance{border-color:#0ff;color:#0ff}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>🔬 CA ERODE-ACCRETE + Marching Squares</h1>
+<p class="subtitle">Cellular automata rules • Smooth contour extraction • Perfect organic boundaries</p>
+
+<div class="main-view">
+<div>
+<canvas id="canvas" width="800" height="800"></canvas>
+</div>
+
+<div class="controls">
+<div id="phaseIndicator" class="phase-indicator phase-balance">⚖️ INITIALIZING</div>
+
+<div class="control-title">🧬 CA Rules</div>
+<div class="control-group">
+<div class="slider-row">
+<span class="slider-label">Erode Threshold:</span>
+<input type="range" class="slider" id="erodeThreshold" min="1" max="7" value="3">
+<span class="slider-value" id="erodeThresholdVal">3</span>
+</div>
+<div class="slider-row">
+<span class="slider-label">Accrete Threshold:</span>
+<input type="range" class="slider" id="accreteThreshold" min="1" max="7" value="4">
+<span class="slider-value" id="accreteThresholdVal">4</span>
+</div>
+<div class="slider-row">
+<span class="slider-label">Stochastic:</span>
+<input type="range" class="slider" id="stochastic" min="0" max="50" value="10">
+<span class="slider-value" id="stochasticVal">10%</span>
+</div>
+</div>
+
+<div class="control-title">🎨 Visualization</div>
+<div class="control-group">
+<div class="toggle-row">
+<span class="toggle-label">Show Marching Squares</span>
+<div class="toggle active" id="toggleMarching" onclick="toggleMarching()">
+<div class="toggle-slider"></div>
+</div>
+</div>
+<div class="toggle-row">
+<span class="toggle-label">Show Grid</span>
+<div class="toggle" id="toggleGrid" onclick="toggleGrid()">
+<div class="toggle-slider"></div>
+</div>
+</div>
+<div class="slider-row">
+<span class="slider-label">Contour Smooth:</span>
+<input type="range" class="slider" id="smooth" min="0" max="10" value="2">
+<span class="slider-value" id="smoothVal">2</span>
+</div>
+</div>
+
+<div class="control-title">⚙️ Control</div>
+<div class="control-group">
+<button class="btn" onclick="startCA()">▶ Start CA Evolution</button>
+<button class="btn btn-secondary" onclick="step()">➡ Single Step</button>
+<button class="btn btn-secondary" onclick="reset()">↻ Reset</button>
+<button class="btn btn-secondary" onclick="togglePause()">⏸ Pause</button>
+</div>
+
+<div class="stats" id="stats"></div>
+</div>
+</div>
+</div>
+
+<div style="background:#1a1a1a;padding:20px;border:2px solid #0ff;border-radius:10px;margin-top:20px">
+<h2 style="color:#0ff;margin-bottom:15px">🔬 THE CA + MARCHING SQUARES METHOD</h2>
+<p style="color:#0f0;line-height:1.8">
+<strong>CA Erosion:</strong> If cell has &lt; threshold same neighbors → erode (local rule)<br>
+<strong>CA Accretion:</strong> If empty cell has ≥ threshold filled neighbors → grow (local rule)<br>
+<strong>Marching Squares:</strong> Extract smooth contours from discrete grid<br>
+<strong>Self-Balance:</strong> Monitor coverage, adjust erosion/accretion rates adaptively<br>
+<strong>Result:</strong> Fast, organic, accurate territory evolution with beautiful boundaries
+</p>
+</div>
+
+<script>
+const W=800,H=800;
+const GRID_RES=200; // CA grid resolution (200×200)
+const CELL_SIZE=W/GRID_RES;
+
+let grid,nextGrid,territories,state;
+const COLORS=['#FF6B6B','#4ECDC4','#45B7D1','#FFA07A','#98D8C8','#F7DC6F'];
+const DATA=[
+  {name:'LIZARD',value:250},{name:'MANTA',value:200},{name:'CAT',value:150},
+  {name:'DOG',value:100},{name:'JELLYFISH',value:80},{name:'HORSE',value:60}
+];
+
+let showMarching=true,showGrid=false;
+
+function reset(){
+  grid=new Uint8Array(GRID_RES*GRID_RES).fill(255);
+  nextGrid=new Uint8Array(GRID_RES*GRID_RES).fill(255);
+  
+  const total=DATA.reduce((s,d)=>s+d.value,0);
+  territories=DATA.map((d,i)=>({
+    id:i,
+    name:d.name,
+    color:COLORS[i],
+    target:(d.value/total)*(GRID_RES*GRID_RES),
+    current:0
+  }));
+  
+  // BSP initialization on CA grid
+  function bsp(rect,items,iter=0){
+    if(items.length===1){
+      const t=items[0];
+      for(let y=rect.y;y<rect.y+rect.h;y++){
+        for(let x=rect.x;x<rect.x+rect.w;x++){
+          if(x>=0&&x<GRID_RES&&y>=0&&y<GRID_RES){
+            grid[y*GRID_RES+x]=t.id;
+            t.current++;
+          }
+        }
+      }
+      return;
+    }
+    const first=items[0],rest=items.slice(1);
+    const ratio=first.target/(first.target+rest.reduce((s,i)=>s+i.target,0));
+    if(iter%2===0){
+      const split=Math.floor(rect.y+rect.h*ratio);
+      bsp({x:rect.x,y:rect.y,w:rect.w,h:split-rect.y},[first],iter+1);
+      bsp({x:rect.x,y:split,w:rect.w,h:rect.y+rect.h-split},rest,iter+1);
+    }else{
+      const split=Math.floor(rect.x+rect.w*ratio);
+      bsp({x:rect.x,y:rect.y,w:split-rect.x,h:rect.h},[first],iter+1);
+      bsp({x:split,y:rect.y,w:rect.x+rect.w-split,h:rect.h},rest,iter+1);
+    }
+  }
+  
+  bsp({x:0,y:0,w:GRID_RES,h:GRID_RES},[...territories].sort((a,b)=>b.target-a.target));
+  
+  state={iter:0,erodeCount:0,accreteCount:0,running:false,paused:false};
+  draw();
+  updateStats();
+}
+
+function step(){
+  const erodeThresh=parseInt(document.getElementById('erodeThreshold').value);
+  const accreteThresh=parseInt(document.getElementById('accreteThreshold').value);
+  const stochastic=parseInt(document.getElementById('stochastic').value)/100;
+  
+  // Count current areas
+  territories.forEach(t=>t.current=0);
+  for(let i=0;i<grid.length;i++){
+    const id=grid[i];
+    if(id<255)territories[id].current++;
+  }
+  
+  // Determine phase
+  const overGrown=territories.filter(t=>t.current>t.target*1.02);
+  const underGrown=territories.filter(t=>t.current<t.target*0.98);
+  
+  let phase='BALANCE';
+  if(overGrown.length>underGrown.length)phase='ERODE';
+  else if(underGrown.length>overGrown.length)phase='ACCRETE';
+  
+  const indicator=document.getElementById('phaseIndicator');
+  if(phase==='ERODE'){
+    indicator.className='phase-indicator phase-erode';
+    indicator.textContent='🔴 ERODING via CA rules';
+  }else if(phase==='ACCRETE'){
+    indicator.className='phase-indicator phase-accrete';
+    indicator.textContent='🟢 ACCRETING via CA rules';
+  }else{
+    indicator.className='phase-indicator phase-balance';
+    indicator.textContent='⚖️ BALANCED - Drift only';
+  }
+  
+  // Copy grid to nextGrid
+  for(let i=0;i<grid.length;i++)nextGrid[i]=grid[i];
+  
+  // Apply CA rules
+  for(let y=1;y<GRID_RES-1;y++){
+    for(let x=1;x<GRID_RES-1;x++){
+      const idx=y*GRID_RES+x;
+      const id=grid[idx];
+      
+      // Count neighbors (Moore neighborhood - 8 neighbors)
+      const neighbors=[
+        grid[(y-1)*GRID_RES+x-1],grid[(y-1)*GRID_RES+x],grid[(y-1)*GRID_RES+x+1],
+        grid[y*GRID_RES+x-1],                          grid[y*GRID_RES+x+1],
+        grid[(y+1)*GRID_RES+x-1],grid[(y+1)*GRID_RES+x],grid[(y+1)*GRID_RES+x+1]
+      ];
+      
+      if(id<255){
+        // EROSION RULE: If too few same-territory neighbors, erode
+        const sameCount=neighbors.filter(n=>n===id).length;
+        const territory=territories[id];
+        
+        const shouldErode=(
+          territory.current>territory.target && // Overgrown
+          sameCount<erodeThresh // Weak boundary
+        )||(Math.random()<stochastic*0.1); // Stochastic erosion
+        
+        if(shouldErode){
+          nextGrid[idx]=255;
+          state.erodeCount++;
+        }
+      }else{
+        // ACCRETION RULE: If enough filled neighbors, grow
+        const counts={};
+        neighbors.forEach(n=>{if(n<255)counts[n]=(counts[n]||0)+1});
+        
+        let bestId=-1,maxCount=0;
+        for(const [id,count] of Object.entries(counts)){
+          const territory=territories[id];
+          if(territory.current<territory.target && count>maxCount){
+            maxCount=count;
+            bestId=parseInt(id);
+          }
+        }
+        
+        const shouldAccrete=(
+          bestId>=0 &&
+          maxCount>=accreteThresh
+        )||(Math.random()<stochastic*0.05 && bestId>=0);
+        
+        if(shouldAccrete){
+          nextGrid[idx]=bestId;
+          state.accreteCount++;
+        }
+      }
+    }
+  }
+  
+  // Swap buffers
+  [grid,nextGrid]=[nextGrid,grid];
+  
+  state.iter++;
+  draw();
+  updateStats();
+  
+  // Check equilibrium
+  const balanced=territories.filter(t=>Math.abs(t.current-t.target)<t.target*0.02).length;
+  return balanced===territories.length;
+}
+
+function startCA(){
+  if(state.running)return;
+  state.running=true;
+  state.paused=false;
+  
+  const interval=setInterval(()=>{
+    if(state.paused)return;
+    
+    const done=step();
+    if(done || state.iter>500){
+      clearInterval(interval);
+      state.running=false;
+      const indicator=document.getElementById('phaseIndicator');
+      indicator.className='phase-indicator phase-balance';
+      indicator.textContent='✅ EQUILIBRIUM';
+    }
+  },50);
+}
+
+function togglePause(){
+  state.paused=!state.paused;
+}
+
+function draw(){
+  const canvas=document.getElementById('canvas');
+  const ctx=canvas.getContext('2d');
+  ctx.fillStyle='#000';
+  ctx.fillRect(0,0,W,H);
+  
+  if(showGrid){
+    // Draw raw grid
+    for(let y=0;y<GRID_RES;y++){
+      for(let x=0;x<GRID_RES;x++){
+        const id=grid[y*GRID_RES+x];
+        if(id<255){
+          ctx.fillStyle=territories[id].color;
+          ctx.fillRect(x*CELL_SIZE,y*CELL_SIZE,CELL_SIZE,CELL_SIZE);
+        }
+      }
+    }
+  }
+  
+  if(showMarching){
+    // Marching squares for each territory
+    const smoothLevel=parseInt(document.getElementById('smooth').value);
+    
+    territories.forEach(t=>{
+      const contours=marchingSquares(grid,GRID_RES,t.id);
+      
+      ctx.strokeStyle=t.color;
+      ctx.fillStyle=t.color;
+      ctx.globalAlpha=0.8;
+      ctx.lineWidth=2;
+      
+      contours.forEach(contour=>{
+        if(contour.length<3)return;
+        
+        // Smooth contour
+        const smoothed=smoothContour(contour,smoothLevel);
+        
+        ctx.beginPath();
+        ctx.moveTo(smoothed[0].x*CELL_SIZE,smoothed[0].y*CELL_SIZE);
+        for(let i=1;i<smoothed.length;i++){
+          ctx.lineTo(smoothed[i].x*CELL_SIZE,smoothed[i].y*CELL_SIZE);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha=1;
+        ctx.stroke();
+      });
+    });
+  }
+}
+
+// MARCHING SQUARES ALGORITHM
+function marchingSquares(grid,gridSize,targetId){
+  const contours=[];
+  const visited=new Set();
+  
+  // Scan for contour start points
+  for(let y=0;y<gridSize-1;y++){
+    for(let x=0;x<gridSize-1;x++){
+      const key=`${x},${y}`;
+      if(visited.has(key))continue;
+      
+      // Check 2×2 cell
+      const tl=grid[y*gridSize+x]===targetId?1:0;
+      const tr=grid[y*gridSize+x+1]===targetId?1:0;
+      const br=grid[(y+1)*gridSize+x+1]===targetId?1:0;
+      const bl=grid[(y+1)*gridSize+x]===targetId?1:0;
+      
+      const config=tl*8+tr*4+br*2+bl;
+      
+      if(config>0&&config<15){
+        // Found contour start
+        const contour=traceContour(grid,gridSize,targetId,x,y,visited);
+        if(contour.length>0)contours.push(contour);
+      }
+    }
+  }
+  
+  return contours;
+}
+
+function traceContour(grid,gridSize,targetId,startX,startY,visited){
+  const contour=[];
+  const edgePoints=getMarchingSquaresPoints(grid,gridSize,targetId,startX,startY);
+  
+  if(edgePoints.length===0)return contour;
+  
+  contour.push(...edgePoints);
+  visited.add(`${startX},${startY}`);
+  
+  return contour;
+}
+
+function getMarchingSquaresPoints(grid,gridSize,targetId,x,y){
+  const tl=grid[y*gridSize+x]===targetId?1:0;
+  const tr=grid[y*gridSize+x+1]===targetId?1:0;
+  const br=grid[(y+1)*gridSize+x+1]===targetId?1:0;
+  const bl=grid[(y+1)*gridSize+x]===targetId?1:0;
+  
+  const config=tl*8+tr*4+br*2+bl;
+  const points=[];
+  
+  // Marching squares lookup table
+  switch(config){
+    case 1:case 14:points.push({x:x,y:y+0.5},{x:x+0.5,y:y+1});break;
+    case 2:case 13:points.push({x:x+0.5,y:y+1},{x:x+1,y:y+0.5});break;
+    case 3:case 12:points.push({x:x,y:y+0.5},{x:x+1,y:y+0.5});break;
+    case 4:case 11:points.push({x:x+0.5,y:y},{x:x+1,y:y+0.5});break;
+    case 6:case 9:points.push({x:x+0.5,y:y},{x:x+0.5,y:y+1});break;
+    case 7:case 8:points.push({x:x,y:y+0.5},{x:x+0.5,y:y});break;
+  }
+  
+  return points;
+}
+
+function smoothContour(contour,level){
+  if(level===0)return contour;
+  
+  let smoothed=[...contour];
+  for(let iter=0;iter<level;iter++){
+    const newSmoothed=[];
+    for(let i=0;i<smoothed.length;i++){
+      const prev=smoothed[(i-1+smoothed.length)%smoothed.length];
+      const curr=smoothed[i];
+      const next=smoothed[(i+1)%smoothed.length];
+      
+      newSmoothed.push({
+        x:(prev.x+curr.x*2+next.x)/4,
+        y:(prev.y+curr.y*2+next.y)/4
+      });
+    }
+    smoothed=newSmoothed;
+  }
+  return smoothed;
+}
+
+function updateStats(){
+  territories.forEach(t=>t.current=0);
+  for(let i=0;i<grid.length;i++){
+    if(grid[i]<255)territories[grid[i]].current++;
+  }
+  
+  const balanced=territories.filter(t=>Math.abs(t.current-t.target)<t.target*0.02).length;
+  const equilibrium=(balanced/territories.length)*100;
+  
+  const statsHtml=`
+    <div class="stat-row"><span class="stat-label">Iteration:</span><span class="stat-value">${state.iter}</span></div>
+    <div class="stat-row"><span class="stat-label">Erode Actions:</span><span class="stat-value">${state.erodeCount}</span></div>
+    <div class="stat-row"><span class="stat-label">Accrete Actions:</span><span class="stat-value">${state.accreteCount}</span></div>
+    <div class="stat-row"><span class="stat-label">Equilibrium:</span><span class="stat-value">${equilibrium.toFixed(1)}%</span></div>
+  `+territories.map(t=>{
+    const pct=(t.current/t.target*100).toFixed(1);
+    return`<div class="stat-row"><span class="stat-label">${t.name}:</span><span class="stat-value">${pct}%</span></div>`;
+  }).join('');
+  
+  document.getElementById('stats').innerHTML=statsHtml;
+}
+
+function toggleMarching(){
+  showMarching=!showMarching;
+  document.getElementById('toggleMarching').classList.toggle('active');
+  draw();
+}
+
+function toggleGrid(){
+  showGrid=!showGrid;
+  document.getElementById('toggleGrid').classList.toggle('active');
+  draw();
+}
+
+['erodeThreshold','accreteThreshold','stochastic','smooth'].forEach(id=>{
+  document.getElementById(id).addEventListener('input',e=>{
+    const val=e.target.value;
+    const suffix=(id==='stochastic')?'%':'';
+    document.getElementById(id+'Val').textContent=val+suffix;
+    if(id==='smooth')draw();
+  });
+});
+
+window.addEventListener('load',reset);
+</script>
+</body>
+</html>

@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>⚔️ VORONOI WARFARE - Territorial Ecology</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'SF Mono',Monaco,monospace;background:#000;color:#0f0;padding:20px}
+.container{max-width:1900px;margin:0 auto}
+h1{color:#0ff;font-size:2.5rem;margin-bottom:10px;text-shadow:0 0 20px #0ff}
+.subtitle{color:#0f0;margin-bottom:30px;font-size:1.15rem}
+.main-view{display:grid;grid-template-columns:900px 1fr;gap:30px}
+canvas{border:3px solid #0f0;background:#000;display:block;box-shadow:0 0 30px rgba(0,255,255,.2)}
+.controls{background:#0a0a0a;border:2px solid #0f0;border-radius:10px;padding:20px}
+.control-title{color:#0ff;font-size:1.3rem;font-weight:900;margin-bottom:15px}
+.btn{background:#0f0;color:#000;border:none;padding:10px 20px;border-radius:5px;cursor:pointer;font-weight:900;font-size:1rem;font-family:inherit;width:100%;margin:5px 0}
+.btn:hover{background:#0ff;box-shadow:0 0 15px #0ff}
+.btn-secondary{background:#333;color:#0f0;border:1px solid #0f0}
+.species-card{background:#1a1a1a;padding:12px;margin:8px 0;border-left:4px solid;border-radius:5px}
+.species-name{color:#0ff;font-weight:900;font-size:1rem;margin-bottom:5px}
+.species-traits{color:#888;font-size:.8rem;line-height:1.4}
+.species-stats{display:flex;justify-content:space-between;margin-top:5px;font-size:.75rem}
+.stat-val{color:#0f0;font-weight:bold}
+.phase-indicator{background:#1a1a1a;padding:15px;border:2px solid;border-radius:10px;margin-bottom:15px;text-align:center;font-size:1.1rem;font-weight:900}
+.phase-voronoi{border-color:#888;color:#888}
+.phase-war{border-color:#f00;color:#f00}
+.phase-peace{border-color:#0ff;color:#0ff}
+.stats{background:#1a1a1a;padding:15px;border:1px solid #333;border-radius:5px;margin-top:15px;font-size:.85rem}
+.stat-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #222}
+.stat-row:last-child{border-bottom:none}
+.progress-bar{background:#333;height:14px;border-radius:7px;overflow:hidden;margin-top:4px}
+.progress-fill{height:100%;transition:width .3s;font-size:.7rem;font-weight:900;color:#000;display:flex;align-items:center;justify-content:center}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>⚔️ VORONOI WARFARE - Territorial Ecology</h1>
+<p class="subtitle">Start: Random Voronoi • Evolution: Species warfare • Result: Data-accurate territories</p>
+
+<div class="main-view">
+<div>
+<canvas id="canvas" width="900" height="900"></canvas>
+</div>
+
+<div class="controls">
+<div id="phaseIndicator" class="phase-indicator phase-voronoi">🎲 PHASE 1: Random Voronoi</div>
+
+<div class="control-title">⚔️ Warfare Control</div>
+<button class="btn" onclick="startWarfare()">▶ Start Territorial Warfare</button>
+<button class="btn btn-secondary" onclick="step()">➡ Single Generation</button>
+<button class="btn btn-secondary" onclick="reset()">↻ Reset Voronoi</button>
+<button class="btn btn-secondary" onclick="togglePause()">⏸ Pause</button>
+
+<div class="control-title" style="margin-top:20px">🧬 Species Behaviors</div>
+<div id="speciesCards"></div>
+
+<div class="stats" id="stats"></div>
+</div>
+</div>
+</div>
+
+<div style="background:#1a1a1a;padding:20px;border:2px solid #0ff;border-radius:10px;margin-top:20px">
+<h2 style="color:#0ff;margin-bottom:15px">⚔️ THE TERRITORIAL WARFARE</h2>
+<p style="color:#0f0;line-height:1.8">
+<strong>Phase 1:</strong> Random Voronoi (beautiful but wrong percentages)<br>
+<strong>Phase 2:</strong> Species warfare using biological rules:<br>
+• <strong>PREDATION:</strong> MP4s eat neighbors (apex predator)<br>
+• <strong>COLONIZATION:</strong> TXTs spread fast (pioneer species)<br>
+• <strong>DEFENSE:</strong> PNGs flock together (safety in numbers)<br>
+• <strong>TERRITORIAL MARKING:</strong> Species "shit on" borders to claim land<br>
+• <strong>RETREAT:</strong> Overpopulated species lose land<br>
+<strong>Phase 3:</strong> Equilibrium when all species reach target percentages
+</p>
+</div>
+
+<script>
+// REAL ARKADU DATA with ECOLOGICAL BEHAVIORS
+const SPECIES={
+  mp4:{
+    name:'MP4',color:'#FF6B6B',target:0.727,
+    // APEX PREDATOR: Heavy, aggressive, territorial
+    aggression:9,defense:8,colonize:2,flock:3,retreat:2,
+    behavior:'🦁 Apex Predator • Eats neighbors aggressively'
+  },
+  png:{
+    name:'PNG',color:'#4ECDC4',target:0.113,
+    // SCHOOLING PREY: Clusters for safety
+    aggression:3,defense:5,colonize:5,flock:9,retreat:4,
+    behavior:'🐟 Schooling • Flocks together for defense'
+  },
+  wav:{
+    name:'WAV',color:'#45B7D1',target:0.072,
+    // MEDIUM PREDATOR: Balanced
+    aggression:6,defense:6,colonize:4,flock:4,retreat:3,
+    behavior:'🐺 Pack Hunter • Balanced territorial control'
+  },
+  jpg:{
+    name:'JPG',color:'#FFA07A',target:0.021,
+    // OPPORTUNIST: Fast spreading
+    aggression:4,defense:4,colonize:7,flock:6,retreat:5,
+    behavior:'🦊 Opportunist • Spreads into gaps quickly'
+  },
+  json:{
+    name:'JSON',color:'#98D8C8',target:0.014,
+    // SYMBIONT: Connects, doesn't fight much
+    aggression:2,defense:3,colonize:8,flock:2,retreat:6,
+    behavior:'🦋 Symbiont • Spreads everywhere peacefully'
+  },
+  py:{
+    name:'PY',color:'#F7DC6F',target:0.009,
+    // TRANSFORMER: Changes neighbors
+    aggression:5,defense:4,colonize:6,flock:3,retreat:4,
+    behavior:'🦠 Mutator • Converts neighbors via code'
+  },
+  txt:{
+    name:'TXT',color:'#BB8FCE',target:0.005,
+    // PIONEER: Colonizes everywhere
+    aggression:1,defense:2,colonize:9,flock:1,retreat:7,
+    behavior:'🌱 Pioneer • Colonizes empty space fast'
+  },
+  other:{
+    name:'OTHER',color:'#85C1E2',target:0.046,
+    // GENERALIST: Adapts to environment
+    aggression:4,defense:5,colonize:5,flock:4,retreat:5,
+    behavior:'🦎 Generalist • Adapts to surroundings'
+  }
+};
+
+const GRID_SIZE=150;
+const CELL_SIZE=900/GRID_SIZE;
+let grid,state,species;
+
+function reset(){
+  grid=new Uint8Array(GRID_SIZE*GRID_SIZE).fill(255);
+  
+  species=Object.entries(SPECIES).map(([key,data],i)=>({
+    id:i,key,...data,current:0
+  }));
+  
+  // PHASE 1: Random Voronoi (arbitrary, doesn't match data)
+  const numSeeds=20; // Arbitrary number of seeds
+  const seeds=[];
+  
+  for(let i=0;i<numSeeds;i++){
+    const x=Math.random()*GRID_SIZE;
+    const y=Math.random()*GRID_SIZE;
+    const speciesId=Math.floor(Math.random()*species.length);
+    seeds.push({x,y,speciesId});
+  }
+  
+  // Fill grid using Voronoi
+  for(let y=0;y<GRID_SIZE;y++){
+    for(let x=0;x<GRID_SIZE;x++){
+      let minDist=Infinity,nearest=null;
+      seeds.forEach(s=>{
+        const dist=Math.hypot(x-s.x,y-s.y);
+        if(dist<minDist){minDist=dist;nearest=s}
+      });
+      if(nearest)grid[y*GRID_SIZE+x]=nearest.speciesId;
+    }
+  }
+  
+  state={
+    iter:0,
+    phase:'voronoi',
+    running:false,
+    paused:false,
+    predations:0,
+    colonizations:0,
+    retreats:0
+  };
+  
+  updateSpeciesCards();
+  updateStats();
+  draw();
+}
+
+function step(){
+  // Count current territories
+  species.forEach(s=>s.current=0);
+  for(let i=0;i<grid.length;i++){
+    if(grid[i]<255)species[grid[i]].current++;
+  }
+  
+  const totalCells=GRID_SIZE*GRID_SIZE;
+  
+  // Determine phase
+  const balanced=species.filter(s=>Math.abs(s.current/totalCells-s.target)<0.01).length;
+  if(balanced===species.length){
+    state.phase='peace';
+  }else{
+    state.phase='war';
+  }
+  
+  const indicator=document.getElementById('phaseIndicator');
+  if(state.phase==='peace'){
+    indicator.className='phase-indicator phase-peace';
+    indicator.textContent='☮️ PHASE 3: Equilibrium Reached';
+  }else{
+    indicator.className='phase-indicator phase-war';
+    indicator.textContent='⚔️ PHASE 2: Territorial Warfare';
+  }
+  
+  // TERRITORIAL WARFARE RULES
+  const actions=[];
+  
+  for(let y=1;y<GRID_SIZE-1;y++){
+    for(let x=1;x<GRID_SIZE-1;x++){
+      const idx=y*GRID_SIZE+x;
+      const cellSpecies=grid[idx];
+      if(cellSpecies===255)continue;
+      
+      const sp=species[cellSpecies];
+      const currentPct=sp.current/totalCells;
+      const deficit=sp.target-currentPct;
+      
+      // Get neighbors
+      const neighbors=[
+        {x:x-1,y:y,idx:idx-1},
+        {x:x+1,y:y,idx:idx+1},
+        {x:x,y:y-1,idx:idx-GRID_SIZE},
+        {x:x,y:y+1,idx:idx+GRID_SIZE}
+      ].filter(n=>n.x>=0&&n.x<GRID_SIZE&&n.y>=0&&n.y<GRID_SIZE);
+      
+      // RULE 1: PREDATION (eat weaker neighbors if hungry)
+      if(deficit>0.01){
+        neighbors.forEach(n=>{
+          const neighborSpecies=grid[n.idx];
+          if(neighborSpecies<255&&neighborSpecies!==cellSpecies){
+            const prey=species[neighborSpecies];
+            const preyDeficit=prey.target-prey.current/totalCells;
+            
+            // Attack if: we're aggressive AND (they're weak OR overpopulated)
+            const attackChance=(sp.aggression/10)*(deficit*5);
+            const preyVulnerable=prey.defense<sp.aggression||(preyDeficit<-0.01);
+            
+            if(preyVulnerable&&Math.random()<attackChance){
+              actions.push({type:'predation',from:n.idx,to:idx,species:cellSpecies});
+            }
+          }
+        });
+      }
+      
+      // RULE 2: COLONIZATION (claim empty/weak territory if expansionist)
+      if(deficit>0&&sp.colonize>5){
+        neighbors.forEach(n=>{
+          const neighborSpecies=grid[n.idx];
+          if(neighborSpecies===255||
+             (neighborSpecies<255&&species[neighborSpecies].defense<sp.colonize)){
+            const colonizeChance=(sp.colonize/10)*(deficit*3);
+            if(Math.random()<colonizeChance){
+              actions.push({type:'colonize',from:n.idx,to:n.idx,species:cellSpecies});
+            }
+          }
+        });
+      }
+      
+      // RULE 3: RETREAT (give up land if overpopulated)
+      if(deficit<-0.01){
+        const retreatChance=(sp.retreat/10)*Math.abs(deficit)*2;
+        if(Math.random()<retreatChance){
+          // Find neighbor who wants this land
+          const needyNeighbors=neighbors.filter(n=>{
+            const ns=grid[n.idx];
+            return ns<255&&ns!==cellSpecies&&
+                   (species[ns].current/totalCells)<species[ns].target;
+          });
+          if(needyNeighbors.length>0){
+            const n=needyNeighbors[Math.floor(Math.random()*needyNeighbors.length)];
+            actions.push({type:'retreat',from:idx,to:idx,species:grid[n.idx]});
+          }
+        }
+      }
+      
+      // RULE 4: FLOCKING (stay with same species)
+      if(sp.flock>6){
+        const sameNeighbors=neighbors.filter(n=>grid[n.idx]===cellSpecies).length;
+        if(sameNeighbors<2){
+          // Isolated! Try to move toward same species
+          const sameSpeciesCells=[];
+          for(let dy=-3;dy<=3;dy++){
+            for(let dx=-3;dx<=3;dx++){
+              const nx=x+dx,ny=y+dy;
+              if(nx>=0&&nx<GRID_SIZE&&ny>=0&&ny<GRID_SIZE){
+                if(grid[ny*GRID_SIZE+nx]===cellSpecies){
+                  sameSpeciesCells.push({x:nx,y:ny});
+                }
+              }
+            }
+          }
+          if(sameSpeciesCells.length>3&&Math.random()<sp.flock/15){
+            // Move toward flock (swap with neighbor in that direction)
+            const target=sameSpeciesCells[Math.floor(Math.random()*sameSpeciesCells.length)];
+            const dir={x:Math.sign(target.x-x),y:Math.sign(target.y-y)};
+            const moveIdx=(y+dir.y)*GRID_SIZE+(x+dir.x);
+            if(moveIdx>=0&&moveIdx<grid.length){
+              actions.push({type:'flock',from:idx,to:moveIdx,species:cellSpecies});
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  // Execute actions (sample to avoid too many changes at once)
+  const executeCount=Math.min(actions.length,500);
+  for(let i=0;i<executeCount;i++){
+    const action=actions[Math.floor(Math.random()*actions.length)];
+    const idx=actions.indexOf(action);
+    if(idx>-1)actions.splice(idx,1);
+    
+    if(action.type==='predation'){
+      grid[action.from]=action.species;
+      state.predations++;
+    }else if(action.type==='colonize'){
+      grid[action.to]=action.species;
+      state.colonizations++;
+    }else if(action.type==='retreat'){
+      grid[action.from]=action.species;
+      state.retreats++;
+    }else if(action.type==='flock'){
+      const temp=grid[action.from];
+      grid[action.from]=grid[action.to];
+      grid[action.to]=temp;
+    }
+  }
+  
+  state.iter++;
+  updateStats();
+  draw();
+  
+  return state.phase==='peace';
+}
+
+function startWarfare(){
+  if(state.running)return;
+  state.running=true;
+  state.paused=false;
+  
+  const interval=setInterval(()=>{
+    if(state.paused)return;
+    
+    const done=step();
+    if(done||state.iter>1000){
+      clearInterval(interval);
+      state.running=false;
+    }
+  },50);
+}
+
+function togglePause(){
+  state.paused=!state.paused;
+}
+
+function draw(){
+  const canvas=document.getElementById('canvas');
+  const ctx=canvas.getContext('2d');
+  const img=ctx.createImageData(900,900);
+  
+  for(let y=0;y<GRID_SIZE;y++){
+    for(let x=0;x<GRID_SIZE;x++){
+      const speciesId=grid[y*GRID_SIZE+x];
+      if(speciesId<255){
+        const sp=species[speciesId];
+        const c=sp.color;
+        const r=parseInt(c.slice(1,3),16);
+        const g=parseInt(c.slice(3,5),16);
+        const b=parseInt(c.slice(5,7),16);
+        
+        for(let dy=0;dy<CELL_SIZE;dy++){
+          for(let dx=0;dx<CELL_SIZE;dx++){
+            const px=x*CELL_SIZE+dx;
+            const py=y*CELL_SIZE+dy;
+            const pidx=(py*900+px)*4;
+            img.data[pidx]=r;
+            img.data[pidx+1]=g;
+            img.data[pidx+2]=b;
+            img.data[pidx+3]=255;
+          }
+        }
+      }
+    }
+  }
+  
+  ctx.putImageData(img,0,0);
+}
+
+function updateSpeciesCards(){
+  const html=species.map(sp=>`
+    <div class="species-card" style="border-color:${sp.color}">
+      <div class="species-name">${sp.name}</div>
+      <div class="species-traits">${sp.behavior}</div>
+      <div class="species-stats">
+        <span>ATK:<span class="stat-val">${sp.aggression}</span></span>
+        <span>DEF:<span class="stat-val">${sp.defense}</span></span>
+        <span>COL:<span class="stat-val">${sp.colonize}</span></span>
+        <span>FLK:<span class="stat-val">${sp.flock}</span></span>
+      </div>
+    </div>
+  `).join('');
+  document.getElementById('speciesCards').innerHTML=html;
+}
+
+function updateStats(){
+  species.forEach(s=>s.current=0);
+  for(let i=0;i<grid.length;i++){
+    if(grid[i]<255)species[grid[i]].current++;
+  }
+  
+  const totalCells=GRID_SIZE*GRID_SIZE;
+  
+  const statsHtml=`
+    <div class="stat-row"><span>Generation:</span><span class="stat-val">${state.iter}</span></div>
+    <div class="stat-row"><span>Predations:</span><span class="stat-val">${state.predations}</span></div>
+    <div class="stat-row"><span>Colonizations:</span><span class="stat-val">${state.colonizations}</span></div>
+    <div class="stat-row"><span>Retreats:</span><span class="stat-val">${state.retreats}</span></div>
+  `+species.map(sp=>{
+    const current=(sp.current/totalCells*100).toFixed(2);
+    const target=(sp.target*100).toFixed(2);
+    const diff=parseFloat(current)-parseFloat(target);
+    const status=Math.abs(diff)<1?'✓':diff>0?'↑':'↓';
+    
+    return`
+      <div class="stat-row" style="flex-direction:column">
+        <div style="display:flex;justify-content:space-between">
+          <span>${status} ${sp.name}:</span>
+          <span class="stat-val">${current}% / ${target}%</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" style="width:${Math.min(100,(current/target)*100)}%;background:${sp.color}">
+            ${diff>0?'+':''}${diff.toFixed(1)}%
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+  
+  document.getElementById('stats').innerHTML=statsHtml;
+}
+
+window.addEventListener('load',reset);
+</script>
+</body>
+</html>

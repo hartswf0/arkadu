@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>ARKADU Terrain Explorer — Procedural Topographic Landscape</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000;color:#4dd9cc;font-family:'Courier New',monospace;overflow:hidden}
+#canvas{position:absolute;inset:0;width:100%;height:100%}
+
+.hud{position:fixed;top:20px;left:20px;background:rgba(0,0,0,.9);border:1px solid #4dd9cc;padding:14px;max-width:280px;z-index:100;font-size:11px;box-shadow:0 0 20px rgba(77,217,204,.3)}
+.hud-title{font-size:13px;font-weight:bold;color:#4dd9cc;margin-bottom:10px;letter-spacing:2px;border-bottom:1px solid #4dd9cc;padding-bottom:6px}
+.hud-row{display:flex;justify-content:space-between;margin:6px 0;padding:4px 0;border-bottom:1px solid rgba(77,217,204,.2)}
+.hud-label{color:#6b8a96;font-size:9px;text-transform:uppercase}
+.hud-value{color:#4dd9cc;font-size:11px;font-weight:bold}
+.hud-section{margin:12px 0;padding:8px 0;border-top:1px solid rgba(77,217,204,.3)}
+.mode-btn{display:block;width:100%;padding:8px;margin:4px 0;background:rgba(77,217,204,.1);border:1px solid #4dd9cc;color:#4dd9cc;cursor:pointer;font-size:10px;text-align:center;transition:all .2s;font-family:inherit}
+.mode-btn:hover{background:rgba(77,217,204,.2)}
+.mode-btn.active{background:#4dd9cc;color:#000}
+
+.controls{position:fixed;bottom:20px;left:20px;background:rgba(0,0,0,.9);border:1px solid #4dd9cc;padding:12px;z-index:100;min-width:280px;box-shadow:0 0 20px rgba(77,217,204,.3)}
+.control-row{margin:8px 0;display:flex;align-items:center;gap:10px}
+.control-label{font-size:9px;color:#6b8a96;width:120px;text-transform:uppercase}
+.slider{flex:1;height:3px;-webkit-appearance:none;appearance:none;background:rgba(77,217,204,.3);outline:none}
+.slider::-webkit-slider-thumb{-webkit-appearance:none;width:10px;height:10px;background:#4dd9cc;cursor:pointer;box-shadow:0 0 8px #4dd9cc}
+.slider::-moz-range-thumb{width:10px;height:10px;background:#4dd9cc;cursor:pointer;border:none;box-shadow:0 0 8px #4dd9cc}
+.toggle{padding:6px 12px;background:rgba(77,217,204,.1);border:1px solid rgba(77,217,204,.3);border-radius:4px;cursor:pointer;font-size:10px;transition:all .2s}
+.toggle:hover{background:rgba(77,217,204,.2)}
+.toggle.on{background:#4dd9cc;color:#000;border-color:#4dd9cc}
+
+.info{position:fixed;top:20px;right:20px;background:rgba(0,0,0,.9);border:1px solid #d97b8f;padding:14px;width:300px;z-index:100;font-size:10px;box-shadow:0 0 20px rgba(217,123,143,.3);transform:translateX(400px);transition:transform .3s}
+.info.open{transform:translateX(0)}
+.info-close{position:absolute;top:10px;right:10px;width:18px;height:18px;cursor:pointer;color:#d97b8f;font-size:16px;text-align:center;line-height:18px}
+.info-title{font-size:12px;font-weight:bold;color:#d97b8f;margin-bottom:10px;letter-spacing:1px}
+
+.loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;background:#000;z-index:200;font-size:13px;color:#4dd9cc}
+.loading.hidden{display:none}
+.progress{width:300px;height:2px;background:rgba(77,217,204,.2);position:relative;overflow:hidden}
+.progress-bar{height:100%;background:#4dd9cc;width:0%;box-shadow:0 0 10px #4dd9cc;transition:width .3s}
+</style>
+</head><body>
+<div id="canvas"></div>
+
+<div class="loading" id="loading">
+<div>⬢ GENERATING TERRAIN ⬢</div>
+<div class="progress"><div class="progress-bar" id="progress"></div></div>
+<div id="loadStatus" style="font-size:11px;color:#6b8a96">INITIALIZING...</div>
+</div>
+
+<div class="hud">
+<div class="hud-title">⬡ TERRAIN EXPLORER ⬡</div>
+<div class="hud-row"><div class="hud-label">Altitude</div><div class="hud-value" id="altitude">0m</div></div>
+<div class="hud-row"><div class="hud-label">Chambers</div><div class="hud-value" id="chambers">0</div></div>
+<div class="hud-row"><div class="hud-label">Artifacts</div><div class="hud-value" id="artifacts">0</div></div>
+<div class="hud-row"><div class="hud-label">View Mode</div><div class="hud-value" id="viewMode">ORBIT</div></div>
+<div class="hud-section">
+<button class="mode-btn active" id="btnOrbit">ORBIT VIEW</button>
+<button class="mode-btn" id="btnFly">FLY THROUGH</button>
+<button class="mode-btn" id="btnTop">TOP DOWN</button>
+<button class="mode-btn" id="btnReset">RESET</button>
+</div>
+</div>
+
+<div class="controls">
+<div class="control-row">
+<div class="control-label">Height Scale</div>
+<input type="range" class="slider" id="heightScale" min="0.5" max="5" step="0.1" value="2">
+</div>
+<div class="control-row">
+<div class="control-label">Transect Depth</div>
+<input type="range" class="slider" id="transectDepth" min="-100" max="100" step="5" value="0">
+</div>
+<div class="control-row">
+<div class="control-label">Point Density</div>
+<input type="range" class="slider" id="pointDensity" min="0.1" max="1" step="0.1" value="0.5">
+</div>
+<div class="control-row" style="gap:8px">
+<div class="toggle on" id="tog-xray">X-RAY</div>
+<div class="toggle on" id="tog-transect">TRANSECT</div>
+<div class="toggle on" id="tog-labels">LABELS</div>
+</div>
+</div>
+
+<div class="info" id="info">
+<div class="info-close" onclick="closeInfo()">×</div>
+<div class="info-title">CHAMBER INFO</div>
+<div id="infoContent"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const S={
+chambers:[],artifacts:[],points:[],
+scene:null,camera:null,renderer:null,terrain:null,pointCloud:null,
+mode:'orbit',xray:true,showTransect:true,showLabels:true,
+heightScale:2,transectDepth:0,pointDensity:0.5,
+selected:null,
+controls:{rotating:false,lastX:0,lastY:0,camAngle:0.5,camDist:800,camHeight:500}
+};
+
+const COLORS={
+png:0x4dd9cc,jpg:0x4dd9cc,mp4:0xd97b8f,mp3:0xe8b849,py:0xe8b849,
+json:0x9d7be8,html:0x6bbd8f,unknown:0x6b8a96
+};
+
+async function load(){
+try{
+updateProgress('Loading artifacts...',20);
+console.log('Fetching data from sys/primitive.jsonl...');
+const r=await fetch('sys/primitive.jsonl');
+if(!r.ok)throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+const t=await r.text();
+console.log(`Loaded ${t.length} bytes`);
+S.artifacts=t.trim().split('\n').filter(l=>l.trim()).map(l=>JSON.parse(l));
+console.log(`Parsed ${S.artifacts.length} artifacts`);
+
+updateProgress('Building chambers...',40);
+buildChambers();
+console.log(`Built ${S.chambers.length} chambers`);
+
+updateProgress('Generating terrain...',60);
+await initThree();
+console.log('Three.js initialized');
+
+updateProgress('Creating landscape...',80);
+generateLandscape();
+console.log(`Generated ${S.points.length} points`);
+
+updateProgress('Complete',100);
+setTimeout(()=>document.getElementById('loading').classList.add('hidden'),500);
+
+updateHUD();
+console.log('Starting animation loop...');
+console.log('Camera position:', S.camera.position);
+console.log('Scene children:', S.scene.children.length);
+animate();
+}catch(e){
+console.error('Load error:', e);
+document.getElementById('loadStatus').innerHTML=`<span style="color:#d97b8f">ERROR: ${e.message}</span>`;
+document.getElementById('loadStatus').innerHTML+=`<br><small>${e.stack}</small>`;
+}}
+
+function updateProgress(msg,pct){
+document.getElementById('loadStatus').textContent=msg.toUpperCase();
+document.getElementById('progress').style.width=pct+'%';
+}
+
+function buildChambers(){
+const m={};
+S.artifacts.forEach(a=>{
+const p=a.path.split('/');
+// Get ALL depths, not just first 3
+for(let d=1;d<p.length;d++){
+const cp=p.slice(0,d).join('/');
+if(!m[cp]){
+m[cp]={id:cp,name:p[d-1],depth:d-1,parent:d>1?p.slice(0,d-1).join('/'):null,
+children:[],artifacts:[],species:{},totalSize:0};
+}
+if(d===p.length-1){
+m[cp].artifacts.push(a);
+const s=(a.ext||'unknown').replace(/^\./,'');
+m[cp].species[s]=(m[cp].species[s]||0)+1;
+m[cp].totalSize+=(a.size||0);
+}
+}
+});
+Object.values(m).forEach(c=>{
+if(c.parent&&m[c.parent]&&!m[c.parent].children.includes(c.id)){
+m[c.parent].children.push(c.id);
+}
+});
+S.chambers=Object.values(m);
+console.log(`Built ${S.chambers.length} chambers at depths 0-${Math.max(...S.chambers.map(c=>c.depth))}`);
+}
+
+async function initThree(){
+S.scene=new THREE.Scene();
+S.scene.background=new THREE.Color(0x000000);
+S.scene.fog=new THREE.Fog(0x000000,400,1200);
+
+S.camera=new THREE.PerspectiveCamera(60,window.innerWidth/window.innerHeight,1,3000);
+S.camera.position.set(0,400,600);
+S.camera.lookAt(0,0,0);
+console.log('Camera created at:', S.camera.position);
+console.log('Camera looking at origin');
+
+S.renderer=new THREE.WebGLRenderer({antialias:true});
+S.renderer.setSize(window.innerWidth,window.innerHeight);
+const canvas = document.getElementById('canvas');
+if(!canvas){
+console.error('Canvas element not found!');
+throw new Error('Canvas element not found');
+}
+canvas.appendChild(S.renderer.domElement);
+console.log('Renderer size:', window.innerWidth, 'x', window.innerHeight);
+console.log('Canvas appended to DOM');
+
+// Lights
+const ambient=new THREE.AmbientLight(0x1a3a52,0.4);
+S.scene.add(ambient);
+
+const sun=new THREE.DirectionalLight(0xffffff,0.6);
+sun.position.set(300,500,200);
+S.scene.add(sun);
+
+// Grid (horizontal ground plane)
+const grid=new THREE.GridHelper(2000,100,0x4dd9cc,0x1a3a52);
+grid.material.opacity=0.2;
+grid.material.transparent=true;
+S.scene.add(grid);
+
+window.addEventListener('resize',onResize);
+S.renderer.domElement.addEventListener('mousedown',onMouseDown);
+S.renderer.domElement.addEventListener('mousemove',onMouseMove);
+S.renderer.domElement.addEventListener('mouseup',onMouseUp);
+S.renderer.domElement.addEventListener('wheel',onWheel);
+S.renderer.domElement.addEventListener('click',onClick);
+}
+
+function generateLandscape(){
+// Generate point cloud on XZ plane (horizontal)
+const positions=[],colors=[],sizes=[];
+S.points=[]; // Reset points array
+console.log(`Generating landscape from ${S.chambers.length} chambers...`);
+
+S.chambers.forEach(ch=>{
+if(ch.artifacts.length<3)return;
+
+// Position based on hash
+const hash=hashString(ch.id);
+const angle=(hash%360)*(Math.PI/180);
+const radius=100+((hash>>8)%300)+ch.depth*40;
+const cx=Math.cos(angle)*radius;
+const cz=Math.sin(angle)*radius;
+
+// Generate points for each artifact
+ch.artifacts.forEach((art,idx)=>{
+if(Math.random()>S.pointDensity)return;
+
+const spread=Math.sqrt(ch.artifacts.length)*3;
+const r=gaussianRandom()*spread;
+const theta=Math.random()*Math.PI*2;
+const px=cx+Math.cos(theta)*r;
+const pz=cz+Math.sin(theta)*r;
+
+// Y (height) based on depth (deeper = lower altitude)
+const py=-(ch.depth*15)+Math.abs(gaussianRandom())*10;
+
+const species=(art.ext||'unknown').replace(/^\./,'');
+const color=new THREE.Color(COLORS[species]||COLORS.unknown);
+
+positions.push(px,py,pz);
+colors.push(color.r,color.g,color.b);
+sizes.push(2+(art.size?Math.log(art.size)/20:0));
+
+S.points.push({pos:[px,py,pz],chamber:ch,artifact:art,species});
+});
+});
+
+console.log(`Total points generated: ${positions.length/3}`);
+if(positions.length===0){
+console.error('No points generated!');
+throw new Error('No points generated - check chamber data');
+}
+
+// Create point cloud
+const geometry=new THREE.BufferGeometry();
+geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+geometry.setAttribute('size',new THREE.Float32BufferAttribute(sizes,1));
+
+const material=new THREE.PointsMaterial({
+size:2,
+vertexColors:true,
+transparent:true,
+opacity:0.8,
+blending:S.xray?THREE.AdditiveBlending:THREE.NormalBlending,
+sizeAttenuation:true
+});
+
+S.pointCloud=new THREE.Points(geometry,material);
+S.scene.add(S.pointCloud);
+console.log('Point cloud added to scene');
+
+// Add a bright test sphere to verify rendering works
+const testGeo=new THREE.SphereGeometry(20,16,16);
+const testMat=new THREE.MeshBasicMaterial({color:0xff00ff,wireframe:true});
+const testSphere=new THREE.Mesh(testGeo,testMat);
+testSphere.position.set(0,0,0);
+S.scene.add(testSphere);
+console.log('Test sphere added at origin');
+
+// Generate terrain mesh from density
+generateTerrainMesh();
+
+// Generate labels
+if(S.showLabels)generateLabels();
+
+// Transect plane
+if(S.showTransect)generateTransectPlane();
+}
+
+function generateTerrainMesh(){
+// Create heightmap-based terrain from point density
+const size=500,segments=100;
+const geometry=new THREE.PlaneGeometry(size*2,size*2,segments,segments);
+
+// Build density grid
+const grid=new Array(segments+1).fill(0).map(()=>new Array(segments+1).fill(0));
+
+S.points.forEach(p=>{
+const gx=Math.floor((p.pos[0]+size)/(size*2)*segments);
+const gz=Math.floor((p.pos[2]+size)/(size*2)*segments);
+if(gx>=0&&gx<=segments&&gz>=0&&gz<=segments){
+grid[gz][gx]++;
+// Spread to neighbors
+if(gx>0)grid[gz][gx-1]+=0.5;
+if(gx<segments)grid[gz][gx+1]+=0.5;
+if(gz>0)grid[gz-1][gx]+=0.5;
+if(gz<segments)grid[gz+1][gx]+=0.5;
+}
+});
+
+// Displace vertices
+const vertices=geometry.attributes.position.array;
+for(let i=0;i<=segments;i++){
+for(let j=0;j<=segments;j++){
+const idx=(i*(segments+1)+j)*3;
+const density=grid[i][j];
+vertices[idx+2]=Math.sqrt(density)*S.heightScale*5; // Z becomes height
+}
+}
+geometry.computeVertexNormals();
+
+const material=new THREE.MeshStandardMaterial({
+color:0x1a3a52,
+wireframe:true,
+opacity:0.2,
+transparent:true,
+side:THREE.DoubleSide
+});
+
+S.terrain=new THREE.Mesh(geometry,material);
+S.terrain.rotation.x=-Math.PI/2; // Rotate to horizontal
+S.scene.add(S.terrain);
+}
+
+function generateLabels(){
+const kingdoms=S.chambers.filter(c=>c.depth===0).slice(0,15);
+kingdoms.forEach(ch=>{
+const hash=hashString(ch.id);
+const angle=(hash%360)*(Math.PI/180);
+const radius=100+((hash>>8)%300);
+const x=Math.cos(angle)*radius;
+const z=Math.sin(angle)*radius;
+
+const canvas=document.createElement('canvas');
+canvas.width=256;canvas.height=64;
+const ctx=canvas.getContext('2d');
+ctx.fillStyle='#4dd9cc';
+ctx.font='bold 24px Courier New';
+ctx.textAlign='center';
+ctx.fillText(ch.name,128,40);
+
+const texture=new THREE.CanvasTexture(canvas);
+const spriteMat=new THREE.SpriteMaterial({map:texture,transparent:true});
+const sprite=new THREE.Sprite(spriteMat);
+sprite.position.set(x,20,z);
+sprite.scale.set(80,20,1);
+S.scene.add(sprite);
+});
+}
+
+function generateTransectPlane(){
+const geometry=new THREE.PlaneGeometry(2000,2000);
+const material=new THREE.MeshBasicMaterial({
+color:0xd97b8f,
+transparent:true,
+opacity:0.15,
+side:THREE.DoubleSide
+});
+const plane=new THREE.Mesh(geometry,material);
+plane.rotation.x=-Math.PI/2;
+plane.position.y=S.transectDepth;
+S.scene.add(plane);
+plane.userData.isTransect=true;
+}
+
+function hashString(str){
+let hash=0;
+for(let i=0;i<str.length;i++){
+hash=((hash<<5)-hash)+str.charCodeAt(i);
+hash=hash&hash;
+}
+return Math.abs(hash);
+}
+
+function gaussianRandom(){
+let u=0,v=0;
+while(u===0)u=Math.random();
+while(v===0)v=Math.random();
+return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+}
+
+let frameCount = 0;
+function animate(){
+requestAnimationFrame(animate);
+
+if(S.mode==='orbit'){
+const angle=S.controls.camAngle;
+const dist=S.controls.camDist;
+const height=S.controls.camHeight;
+S.camera.position.x=Math.cos(angle)*dist;
+S.camera.position.y=height;
+S.camera.position.z=Math.sin(angle)*dist;
+S.camera.lookAt(0,0,0);
+}
+
+S.renderer.render(S.scene,S.camera);
+updateHUD();
+
+if(frameCount === 0){
+console.log('First frame rendered!');
+console.log('Camera at:', S.camera.position);
+console.log('Renderer size:', S.renderer.domElement.width, 'x', S.renderer.domElement.height);
+}
+frameCount++;
+}
+
+function onResize(){
+S.camera.aspect=window.innerWidth/window.innerHeight;
+S.camera.updateProjectionMatrix();
+S.renderer.setSize(window.innerWidth,window.innerHeight);
+}
+
+function onMouseDown(e){
+S.controls.rotating=true;
+S.controls.lastX=e.clientX;
+S.controls.lastY=e.clientY;
+}
+
+function onMouseMove(e){
+if(!S.controls.rotating)return;
+const dx=e.clientX-S.controls.lastX;
+const dy=e.clientY-S.controls.lastY;
+
+if(S.mode==='orbit'){
+S.controls.camAngle-=dx*0.005;
+S.controls.camHeight=Math.max(50,Math.min(800,S.controls.camHeight-dy*0.5));
+}
+
+S.controls.lastX=e.clientX;
+S.controls.lastY=e.clientY;
+}
+
+function onMouseUp(){
+S.controls.rotating=false;
+}
+
+function onWheel(e){
+e.preventDefault();
+if(S.mode==='orbit'){
+S.controls.camDist=Math.max(200,Math.min(1200,S.controls.camDist+e.deltaY*0.5));
+}
+}
+
+function onClick(e){
+const raycaster=new THREE.Raycaster();
+raycaster.params.Points.threshold=5;
+const mouse=new THREE.Vector2();
+mouse.x=(e.clientX/window.innerWidth)*2-1;
+mouse.y=-(e.clientY/window.innerHeight)*2+1;
+raycaster.setFromCamera(mouse,S.camera);
+
+if(S.pointCloud){
+const intersects=raycaster.intersectObject(S.pointCloud);
+if(intersects.length>0){
+const idx=intersects[0].index;
+const point=S.points[idx];
+if(point)showInfo(point);
+}
+}
+}
+
+function showInfo(point){
+const ch=point.chamber;
+const info=document.getElementById('info');
+const content=document.getElementById('infoContent');
+
+let html=`
+<div style="padding:10px;background:rgba(77,217,204,.05);border-left:2px solid #4dd9cc;border-radius:4px;margin:8px 0">
+<div style="font-weight:bold;color:#4dd9cc;font-size:11px;margin-bottom:8px">${ch.name}</div>
+<div style="font-size:9px;color:#6b8a96">Depth: ${ch.depth}</div>
+<div style="font-size:9px;color:#6b8a96">Artifacts: ${ch.artifacts.length}</div>
+<div style="font-size:9px;color:#6b8a96">Size: ${(ch.totalSize/1024/1024).toFixed(2)} MB</div>
+</div>
+<div style="margin-top:12px;font-size:10px;color:#6b8a96">SPECIES:</div>`;
+
+Object.entries(ch.species).sort((a,b)=>b[1]-a[1]).forEach(([sp,cnt])=>{
+const pct=(cnt/ch.artifacts.length*100).toFixed(1);
+html+=`<div style="padding:4px;margin:2px 0;background:rgba(77,217,204,.08);border-radius:3px;font-size:9px">${sp.toUpperCase()}: ${cnt} (${pct}%)</div>`;
+});
+
+content.innerHTML=html;
+info.classList.add('open');
+}
+
+function closeInfo(){
+document.getElementById('info').classList.remove('open');
+}
+
+function updateHUD(){
+document.getElementById('altitude').textContent=S.camera.position.y.toFixed(0)+'m';
+document.getElementById('chambers').textContent=S.chambers.length;
+document.getElementById('artifacts').textContent=S.artifacts.length.toLocaleString();
+}
+
+// Controls
+document.getElementById('btnOrbit').onclick=()=>{
+S.mode='orbit';
+document.getElementById('viewMode').textContent='ORBIT';
+document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
+document.getElementById('btnOrbit').classList.add('active');
+};
+
+document.getElementById('btnFly').onclick=()=>{
+S.mode='fly';
+document.getElementById('viewMode').textContent='FLY';
+document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
+document.getElementById('btnFly').classList.add('active');
+};
+
+document.getElementById('btnTop').onclick=()=>{
+S.camera.position.set(0,600,0.1);
+S.camera.lookAt(0,0,0);
+document.getElementById('viewMode').textContent='TOP DOWN';
+};
+
+document.getElementById('btnReset').onclick=()=>{
+S.controls.camAngle=0;
+S.controls.camDist=600;
+S.controls.camHeight=400;
+};
+
+document.getElementById('heightScale').oninput=e=>{
+S.heightScale=parseFloat(e.target.value);
+if(S.terrain)S.scene.remove(S.terrain);
+generateTerrainMesh();
+};
+
+document.getElementById('transectDepth').oninput=e=>{
+S.transectDepth=parseFloat(e.target.value);
+S.scene.children.filter(c=>c.userData.isTransect).forEach(c=>S.scene.remove(c));
+if(S.showTransect)generateTransectPlane();
+};
+
+document.getElementById('pointDensity').oninput=e=>{
+S.pointDensity=parseFloat(e.target.value);
+};
+
+document.getElementById('tog-xray').onclick=function(){
+S.xray=!S.xray;
+this.classList.toggle('on');
+if(S.pointCloud){
+S.pointCloud.material.blending=S.xray?THREE.AdditiveBlending:THREE.NormalBlending;
+}
+};
+
+document.getElementById('tog-transect').onclick=function(){
+S.showTransect=!S.showTransect;
+this.classList.toggle('on');
+S.scene.children.filter(c=>c.userData.isTransect).forEach(c=>S.scene.remove(c));
+if(S.showTransect)generateTransectPlane();
+};
+
+document.getElementById('tog-labels').onclick=function(){
+S.showLabels=!S.showLabels;
+this.classList.toggle('on');
+};
+
+load();
+</script>
+</body></html>

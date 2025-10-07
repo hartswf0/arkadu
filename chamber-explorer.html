@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<title>ARKADU Chamber Explorer — Level-of-Detail Navigation</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0e1a;color:#4dd9cc;font-family:monospace;overflow:hidden}
+#canvas{display:block;cursor:grab}
+#canvas.dragging{cursor:grabbing}
+.hud{position:fixed;top:20px;left:20px;background:rgba(0,0,0,.95);border:1px solid #4dd9cc;
+padding:16px;width:340px;z-index:100;font-size:11px;border-radius:8px}
+.stat{margin:6px 0;padding:6px;background:rgba(77,217,204,.05);border-radius:4px}
+.label{color:#6b8a96;font-size:9px;text-transform:uppercase}
+.value{color:#4dd9cc;font-size:11px;font-weight:bold;margin-top:2px}
+.controls{position:fixed;bottom:20px;left:20px;background:rgba(0,0,0,.95);
+border:1px solid #4dd9cc;padding:16px;width:340px;border-radius:8px;z-index:100}
+.btn{padding:8px 12px;margin:4px;background:rgba(77,217,204,.1);border:1px solid rgba(77,217,204,.3);
+color:#4dd9cc;cursor:pointer;font-size:10px;display:inline-block;border-radius:4px;transition:all .2s}
+.btn:hover{background:rgba(77,217,204,.2);border-color:#4dd9cc}
+.inspector{position:fixed;top:20px;right:20px;background:rgba(0,0,0,.95);
+border:1px solid #d97b8f;padding:16px;width:400px;max-height:80vh;overflow-y:auto;
+z-index:100;border-radius:8px;transform:translateX(450px);transition:transform .3s}
+.inspector.open{transform:translateX(0)}
+.close{position:absolute;top:16px;right:16px;cursor:pointer;color:#d97b8f;font-size:18px}
+.info-block{margin:10px 0;padding:10px;background:rgba(77,217,204,.05);border-radius:6px;font-size:10px}
+.chamber-item{padding:6px;margin:4px 0;background:rgba(77,217,204,.05);border-left:3px solid #4dd9cc;
+border-radius:3px;font-size:10px;cursor:pointer}
+.chamber-item:hover{background:rgba(77,217,204,.15)}
+.loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+flex-direction:column;gap:20px;background:#000;z-index:200;color:#4dd9cc}
+.loading.hidden{display:none}
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+
+<div class="loading" id="loading">
+<div>⬢ LOADING CHAMBER HIERARCHY ⬢</div>
+<div id="status">Loading artifacts...</div>
+</div>
+
+<div class="hud">
+<div style="font-size:14px;color:#4dd9cc;font-weight:bold;margin-bottom:12px">
+CHAMBER EXPLORER
+</div>
+<div class="stat"><div class="label">Current Depth</div><div class="value" id="currentDepth">0 (Kingdoms)</div></div>
+<div class="stat"><div class="label">Visible Chambers</div><div class="value" id="visibleChambers">0</div></div>
+<div class="stat"><div class="label">Total Artifacts</div><div class="value" id="totalArtifacts">0</div></div>
+<div class="stat"><div class="label">Zoom Level</div><div class="value" id="zoomLevel">1.0x</div></div>
+<div class="stat"><div class="label">Position</div><div class="value" id="position">0, 0</div></div>
+</div>
+
+<div class="controls">
+<div style="font-size:10px;color:#6b8a96;margin-bottom:8px">
+<strong>NAVIGATION</strong><br>
+• Drag to pan<br>
+• Scroll to zoom<br>
+• Click chamber to drill down<br>
+• Double-click to zoom out
+</div>
+<div class="btn" id="btnReset">Reset View</div>
+<div class="btn" id="btnZoomOut">← Level Up</div>
+</div>
+
+<div class="inspector" id="inspector">
+<div class="close" onclick="closeInspector()">×</div>
+<div style="font-size:13px;color:#d97b8f;font-weight:bold;margin-bottom:12px">CHAMBER DETAILS</div>
+<div id="inspectorContent"></div>
+</div>
+
+<script>
+const CAN=document.getElementById('canvas');
+const CTX=CAN.getContext('2d');
+let DPR=window.devicePixelRatio||1;
+let W,H;
+
+const STATE={
+artifacts:[],
+chambers:[],
+chamberMap:{},
+currentDepth:0,
+currentParent:null,
+visibleChambers:[],
+zoom:1,
+panX:0,
+panY:0,
+dragging:false,
+lastX:0,
+lastY:0,
+selectedChamber:null
+};
+
+const DEPTH_COLORS=[
+'#d97b8f','#e8b849','#9d7be8','#4dd9cc','#6bbd8f','#ffaa44'
+];
+
+async function load(){
+try{
+updateStatus('Loading artifacts...');
+const r=await fetch('sys/primitive.jsonl');
+const t=await r.text();
+STATE.artifacts=t.trim().split('\n').map(l=>JSON.parse(l));
+console.log(`Loaded ${STATE.artifacts.length} artifacts`);
+
+updateStatus('Building chamber hierarchy...');
+buildChambers();
+
+updateStatus('Initializing view...');
+resize();
+showDepth(0,null);
+draw();
+
+document.getElementById('loading').classList.add('hidden');
+updateHUD();
+}catch(e){
+console.error(e);
+document.getElementById('status').innerHTML=`<span style="color:#d97b8f">ERROR: ${e.message}</span>`;
+}}
+
+function updateStatus(msg){
+document.getElementById('status').textContent=msg;
+}
+
+function buildChambers(){
+STATE.chamberMap={};
+
+// Build all chambers
+STATE.artifacts.forEach(art=>{
+const parts=art.path.split('/');
+for(let d=0;d<parts.length-1;d++){
+const id=parts.slice(0,d+1).join('/');
+if(!STATE.chamberMap[id]){
+STATE.chamberMap[id]={
+id:id,
+name:parts[d],
+depth:d,
+parent:d>0?parts.slice(0,d).join('/'):null,
+children:[],
+artifacts:[],
+totalCount:0,
+totalSize:0,
+species:{}
+};
+}
+}
+
+// Leaf chamber gets artifact
+const leafId=parts.slice(0,-1).join('/');
+if(STATE.chamberMap[leafId]){
+STATE.chamberMap[leafId].artifacts.push(art);
+const ext=(art.ext||'').replace(/^\./,'')||'unknown';
+STATE.chamberMap[leafId].species[ext]=(STATE.chamberMap[leafId].species[ext]||0)+1;
+}
+});
+
+// Link children
+Object.values(STATE.chamberMap).forEach(ch=>{
+if(ch.parent&&STATE.chamberMap[ch.parent]){
+if(!STATE.chamberMap[ch.parent].children.includes(ch.id)){
+STATE.chamberMap[ch.parent].children.push(ch.id);
+}
+}
+});
+
+// Aggregate totals
+function aggregate(ch){
+ch.totalCount=ch.artifacts.length;
+ch.totalSize=ch.artifacts.reduce((s,a)=>s+(a.size||0),0);
+ch.children.forEach(childId=>{
+const child=STATE.chamberMap[childId];
+if(child){
+aggregate(child);
+ch.totalCount+=child.totalCount;
+ch.totalSize+=child.totalSize;
+Object.entries(child.species).forEach(([sp,cnt])=>{
+ch.species[sp]=(ch.species[sp]||0)+cnt;
+});
+}
+});
+}
+
+Object.values(STATE.chamberMap).forEach(aggregate);
+
+STATE.chambers=Object.values(STATE.chamberMap);
+console.log(`Built ${STATE.chambers.length} chambers`);
+}
+
+function showDepth(depth,parentId){
+STATE.currentDepth=depth;
+STATE.currentParent=parentId;
+
+// Get chambers at this depth with this parent
+STATE.visibleChambers=STATE.chambers.filter(ch=>{
+if(parentId===null){
+return ch.depth===depth&&!ch.parent;
+}else{
+return ch.parent===parentId;
+}
+});
+
+console.log(`Showing depth ${depth}, parent ${parentId||'ROOT'}: ${STATE.visibleChambers.length} chambers`);
+
+// Layout chambers in a grid
+const cols=Math.ceil(Math.sqrt(STATE.visibleChambers.length));
+const spacing=400;
+const offsetX=-(cols*spacing)/2;
+const offsetY=-(Math.ceil(STATE.visibleChambers.length/cols)*spacing)/2;
+
+STATE.visibleChambers.forEach((ch,i)=>{
+const col=i%cols;
+const row=Math.floor(i/cols);
+ch.x=offsetX+col*spacing+spacing/2;
+ch.y=offsetY+row*spacing+spacing/2;
+ch.size=Math.min(150,50+Math.log(ch.totalCount+1)*15);
+});
+
+STATE.zoom=1;
+STATE.panX=0;
+STATE.panY=0;
+
+draw();
+updateHUD();
+}
+
+function draw(){
+CTX.fillStyle='#0a0e1a';
+CTX.fillRect(0,0,W,H);
+
+CTX.save();
+CTX.translate(W/(2*DPR)+STATE.panX,H/(2*DPR)+STATE.panY);
+CTX.scale(STATE.zoom,STATE.zoom);
+
+// Draw chambers
+STATE.visibleChambers.forEach(ch=>{
+const color=DEPTH_COLORS[ch.depth%DEPTH_COLORS.length];
+
+// Chamber circle
+CTX.fillStyle=hexToRgba(color,0.15);
+CTX.beginPath();
+CTX.arc(ch.x,ch.y,ch.size,0,Math.PI*2);
+CTX.fill();
+
+// Border
+CTX.strokeStyle=hexToRgba(color,0.8);
+CTX.lineWidth=2;
+CTX.stroke();
+
+// Highlight selected
+if(ch===STATE.selectedChamber){
+CTX.strokeStyle='#fff';
+CTX.lineWidth=4;
+CTX.beginPath();
+CTX.arc(ch.x,ch.y,ch.size+6,0,Math.PI*2);
+CTX.stroke();
+}
+
+// Name
+CTX.fillStyle=color;
+CTX.font='14px monospace';
+CTX.textAlign='center';
+CTX.textBaseline='middle';
+CTX.fillText(ch.name,ch.x,ch.y);
+
+// Stats
+CTX.fillStyle='#6b8a96';
+CTX.font='10px monospace';
+CTX.fillText(`${ch.totalCount} artifacts`,ch.x,ch.y+20);
+CTX.fillText(`${formatSize(ch.totalSize)}`,ch.x,ch.y+32);
+
+// Show children count
+if(ch.children.length>0){
+CTX.fillStyle='#4dd9cc';
+CTX.fillText(`${ch.children.length} children →`,ch.x,ch.y-ch.size-15);
+}
+});
+
+CTX.restore();
+}
+
+function formatSize(bytes){
+if(bytes<1024)return bytes+'B';
+if(bytes<1024*1024)return(bytes/1024).toFixed(1)+'KB';
+if(bytes<1024*1024*1024)return(bytes/1024/1024).toFixed(1)+'MB';
+return(bytes/1024/1024/1024).toFixed(2)+'GB';
+}
+
+function hexToRgba(hex,alpha){
+const h=hex.replace('#','');
+const r=parseInt(h.slice(0,2),16);
+const g=parseInt(h.slice(2,4),16);
+const b=parseInt(h.slice(4,6),16);
+return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function updateHUD(){
+const depthNames=['Kingdoms','Phyla','Classes','Orders','Families','Genera','Species'];
+document.getElementById('currentDepth').textContent=
+`${STATE.currentDepth} (${depthNames[STATE.currentDepth]||'Depth '+STATE.currentDepth})`;
+document.getElementById('visibleChambers').textContent=STATE.visibleChambers.length;
+document.getElementById('totalArtifacts').textContent=STATE.artifacts.length.toLocaleString();
+document.getElementById('zoomLevel').textContent=STATE.zoom.toFixed(2)+'x';
+document.getElementById('position').textContent=
+`${Math.floor(STATE.panX)}, ${Math.floor(STATE.panY)}`;
+}
+
+function resize(){
+W=window.innerWidth;
+H=window.innerHeight;
+CAN.width=W*DPR;
+CAN.height=H*DPR;
+CAN.style.width=W+'px';
+CAN.style.height=H+'px';
+CTX.scale(DPR,DPR);
+}
+
+window.addEventListener('resize',()=>{resize();draw();});
+
+CAN.addEventListener('wheel',e=>{
+e.preventDefault();
+const delta=e.deltaY>0?0.9:1.1;
+STATE.zoom=Math.max(0.2,Math.min(5,STATE.zoom*delta));
+updateHUD();
+draw();
+},{passive:false});
+
+CAN.addEventListener('mousedown',e=>{
+STATE.dragging=true;
+STATE.lastX=e.clientX;
+STATE.lastY=e.clientY;
+CAN.classList.add('dragging');
+});
+
+CAN.addEventListener('mousemove',e=>{
+if(!STATE.dragging)return;
+STATE.panX+=e.clientX-STATE.lastX;
+STATE.panY+=e.clientY-STATE.lastY;
+STATE.lastX=e.clientX;
+STATE.lastY=e.clientY;
+updateHUD();
+draw();
+});
+
+CAN.addEventListener('mouseup',()=>{
+STATE.dragging=false;
+CAN.classList.remove('dragging');
+});
+
+CAN.addEventListener('click',e=>{
+const rect=CAN.getBoundingClientRect();
+const mx=((e.clientX-rect.left-W/2-STATE.panX)/STATE.zoom);
+const my=((e.clientY-rect.top-H/2-STATE.panY)/STATE.zoom);
+
+let closest=null;
+let minDist=Infinity;
+
+STATE.visibleChambers.forEach(ch=>{
+const dx=ch.x-mx;
+const dy=ch.y-my;
+const d=Math.sqrt(dx*dx+dy*dy);
+if(d<ch.size&&d<minDist){
+minDist=d;
+closest=ch;
+}
+});
+
+if(closest){
+STATE.selectedChamber=closest;
+inspectChamber(closest);
+draw();
+}
+});
+
+CAN.addEventListener('dblclick',e=>{
+e.preventDefault();
+if(STATE.currentParent){
+const parent=STATE.chamberMap[STATE.currentParent];
+showDepth(parent.depth,parent.parent);
+}else if(STATE.currentDepth>0){
+showDepth(STATE.currentDepth-1,null);
+}
+});
+
+function inspectChamber(ch){
+let html=`
+<div class="info-block">
+<div class="label">Name</div><div class="value">${ch.name}</div>
+<div class="label">Path</div><div class="value" style="font-size:9px;word-break:break-all">${ch.id}</div>
+<div class="label">Depth</div><div class="value">${ch.depth}</div>
+<div class="label">Artifacts</div><div class="value">${ch.totalCount}</div>
+<div class="label">Size</div><div class="value">${formatSize(ch.totalSize)}</div>
+<div class="label">Children</div><div class="value">${ch.children.length}</div>
+</div>`;
+
+if(ch.children.length>0){
+html+=`<div style="font-size:11px;color:#4dd9cc;font-weight:bold;margin:12px 0">
+DRILL DOWN (${ch.children.length} children)</div>`;
+html+=`<div class="chamber-item" onclick="drillDown('${ch.id}')">
+<strong>→ Open ${ch.name}</strong><br>
+<span style="font-size:9px;color:#6b8a96">Show ${ch.children.length} child chambers</span>
+</div>`;
+}
+
+if(Object.keys(ch.species).length>0){
+html+=`<div style="font-size:11px;color:#e8b849;font-weight:bold;margin:12px 0">
+SPECIES (${Object.keys(ch.species).length})</div>`;
+Object.entries(ch.species).sort((a,b)=>b[1]-a[1]).slice(0,10).forEach(([sp,cnt])=>{
+html+=`<div style="padding:4px;margin:3px 0;background:rgba(232,184,73,.05);
+border-left:2px solid #e8b849;font-size:10px">
+${sp.toUpperCase()}: ${cnt} (${(cnt/ch.totalCount*100).toFixed(1)}%)
+</div>`;
+});
+}
+
+document.getElementById('inspectorContent').innerHTML=html;
+document.getElementById('inspector').classList.add('open');
+}
+
+window.drillDown=function(chamberId){
+const ch=STATE.chamberMap[chamberId];
+if(ch&&ch.children.length>0){
+showDepth(ch.depth+1,ch.id);
+closeInspector();
+}
+};
+
+function closeInspector(){
+document.getElementById('inspector').classList.remove('open');
+STATE.selectedChamber=null;
+draw();
+}
+
+document.getElementById('btnReset').onclick=()=>{
+showDepth(0,null);
+closeInspector();
+};
+
+document.getElementById('btnZoomOut').onclick=()=>{
+if(STATE.currentParent){
+const parent=STATE.chamberMap[STATE.currentParent];
+showDepth(parent.depth,parent.parent);
+}else if(STATE.currentDepth>0){
+showDepth(STATE.currentDepth-1,null);
+}
+closeInspector();
+};
+
+load();
+</script>
+</body></html>

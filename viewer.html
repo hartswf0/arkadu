@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ARKADU Viewer — Media Archaeology Interface</title>
+    <style>
+        :root {
+            --void: #0a0a0f;
+            --strata: #1a1a2e;
+            --excavate: #36cfc9;
+            --artifact: #ffd700;
+            --trace: #ff6b6b;
+            --persist: #95e1d3;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Monaco', 'Courier New', monospace;
+            background: var(--void);
+            color: var(--persist);
+            line-height: 1.6;
+        }
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        header {
+            text-align: center;
+            padding: 40px;
+            background: linear-gradient(135deg, var(--strata), var(--void));
+            border-bottom: 3px solid var(--excavate);
+            margin-bottom: 30px;
+        }
+        h1 {
+            font-size: 3rem;
+            color: var(--artifact);
+            text-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
+            letter-spacing: 0.3em;
+        }
+        .subtitle {
+            color: var(--excavate);
+            font-size: 1.2rem;
+            margin-top: 10px;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+        button {
+            background: var(--strata);
+            color: var(--excavate);
+            border: 2px solid var(--excavate);
+            padding: 12px 20px;
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: 700;
+            transition: all 0.3s;
+        }
+        button:hover {
+            background: var(--excavate);
+            color: var(--void);
+            box-shadow: 0 0 15px rgba(54, 207, 201, 0.5);
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
+            margin: 30px 0;
+        }
+        .stat-box {
+            background: rgba(54, 207, 201, 0.1);
+            border: 2px solid var(--excavate);
+            padding: 20px;
+            text-align: center;
+        }
+        .stat-number {
+            font-size: 2rem;
+            color: var(--artifact);
+            font-weight: 700;
+            display: block;
+        }
+        .stat-label {
+            color: var(--persist);
+            font-size: 0.85rem;
+            text-transform: uppercase;
+        }
+        .section {
+            background: var(--strata);
+            border: 1px solid var(--excavate);
+            padding: 25px;
+            margin: 20px 0;
+        }
+        .section h2 {
+            color: var(--artifact);
+            border-bottom: 2px solid var(--excavate);
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .card {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--persist);
+            padding: 15px;
+            font-size: 0.85rem;
+        }
+        .card:hover {
+            border-color: var(--excavate);
+            box-shadow: 0 0 10px rgba(54, 207, 201, 0.3);
+        }
+        .card h3 {
+            color: var(--artifact);
+            font-size: 0.9rem;
+            margin-bottom: 10px;
+            word-break: break-word;
+        }
+        .meta { margin: 4px 0; color: var(--persist); }
+        .meta-label { color: var(--excavate); font-weight: 700; }
+        .warning {
+            background: rgba(255, 107, 107, 0.1);
+            border: 2px solid var(--trace);
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .warning h3 { color: var(--trace); margin-bottom: 10px; }
+        input[type="text"] {
+            padding: 10px;
+            background: var(--strata);
+            border: 1px solid var(--excavate);
+            color: var(--persist);
+            font-family: inherit;
+            flex: 1;
+            min-width: 200px;
+        }
+        input:focus {
+            outline: none;
+            border-color: var(--artifact);
+        }
+        .filter-bar {
+            display: flex;
+            gap: 10px;
+            margin: 15px 0;
+        }
+        pre {
+            background: rgba(0,0,0,0.5);
+            padding: 15px;
+            overflow-x: auto;
+            font-size: 0.8rem;
+            border-left: 3px solid var(--excavate);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>ARKADU</h1>
+            <div class="subtitle">Noah's Ark ⊗ Xanadu — Media Archaeology Viewer</div>
+        </header>
+
+        <div class="controls">
+            <button onclick="loadManifest()">📂 LOAD MANIFEST</button>
+            <button onclick="showStats()">📊 STATISTICS</button>
+            <button onclick="showAnimals()">🦁 ANIMALS</button>
+            <button onclick="showOrphans()">⚠️ ORPHANS</button>
+            <button onclick="showLinked()">🔗 LINKED</button>
+            <button onclick="showGitHubAnalysis()">⚙️ GITHUB TRIAGE</button>
+        </div>
+
+        <div id="display"></div>
+    </div>
+
+    <script>
+        let manifest = null;
+
+        async function loadManifest() {
+            try {
+                const response = await fetch('media-manifest.json');
+                manifest = await response.json();
+                showStats();
+            } catch (e) {
+                document.getElementById('display').innerHTML = `
+                    <div class="warning">
+                        <h3>⚠️ Could not load media-manifest.json</h3>
+                        <p>Run: <code>python3 ARKADU/arkadu-scan.py .</code> first to generate the manifest.</p>
+                    </div>
+                `;
+            }
+        }
+
+        function showStats() {
+            if (!manifest) { loadManifest(); return; }
+            
+            const s = manifest.stats;
+            const g = manifest.github_analysis;
+            
+            document.getElementById('display').innerHTML = `
+                <div class="stats">
+                    <div class="stat-box">
+                        <span class="stat-number">${s.total_images}</span>
+                        <span class="stat-label">Images</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-number">${s.total_videos}</span>
+                        <span class="stat-label">Videos</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-number">${s.total_audio}</span>
+                        <span class="stat-label">Audio</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-number">${g.total_size_mb}</span>
+                        <span class="stat-label">MB Total</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-number">${s.html_files}</span>
+                        <span class="stat-label">HTML Files</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-number">${s.orphaned_artifacts}</span>
+                        <span class="stat-label">Orphaned</span>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2>Project Overview</h2>
+                    <p style="margin-bottom: 15px;">
+                        <strong>Generated:</strong> ${new Date(manifest.generated).toLocaleString()}<br>
+                        <strong>Total Artifacts:</strong> ${s.total_images + s.total_videos + s.total_audio}<br>
+                        <strong>Orphan Rate:</strong> ${((s.orphaned_artifacts / (s.total_images + s.total_videos + s.total_audio)) * 100).toFixed(1)}%
+                    </p>
+                </div>
+            `;
+        }
+
+        function showAnimals() {
+            if (!manifest) { loadManifest(); return; }
+            
+            const strata = Object.entries(manifest.strata)
+                .sort((a, b) => b[1] - a[1])
+                .filter(([_, count]) => count > 0);
+            
+            document.getElementById('display').innerHTML = `
+                <div class="section">
+                    <h2>🦁 Animal Kingdoms (Technocultural Strata)</h2>
+                    <div class="grid">
+                        ${strata.map(([animal, count]) => `
+                            <div class="card">
+                                <h3>${animal}</h3>
+                                <div class="meta">
+                                    <span class="meta-label">Artifacts:</span> ${count}
+                                </div>
+                                <div class="meta">
+                                    <span class="meta-label">Type:</span> Stratum
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function showOrphans() {
+            if (!manifest) { loadManifest(); return; }
+            
+            const all = [...manifest.artifacts.images, ...manifest.artifacts.videos, ...manifest.artifacts.audio];
+            const orphans = all.filter(a => !a.used_by || a.used_by.length === 0);
+            
+            document.getElementById('display').innerHTML = `
+                <div class="section">
+                    <h2>⚠️ Orphaned Artifacts (${orphans.length})</h2>
+                    <p style="margin-bottom: 15px; color: var(--persist);">
+                        These artifacts exist but are not referenced by any HTML files. 
+                        They may be intermediate files, deprecated assets, or working materials.
+                    </p>
+                    <div class="filter-bar">
+                        <input type="text" id="orphanFilter" placeholder="Filter by path, animal, or type..." 
+                               onkeyup="filterOrphans()">
+                    </div>
+                    <div class="grid" id="orphanGrid">
+                        ${renderArtifacts(orphans.slice(0, 100))}
+                    </div>
+                    ${orphans.length > 100 ? `<p style="margin-top: 15px; color: var(--artifact);">Showing first 100 of ${orphans.length} orphans</p>` : ''}
+                </div>
+            `;
+        }
+
+        function showLinked() {
+            if (!manifest) { loadManifest(); return; }
+            
+            const all = [...manifest.artifacts.images, ...manifest.artifacts.videos, ...manifest.artifacts.audio];
+            const linked = all.filter(a => a.used_by && a.used_by.length > 0);
+            
+            document.getElementById('display').innerHTML = `
+                <div class="section">
+                    <h2>🔗 Linked Artifacts (${linked.length})</h2>
+                    <p style="margin-bottom: 15px; color: var(--persist);">
+                        These artifacts are actively referenced in HTML files — they form circulation networks.
+                    </p>
+                    <div class="grid">
+                        ${renderArtifacts(linked)}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderArtifacts(artifacts) {
+            return artifacts.map(a => `
+                <div class="card">
+                    <h3>${a.path.split('/').pop()}</h3>
+                    <div class="meta"><span class="meta-label">Path:</span> ${a.path}</div>
+                    <div class="meta"><span class="meta-label">Size:</span> ${formatBytes(a.size)}</div>
+                    <div class="meta"><span class="meta-label">Type:</span> ${a.type}</div>
+                    <div class="meta"><span class="meta-label">Animal:</span> ${a.animal || 'UNKNOWN'}</div>
+                    ${a.used_by && a.used_by.length > 0 ? `
+                        <div class="meta" style="margin-top: 8px;">
+                            <span class="meta-label">Used by:</span><br>
+                            ${a.used_by.map(u => `<small>→ ${u}</small>`).join('<br>')}
+                        </div>
+                    ` : ''}
+                </div>
+            `).join('');
+        }
+
+        function showGitHubAnalysis() {
+            if (!manifest) { loadManifest(); return; }
+            
+            const g = manifest.github_analysis;
+            
+            document.getElementById('display').innerHTML = `
+                <div class="warning">
+                    <h3>⚠️ GitHub Storage Triage</h3>
+                    <p><strong>Total Size:</strong> ${g.total_size_mb} MB</p>
+                    <p><strong>Video Size:</strong> ${g.video_size_mb} MB</p>
+                    <p><strong>Files over 100MB:</strong> ${g.large_files_over_100mb}</p>
+                    <p><strong>Files over 50MB:</strong> ${g.large_files_over_50mb}</p>
+                    <p><strong>Recommendation:</strong> ${g.recommendation}</p>
+                </div>
+
+                <div class="section">
+                    <h2>🎯 Recommended Strategy</h2>
+                    <pre>
+# ARKADU Recommendation for GitHub
+
+Your project contains 52.7 GB of media — far beyond GitHub's limits.
+
+## Strategy: Selective Archival + External Hosting
+
+1. **Keep in Git (with Git LFS):**
+   - Key "header_prompt" videos (&lt;10 MB each)
+   - Iconic clapper cards and thumbnails
+   - Shared assets referenced across multiple HTML files
+   - Total: ~500 MB
+
+2. **Host Externally:**
+   - Full slideshows and compilations
+   - Boy_video.mp4 (162 MB)
+   - All animal-specific working files
+   - Options: Internet Archive, Cloudflare R2, YouTube (unlisted)
+
+3. **.gitignore pattern:**
+   *.mp4
+   !*_header_prompt.mp4
+   *.mov
+   *.avi
+   boy_video.mp4
+   */MEDIA/
+   */TRUNK/
+
+4. **Manifest-based linking:**
+   - Keep media-manifest.json in Git
+   - Update HTML to load from manifest
+   - Manifest maps local paths → external URLs
+   - Enables offline/online dual operation
+
+5. **Archive Distribution:**
+   - Create releases with full media as .zip
+   - Host on Internet Archive
+   - Link in README for full download
+                    </pre>
+                </div>
+            `;
+        }
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function filterOrphans() {
+            const query = document.getElementById('orphanFilter').value.toLowerCase();
+            const all = [...manifest.artifacts.images, ...manifest.artifacts.videos, ...manifest.artifacts.audio];
+            const orphans = all.filter(a => !a.used_by || a.used_by.length === 0);
+            const filtered = orphans.filter(a => 
+                a.path.toLowerCase().includes(query) ||
+                a.animal.toLowerCase().includes(query) ||
+                a.type.toLowerCase().includes(query)
+            );
+            
+            document.getElementById('orphanGrid').innerHTML = renderArtifacts(filtered.slice(0, 100));
+        }
+
+        // Auto-load on start
+        window.addEventListener('DOMContentLoaded', loadManifest);
+    </script>
+</body>
+</html>

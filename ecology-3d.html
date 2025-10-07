@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>ARKADU 3D Ecology — Transect Engine</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+--void:#0a0e1a;--text:#b8dbd9;--dim:#6b8a96;--blue:#4dd9cc;--coral:#d97b8f;
+--amber:#e8b849;--purple:#9d7be8;--green:#6bbd8f;
+}
+body{background:var(--void);color:var(--text);font-family:'Courier New',monospace;overflow:hidden;height:100vh}
+
+#canvas{position:absolute;inset:0;cursor:grab}
+#canvas.grabbing{cursor:grabbing}
+
+.hud{position:fixed;top:20px;left:20px;background:rgba(15,20,25,.85);backdrop-filter:blur(12px);border:2px solid rgba(77,217,204,.3);border-radius:12px;padding:16px;max-width:280px;z-index:100;font-size:11px}
+.hud-title{font-size:15px;font-weight:bold;color:var(--blue);margin-bottom:12px;letter-spacing:1px}
+.hud-section{margin:12px 0;padding:10px 0;border-top:1px solid rgba(77,217,204,.2)}
+.hud-label{font-size:9px;text-transform:uppercase;color:var(--dim);margin-bottom:6px;letter-spacing:0.5px}
+.hud-value{font-size:12px;color:var(--text)}
+.hud-btn{display:block;width:100%;padding:8px;margin:4px 0;background:rgba(77,217,204,.1);border:1px solid rgba(77,217,204,.3);color:var(--text);cursor:pointer;font-size:10px;border-radius:6px;font-family:inherit;transition:all .2s}
+.hud-btn:hover{background:rgba(77,217,204,.2);border-color:var(--blue)}
+.hud-btn.active{background:var(--blue);color:var(--void);border-color:var(--blue)}
+
+.transect{position:fixed;top:20px;right:20px;background:rgba(15,20,25,.85);backdrop-filter:blur(12px);border:2px solid rgba(217,123,143,.3);border-radius:12px;padding:16px;max-width:320px;z-index:100;font-size:11px;transform:translateX(400px);transition:transform .3s}
+.transect.open{transform:translateX(0)}
+.transect-title{font-size:14px;font-weight:bold;color:var(--coral);margin-bottom:12px}
+.transect-close{position:absolute;top:12px;right:12px;width:20px;height:20px;cursor:pointer;color:var(--text);font-size:18px;line-height:20px;text-align:center}
+.chamber-card{background:rgba(77,217,204,.05);border-left:3px solid var(--blue);padding:10px;margin:8px 0;border-radius:4px}
+.chamber-name{font-size:12px;font-weight:bold;color:var(--blue);margin-bottom:6px}
+.chamber-meta{font-size:9px;color:var(--dim);line-height:1.4}
+.nested-glyphs{display:flex;gap:4px;margin-top:8px;flex-wrap:wrap}
+.glyph{width:16px;height:16px;border-radius:3px;cursor:pointer;transition:transform .2s}
+.glyph:hover{transform:scale(1.5)}
+.mycelium-count{font-size:10px;color:var(--purple);margin-top:6px}
+
+.legend{position:fixed;bottom:20px;left:20px;background:rgba(15,20,25,.85);backdrop-filter:blur(12px);border:2px solid rgba(77,217,204,.3);border-radius:12px;padding:12px;z-index:100;font-size:10px}
+.legend-item{display:flex;align-items:center;gap:8px;margin:4px 0}
+.legend-box{width:12px;height:12px;border-radius:2px}
+
+.controls{position:fixed;bottom:20px;right:20px;background:rgba(15,20,25,.85);backdrop-filter:blur(12px);border:2px solid rgba(77,217,204,.3);border-radius:12px;padding:14px;z-index:100}
+.control-group{margin:8px 0}
+.control-label{font-size:9px;text-transform:uppercase;color:var(--dim);margin-bottom:4px}
+.slider{width:160px;height:4px;-webkit-appearance:none;appearance:none;background:rgba(77,217,204,.2);border-radius:2px;outline:none}
+.slider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:12px;height:12px;background:var(--blue);border-radius:50%;cursor:pointer}
+.slider::-moz-range-thumb{width:12px;height:12px;background:var(--blue);border-radius:50%;cursor:pointer;border:none}
+
+.loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;background:var(--void);z-index:200;font-size:14px;color:var(--blue)}
+.loading.hidden{display:none}
+.loading-bar{width:200px;height:4px;background:rgba(77,217,204,.2);border-radius:2px;overflow:hidden}
+.loading-progress{height:100%;background:var(--blue);width:0%;transition:width .3s}
+</style>
+</head><body>
+<canvas id="canvas"></canvas>
+
+<div class="loading" id="loading">
+<div>LOADING ECOLOGICAL STRATA</div>
+<div class="loading-bar"><div class="loading-progress" id="loadProgress"></div></div>
+<div id="loadStatus" style="font-size:11px;color:var(--dim)">Initializing...</div>
+</div>
+
+<div class="hud">
+<div class="hud-title">TRANSECT ENGINE</div>
+<div class="hud-section">
+<div class="hud-label">Current Depth</div>
+<div class="hud-value" id="currentDepth">Biome View</div>
+</div>
+<div class="hud-section">
+<div class="hud-label">Focus</div>
+<div class="hud-value" id="focusChamber">None</div>
+</div>
+<div class="hud-section">
+<div class="hud-label">Taxonomy</div>
+<div class="hud-value" id="taxonomy">—</div>
+</div>
+<div class="hud-section">
+<button class="hud-btn active" id="btnBiome">BIOME VIEW</button>
+<button class="hud-btn" id="btnStrata">STRATA VIEW</button>
+<button class="hud-btn" id="btnMycelium">MYCELIUM</button>
+<button class="hud-btn" id="btnTransect">TRANSECT MODE</button>
+<button class="hud-btn" id="btnReset">RESET ORBIT</button>
+</div>
+</div>
+
+<div class="transect" id="transect">
+<div class="transect-close" onclick="closeTransect()">×</div>
+<div class="transect-title" id="transectTitle">Chamber</div>
+<div id="transectContent"></div>
+</div>
+
+<div class="legend">
+<div style="font-size:10px;font-weight:bold;color:var(--blue);margin-bottom:8px">SPECIES</div>
+<div class="legend-item"><div class="legend-box" style="background:var(--blue)"></div>Images (PNG/JPG)</div>
+<div class="legend-item"><div class="legend-box" style="background:var(--coral)"></div>Video (MP4)</div>
+<div class="legend-item"><div class="legend-box" style="background:var(--amber)"></div>Audio/Code (MP3/PY)</div>
+<div class="legend-item"><div class="legend-box" style="background:var(--purple)"></div>Data (JSON)</div>
+<div class="legend-item"><div class="legend-box" style="background:var(--green)"></div>Web (HTML)</div>
+</div>
+
+<div class="controls">
+<div class="control-group">
+<div class="control-label">Rotation</div>
+<input type="range" class="slider" id="rotSpeed" min="0" max="20" value="5" step="1">
+</div>
+<div class="control-group">
+<div class="control-label">Depth Separation</div>
+<input type="range" class="slider" id="depthSep" min="100" max="500" value="250" step="10">
+</div>
+<div class="control-group">
+<div class="control-label">Chamber Scale</div>
+<input type="range" class="slider" id="chamberScale" min="5" max="30" value="15" step="1">
+</div>
+<div class="control-group">
+<div class="control-label">Transect Height</div>
+<input type="range" class="slider" id="transectHeight" min="-200" max="600" value="200" step="10">
+</div>
+</div>
+
+<script>
+const canvas=document.getElementById('canvas');
+const ctx=canvas.getContext('2d');
+let W,H;
+
+const S={
+chambers:[],artifacts:[],chains:[],
+camX:0,camY:0,camZ:800,
+rotX:0.3,rotY:0,
+autoRotate:true,rotSpeed:0.005,
+dragging:false,lastX:0,lastY:0,
+focused:null,
+mode:'biome',
+depthSeparation:250,
+chamberScale:15,
+transectHeight:200,
+transectMode:false
+};
+
+const COLORS={
+png:'#4dd9cc',jpg:'#4dd9cc',mp4:'#d97b8f',mp3:'#e8b849',py:'#e8b849',
+json:'#9d7be8',html:'#6bbd8f'
+};
+
+async function load(){
+try{
+updateLoadStatus('Loading artifacts...',20);
+const r=await fetch('/sys/primitive.jsonl');
+const t=await r.text();
+S.artifacts=t.trim().split('\n').map(l=>JSON.parse(l));
+
+updateLoadStatus('Loading chains...',40);
+try{
+const cr=await fetch('/sys/ekphrasis.jsonl');
+const ct=await cr.text();
+S.chains=ct.trim().split('\n').map(l=>JSON.parse(l));
+}catch(e){S.chains=[];}
+
+updateLoadStatus('Building chambers...',60);
+buildChambers();
+
+updateLoadStatus('Positioning in 3D space...',80);
+position3D();
+
+updateLoadStatus('Ready',100);
+setTimeout(()=>document.getElementById('loading').classList.add('hidden'),500);
+init();
+}catch(e){
+document.getElementById('loadStatus').innerHTML=`<span style="color:var(--coral)">ERROR: ${e.message}</span>`;
+}}
+
+function updateLoadStatus(msg,pct){
+document.getElementById('loadStatus').textContent=msg;
+document.getElementById('loadProgress').style.width=pct+'%';
+}
+
+function buildChambers(){
+const m={};
+S.artifacts.forEach(a=>{
+const p=a.path.split('/');
+for(let d=1;d<=Math.min(p.length-1,3);d++){
+const cp=p.slice(0,d).join('/');
+if(!m[cp]){
+m[cp]={
+id:cp,name:p[d-1],depth:d-1,
+parent:d>1?p.slice(0,d-1).join('/'):null,
+children:[],artifacts:[],species:{},
+totalSize:0,dominantSpecies:null
+};
+}
+if(d===p.length-1){
+m[cp].artifacts.push(a);
+const s=(a.ext||'unknown').replace(/^\./,'');
+m[cp].species[s]=(m[cp].species[s]||0)+1;
+m[cp].totalSize+=(a.size||0);
+}
+}
+});
+Object.values(m).forEach(c=>{
+if(c.parent&&m[c.parent]){
+if(!m[c.parent].children.includes(c.id))m[c.parent].children.push(c.id);
+}
+const sorted=Object.entries(c.species).sort((a,b)=>b[1]-a[1]);
+c.dominantSpecies=sorted[0]?sorted[0][0]:'unknown';
+});
+S.chambers=Object.values(m);
+}
+
+function position3D(){
+const depths=[
+S.chambers.filter(c=>c.depth===0),
+S.chambers.filter(c=>c.depth===1),
+S.chambers.filter(c=>c.depth===2)
+];
+
+depths.forEach((layer,d)=>{
+const radius=200+d*100;
+layer.forEach((ch,i)=>{
+const angle=(i/layer.length)*Math.PI*2;
+ch.x3d=Math.cos(angle)*radius;
+ch.z3d=Math.sin(angle)*radius;
+ch.y3d=d*S.depthSeparation;
+ch.size=Math.min(80,Math.max(20,Math.sqrt(ch.artifacts.length)*S.chamberScale));
+});
+});
+}
+
+function init(){
+resize();
+window.onresize=resize;
+setupControls();
+animate();
+}
+
+function resize(){
+W=canvas.width=window.innerWidth;
+H=canvas.height=window.innerHeight;
+}
+
+function setupControls(){
+canvas.onmousedown=e=>{
+S.dragging=true;
+S.lastX=e.clientX;
+S.lastY=e.clientY;
+canvas.classList.add('grabbing');
+S.autoRotate=false;
+};
+
+canvas.onmousemove=e=>{
+if(!S.dragging)return;
+const dx=e.clientX-S.lastX;
+const dy=e.clientY-S.lastY;
+S.rotY+=dx*0.005;
+S.rotX-=dy*0.005;
+S.rotX=Math.max(-Math.PI/2,Math.min(Math.PI/2,S.rotX));
+S.lastX=e.clientX;
+S.lastY=e.clientY;
+};
+
+canvas.onmouseup=canvas.onmouseleave=()=>{
+S.dragging=false;
+canvas.classList.remove('grabbing');
+};
+
+canvas.onwheel=e=>{
+e.preventDefault();
+S.camZ=Math.max(300,Math.min(1500,S.camZ+e.deltaY*0.5));
+};
+
+canvas.onclick=e=>{
+const rect=canvas.getBoundingClientRect();
+const mx=e.clientX-rect.left;
+const my=e.clientY-rect.top;
+const hit=findHit(mx,my);
+if(hit)focusChamber(hit);
+};
+
+document.getElementById('btnBiome').onclick=()=>setMode('biome');
+document.getElementById('btnStrata').onclick=()=>setMode('strata');
+document.getElementById('btnMycelium').onclick=()=>setMode('mycelium');
+document.getElementById('btnTransect').onclick=()=>toggleTransectMode();
+document.getElementById('btnReset').onclick=()=>{
+S.rotX=0.3;S.rotY=0;S.camZ=800;S.autoRotate=true;S.focused=null;
+closeTransect();
+};
+
+document.getElementById('rotSpeed').oninput=e=>S.rotSpeed=parseInt(e.target.value)/1000;
+document.getElementById('depthSep').oninput=e=>{
+S.depthSeparation=parseInt(e.target.value);
+position3D();
+};
+document.getElementById('chamberScale').oninput=e=>{
+S.chamberScale=parseInt(e.target.value);
+position3D();
+};
+document.getElementById('transectHeight').oninput=e=>S.transectHeight=parseInt(e.target.value);
+}
+
+function setMode(mode){
+S.mode=mode;
+['btnBiome','btnStrata','btnMycelium'].forEach(id=>{
+document.getElementById(id).classList.toggle('active',id==='btn'+mode.charAt(0).toUpperCase()+mode.slice(1));
+});
+}
+
+function toggleTransectMode(){
+S.transectMode=!S.transectMode;
+document.getElementById('btnTransect').classList.toggle('active',S.transectMode);
+}
+
+function animate(){
+requestAnimationFrame(animate);
+if(S.autoRotate)S.rotY+=S.rotSpeed;
+render();
+}
+
+function render(){
+ctx.fillStyle='#0a0e1a';
+ctx.fillRect(0,0,W,H);
+
+// Transform chambers to 2D
+const projected=S.chambers.map(ch=>{
+const p=project3D(ch.x3d,ch.y3d,ch.z3d);
+return{ch,x:p.x,y:p.y,z:p.z,depth:p.z};
+}).sort((a,b)=>a.depth-b.depth);
+
+// Draw connections first (behind chambers)
+if(S.mode==='mycelium'){
+drawMycelium(projected);
+}else{
+drawConnections(projected);
+}
+
+// Draw transect plane if active
+if(S.transectMode){
+drawTransectPlane(projected);
+}
+
+// Draw chambers
+projected.forEach(({ch,x,y,z})=>{
+if(S.transectMode&&Math.abs(ch.y3d-S.transectHeight)>50)return;
+drawChamber(ch,x,y,z);
+});
+
+// Draw HUD text
+updateHUD();
+}
+
+function project3D(x,y,z){
+// Rotate
+const cosX=Math.cos(S.rotX);
+const sinX=Math.sin(S.rotX);
+const cosY=Math.cos(S.rotY);
+const sinY=Math.sin(S.rotY);
+
+let x1=x*cosY-z*sinY;
+let z1=x*sinY+z*cosY;
+let y1=y*cosX-z1*sinX;
+let z2=y*sinX+z1*cosX;
+
+// Project
+const scale=S.camZ/(S.camZ+z2);
+return{
+x:W/2+x1*scale,
+y:H/2-y1*scale,
+z:z2
+};
+}
+
+function drawChamber(ch,x,y,z){
+const scale=S.camZ/(S.camZ+z);
+const size=ch.size*scale;
+
+// Get color
+const col=COLORS[ch.dominantSpecies]||'#6b8a96';
+
+// Draw chamber box with depth
+const opacity=Math.max(0.3,Math.min(1,1-z/1000));
+ctx.save();
+
+// Shadow/depth effect
+ctx.fillStyle=`rgba(0,0,0,${0.3*opacity})`;
+ctx.fillRect(x-size/2+3,y-size/2+3,size,size);
+
+// Main chamber
+ctx.fillStyle=col.replace(')',`,${0.15*opacity})`).replace('#','rgba('+parseInt(col.slice(1,3),16)+','+parseInt(col.slice(3,5),16)+','+parseInt(col.slice(5,7),16)+',');
+ctx.fillRect(x-size/2,y-size/2,size,size);
+
+// Border
+const focused=S.focused===ch.id;
+ctx.strokeStyle=focused?'#4dd9cc':col;
+ctx.lineWidth=focused?3:1;
+ctx.globalAlpha=opacity;
+ctx.strokeRect(x-size/2,y-size/2,size,size);
+
+// Nested chamber glyphs (children)
+if(ch.children.length>0&&scale>0.5){
+const glyphSize=Math.max(3,size/6);
+const padding=size*0.15;
+let gx=x-size/2+padding;
+let gy=y-size/2+padding;
+ch.children.slice(0,9).forEach((cid,i)=>{
+const child=S.chambers.find(c=>c.id===cid);
+if(!child)return;
+const gcol=COLORS[child.dominantSpecies]||'#6b8a96';
+ctx.fillStyle=gcol.replace(')',`,${0.6*opacity})`).replace('#','rgba('+parseInt(gcol.slice(1,3),16)+','+parseInt(gcol.slice(3,5),16)+','+parseInt(gcol.slice(5,7),16)+',');
+ctx.fillRect(gx,gy,glyphSize,glyphSize);
+gx+=glyphSize+2;
+if(i%3===2){gx=x-size/2+padding;gy+=glyphSize+2;}
+});
+}
+
+// Label
+if(scale>0.4){
+ctx.fillStyle=`rgba(184,219,217,${opacity})`;
+ctx.font=`${Math.floor(9*scale)}px 'Courier New'`;
+ctx.textAlign='center';
+ctx.fillText(ch.name,x,y+size/2+12*scale);
+}
+
+ctx.restore();
+}
+
+function drawConnections(projected){
+S.chambers.forEach(ch=>{
+if(S.mode==='strata'&&ch.depth!==S.focused?.depth)return;
+ch.children.forEach(cid=>{
+const child=S.chambers.find(c=>c.id===cid);
+if(!child)return;
+const p1=projected.find(p=>p.ch.id===ch.id);
+const p2=projected.find(p=>p.ch.id===child.id);
+if(!p1||!p2)return;
+
+ctx.beginPath();
+ctx.moveTo(p1.x,p1.y);
+ctx.lineTo(p2.x,p2.y);
+ctx.strokeStyle='rgba(77,217,204,0.15)';
+ctx.lineWidth=1;
+ctx.stroke();
+});
+});
+}
+
+function drawMycelium(projected){
+S.chains.forEach(chain=>{
+const srcCh=S.chambers.find(c=>c.artifacts.some(a=>a.path===chain.prompt_file));
+const tgtCh=S.chambers.find(c=>c.artifacts.some(a=>a.path===chain.script));
+if(!srcCh||!tgtCh)return;
+const p1=projected.find(p=>p.ch.id===srcCh.id);
+const p2=projected.find(p=>p.ch.id===tgtCh.id);
+if(!p1||!p2)return;
+
+ctx.beginPath();
+ctx.moveTo(p1.x,p1.y);
+const cpx=(p1.x+p2.x)/2;
+const cpy=(p1.y+p2.y)/2-50;
+ctx.quadraticCurveTo(cpx,cpy,p2.x,p2.y);
+ctx.strokeStyle='rgba(157,123,232,0.4)';
+ctx.lineWidth=2;
+ctx.setLineDash([5,5]);
+ctx.stroke();
+ctx.setLineDash([]);
+});
+}
+
+function drawTransectPlane(projected){
+// Draw horizontal slice plane
+const y=H/2-(S.transectHeight*S.camZ/(S.camZ+0));
+ctx.fillStyle='rgba(217,123,143,0.08)';
+ctx.fillRect(0,y-50,W,100);
+ctx.strokeStyle='rgba(217,123,143,0.5)';
+ctx.lineWidth=2;
+ctx.beginPath();
+ctx.moveTo(0,y);
+ctx.lineTo(W,y);
+ctx.stroke();
+
+// Label
+ctx.fillStyle='rgba(217,123,143,0.9)';
+ctx.font='11px Courier New';
+ctx.fillText(`TRANSECT Y=${S.transectHeight}`,20,y-60);
+}
+
+function findHit(mx,my){
+const projected=S.chambers.map(ch=>{
+const p=project3D(ch.x3d,ch.y3d,ch.z3d);
+const scale=S.camZ/(S.camZ+p.z);
+const size=ch.size*scale;
+return{ch,x:p.x,y:p.y,size,z:p.z};
+}).sort((a,b)=>b.z-a.z);
+
+for(const p of projected){
+if(mx>=p.x-p.size/2&&mx<=p.x+p.size/2&&my>=p.y-p.size/2&&my<=p.y+p.size/2){
+return p.ch;
+}
+}
+return null;
+}
+
+function focusChamber(ch){
+S.focused=ch;
+S.autoRotate=false;
+
+// Open transect panel
+const panel=document.getElementById('transect');
+const title=document.getElementById('transectTitle');
+const content=document.getElementById('transectContent');
+
+title.textContent=ch.name;
+
+let html=`
+<div class="chamber-card">
+<div class="chamber-name">${ch.name}</div>
+<div class="chamber-meta">
+<strong>Depth:</strong> ${ch.depth}<br>
+<strong>Artifacts:</strong> ${ch.artifacts.length}<br>
+<strong>Size:</strong> ${(ch.totalSize/1024/1024).toFixed(2)} MB<br>
+<strong>Dominant Species:</strong> ${ch.dominantSpecies.toUpperCase()}<br>
+<strong>Species:</strong> ${Object.keys(ch.species).join(', ')}
+</div>
+</div>`;
+
+if(ch.children.length>0){
+html+=`<div style="margin-top:16px;font-size:10px;color:var(--blue);font-weight:bold">NESTED CHAMBERS (${ch.children.length})</div>
+<div class="nested-glyphs">`;
+ch.children.forEach(cid=>{
+const child=S.chambers.find(c=>c.id===cid);
+if(!child)return;
+const col=COLORS[child.dominantSpecies]||'#6b8a96';
+html+=`<div class="glyph" style="background:${col}" title="${child.name}" onclick="focusChamberById('${cid}')"></div>`;
+});
+html+=`</div>`;
+}
+
+const myceliumCount=S.chains.filter(c=>
+ch.artifacts.some(a=>a.path===c.prompt_file||a.path===c.script)
+).length;
+if(myceliumCount>0){
+html+=`<div class="mycelium-count">🔗 ${myceliumCount} mycelial connections</div>`;
+}
+
+if(ch.parent){
+const parent=S.chambers.find(c=>c.id===ch.parent);
+if(parent){
+html+=`<div style="margin-top:12px;font-size:10px;color:var(--dim)">
+Parent: <span style="color:var(--blue);cursor:pointer" onclick="focusChamberById('${parent.id}')">${parent.name}</span>
+</div>`;
+}
+}
+
+content.innerHTML=html;
+panel.classList.add('open');
+
+// Update HUD
+document.getElementById('focusChamber').textContent=ch.name;
+document.getElementById('currentDepth').textContent=`Depth ${ch.depth}`;
+document.getElementById('taxonomy').textContent=getTaxonomy(ch);
+}
+
+function closeTransect(){
+document.getElementById('transect').classList.remove('open');
+S.focused=null;
+document.getElementById('focusChamber').textContent='None';
+document.getElementById('currentDepth').textContent='Biome View';
+document.getElementById('taxonomy').textContent='—';
+}
+
+function focusChamberById(id){
+const ch=S.chambers.find(c=>c.id===id);
+if(ch)focusChamber(ch);
+}
+
+function getTaxonomy(ch){
+const parts=ch.id.split('/');
+return parts.map((p,i)=>`L${i}: ${p}`).join(' > ');
+}
+
+function updateHUD(){
+// Could add real-time stats here
+}
+
+load();
+</script>
+</body></html>

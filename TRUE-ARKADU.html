@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TRUE-ARKADU - Complete System Explorer</title>
+<style>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+  background: #000;
+  color: #0f0;
+  font-size: 13px;
+  overflow: hidden;
+}
+
+.container {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  grid-template-rows: 50px 1fr;
+  height: 100vh;
+  gap: 2px;
+  background: #0f0;
+}
+
+.header {
+  grid-column: 1 / -1;
+  background: #000;
+  border: 2px solid #0f0;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  justify-content: space-between;
+}
+
+.header h1 {
+  font-size: 18px;
+  color: #0f0;
+}
+
+.header-stats {
+  font-size: 11px;
+  color: #0a0;
+}
+
+.sidebar {
+  background: #000;
+  border: 2px solid #0f0;
+  overflow-y: auto;
+  padding: 10px;
+}
+
+.main {
+  background: #000;
+  border: 2px solid #0f0;
+  display: grid;
+  grid-template-rows: 40px 1fr;
+  overflow: hidden;
+}
+
+.tabs {
+  display: flex;
+  gap: 5px;
+  padding: 5px 10px;
+  border-bottom: 1px solid #0f0;
+  overflow-x: auto;
+}
+
+.tab {
+  padding: 5px 15px;
+  background: transparent;
+  border: 1px solid #0f0;
+  color: #0f0;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.tab:hover {
+  background: #0f0;
+  color: #000;
+}
+
+.tab.active {
+  background: #0f0;
+  color: #000;
+}
+
+.content {
+  overflow-y: auto;
+  padding: 15px;
+  display: none;
+}
+
+.content.active {
+  display: block;
+}
+
+.tree-item {
+  padding: 3px 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.tree-item:hover {
+  background: rgba(0, 255, 0, 0.1);
+}
+
+.tree-folder {
+  color: #0ff;
+  font-weight: bold;
+}
+
+.tree-file {
+  color: #0f0;
+  padding-left: 15px;
+}
+
+.tree-file.python {
+  color: #ff0;
+}
+
+.tree-file.json {
+  color: #f0f;
+}
+
+.tree-file.media {
+  color: #0af;
+}
+
+.window {
+  background: #001100;
+  border: 1px solid #0f0;
+  margin-bottom: 15px;
+  max-height: 80vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.window-header {
+  background: #0f0;
+  color: #000;
+  padding: 8px 12px;
+  font-weight: bold;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: move;
+}
+
+.window-controls {
+  display: flex;
+  gap: 5px;
+}
+
+.window-btn {
+  background: #000;
+  color: #0f0;
+  border: 1px solid #0f0;
+  padding: 2px 8px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 11px;
+}
+
+.window-btn:hover {
+  background: #0f0;
+  color: #000;
+}
+
+.window-content {
+  padding: 15px;
+  overflow-y: auto;
+  flex: 1;
+  max-height: calc(80vh - 40px);
+}
+
+.code-view {
+  background: #000;
+  color: #0f0;
+  font-family: 'Menlo', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 10px;
+  overflow-x: auto;
+  white-space: pre;
+  border: 1px solid #0f0;
+}
+
+.json-view {
+  background: #000;
+  color: #f0f;
+  font-family: 'Menlo', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 10px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.dep-node {
+  display: inline-block;
+  padding: 5px 10px;
+  margin: 5px;
+  border: 1px solid #0f0;
+  border-radius: 3px;
+  background: rgba(0, 255, 0, 0.1);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.dep-node:hover {
+  background: #0f0;
+  color: #000;
+}
+
+.dep-node.python {
+  border-color: #ff0;
+  color: #ff0;
+}
+
+.dep-node.json {
+  border-color: #f0f;
+  color: #f0f;
+}
+
+.dep-node.media {
+  border-color: #0af;
+  color: #0af;
+}
+
+.loading {
+  text-align: center;
+  padding: 40px;
+  color: #0f0;
+  animation: blink 1s infinite;
+}
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0.3; }
+}
+
+.search-box {
+  width: 100%;
+  padding: 8px;
+  background: #000;
+  border: 1px solid #0f0;
+  color: #0f0;
+  font-family: inherit;
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+
+.search-box:focus {
+  outline: none;
+  border-color: #0ff;
+}
+
+.file-info {
+  color: #0a0;
+  font-size: 11px;
+  margin-bottom: 10px;
+  padding: 8px;
+  background: rgba(0, 255, 0, 0.05);
+  border: 1px solid #0f0;
+}
+
+.link-arrow {
+  color: #0ff;
+  font-weight: bold;
+  margin: 0 10px;
+}
+
+.section-title {
+  color: #0ff;
+  font-size: 14px;
+  font-weight: bold;
+  margin: 15px 0 10px 0;
+  padding-bottom: 5px;
+  border-bottom: 1px solid #0f0;
+}
+
+.grid-view {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+}
+
+.grid-item {
+  border: 1px solid #0f0;
+  padding: 10px;
+  background: rgba(0, 255, 0, 0.03);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.grid-item:hover {
+  background: rgba(0, 255, 0, 0.1);
+}
+
+.grid-item-name {
+  color: #0f0;
+  font-weight: bold;
+  margin-bottom: 5px;
+  word-break: break-all;
+}
+
+.grid-item-info {
+  color: #0a0;
+  font-size: 11px;
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header">
+    <h1>TRUE-ARKADU | Complete System Explorer</h1>
+    <div class="header-stats" id="headerStats">Loading...</div>
+  </div>
+
+  <div class="sidebar">
+    <input type="text" class="search-box" id="searchBox" placeholder="Search files...">
+    <div id="fileTree"></div>
+  </div>
+
+  <div class="main">
+    <div class="tabs" id="tabs">
+      <button class="tab active" onclick="switchTab('overview')">OVERVIEW</button>
+      <button class="tab" onclick="switchTab('python')">PYTHON</button>
+      <button class="tab" onclick="switchTab('json')">JSON</button>
+      <button class="tab" onclick="switchTab('media')">MEDIA</button>
+      <button class="tab" onclick="switchTab('deps')">DEPENDENCIES</button>
+    </div>
+
+    <div id="overview" class="content active">
+      <div class="loading">Loading TRUE-ARKADU data...</div>
+    </div>
+
+    <div id="python" class="content"></div>
+    <div id="json" class="content"></div>
+    <div id="media" class="content"></div>
+    <div id="deps" class="content"></div>
+  </div>
+</div>
+
+<script>
+let arkadu = {
+  python: [],
+  json: [],
+  media: null,
+  graph: null,
+  openWindows: []
+};
+
+// Switch tabs
+function switchTab(tabName) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.content').forEach(c => c.classList.remove('active'));
+  
+  event.target.classList.add('active');
+  document.getElementById(tabName).classList.add('active');
+}
+
+// Load data
+async function loadData() {
+  try {
+    const basePath = window.location.protocol === 'file:' ? 'deep/' : '/deep/';
+    console.log(`Using base path: ${basePath}`);
+    
+    console.log('Loading Python files...');
+    const pyResp = await fetch(basePath + 'python_files.json');
+    if (!pyResp.ok) throw new Error(`Failed to load Python files: ${pyResp.status}`);
+    arkadu.python = await pyResp.json();
+    console.log(`Loaded ${arkadu.python.length} Python files`);
+
+    console.log('Loading JSON files...');
+    const jsonResp = await fetch(basePath + 'json_files.json');
+    if (!jsonResp.ok) throw new Error(`Failed to load JSON files: ${jsonResp.status}`);
+    arkadu.json = await jsonResp.json();
+    console.log(`Loaded ${arkadu.json.length} JSON files`);
+
+    console.log('Loading media manifest...');
+    const mediaResp = await fetch(basePath + 'media_manifest.json');
+    if (!mediaResp.ok) throw new Error(`Failed to load media manifest: ${mediaResp.status}`);
+    arkadu.media = await mediaResp.json();
+    console.log('Loaded media manifest');
+
+    console.log('Loading dependency graph...');
+    const graphResp = await fetch(basePath + 'dependency_graph.json');
+    if (!graphResp.ok) throw new Error(`Failed to load dependency graph: ${graphResp.status}`);
+    arkadu.graph = await graphResp.json();
+    console.log(`Loaded graph: ${arkadu.graph.nodes.length} nodes, ${arkadu.graph.edges.length} edges`);
+
+    renderAll();
+  } catch (error) {
+    console.error('Error loading data:', error);
+    document.getElementById('overview').innerHTML = `
+      <div style="color: #f00; padding: 20px; border: 1px solid #f00;">
+        ERROR: Failed to load data<br><br>
+        ${error.message}<br><br>
+        Make sure ARKADU/deep/*.json files exist.<br>
+        Run: python3 ARKADU/kern/deep_scan.py
+      </div>
+    `;
+  }
+}
+
+// Render all views
+function renderAll() {
+  renderOverview();
+  renderPythonView();
+  renderJsonView();
+  renderMediaView();
+  renderDepsView();
+  renderFileTree();
+  updateHeaderStats();
+}
+
+// Update header stats
+function updateHeaderStats() {
+  const stats = `${arkadu.python.length} PY | ${arkadu.json.length} JSON | ${arkadu.graph.nodes.length} Nodes | ${arkadu.graph.edges.length} Edges`;
+  document.getElementById('headerStats').textContent = stats;
+}
+
+// Render overview
+function renderOverview() {
+  const totalPyLines = arkadu.python.reduce((sum, p) => sum + p.lines, 0);
+  const pyWithDeps = arkadu.python.filter(p => p.file_references.length > 0).length;
+  const jsonWithPrompts = arkadu.json.filter(j => j.has_prompts).length;
+
+  const html = `
+    <div class="section-title">SYSTEM OVERVIEW</div>
+    
+    <div class="grid-view">
+      <div class="grid-item" onclick="switchTab('python')">
+        <div class="grid-item-name">PYTHON FILES</div>
+        <div class="grid-item-info">
+          ${arkadu.python.length} files<br>
+          ${totalPyLines.toLocaleString()} lines<br>
+          ${pyWithDeps} with dependencies
+        </div>
+      </div>
+
+      <div class="grid-item" onclick="switchTab('json')">
+        <div class="grid-item-name">JSON FILES</div>
+        <div class="grid-item-info">
+          ${arkadu.json.length} files<br>
+          ${jsonWithPrompts} with prompts
+        </div>
+      </div>
+
+      <div class="grid-item" onclick="switchTab('deps')">
+        <div class="grid-item-name">DEPENDENCY GRAPH</div>
+        <div class="grid-item-info">
+          ${arkadu.graph.nodes.length} nodes<br>
+          ${arkadu.graph.edges.length} edges
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title">QUICK ACCESS</div>
+    <div style="margin-top: 15px;">
+      ${arkadu.python.slice(0, 10).map(py => `
+        <div class="dep-node python" onclick='openPythonFile("${py.path}")'>
+          ${py.path.split('/').pop()}
+        </div>
+      `).join('')}
+    </div>
+  `;
+
+  document.getElementById('overview').innerHTML = html;
+}
+
+// Render Python view
+function renderPythonView() {
+  const html = `
+    <div class="section-title">PYTHON FILES (${arkadu.python.length})</div>
+    <div class="grid-view">
+      ${arkadu.python.map(py => `
+        <div class="grid-item" onclick='openPythonFile("${py.path}")'>
+          <div class="grid-item-name">${py.path.split('/').pop()}</div>
+          <div class="grid-item-info">
+            ${py.lines} lines<br>
+            ${py.file_references.length} refs<br>
+            ${py.subprocess_calls.length} subproc
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+
+  document.getElementById('python').innerHTML = html;
+}
+
+// Render JSON view
+function renderJsonView() {
+  const html = `
+    <div class="section-title">JSON FILES (${arkadu.json.length})</div>
+    <div class="grid-view">
+      ${arkadu.json.map(js => `
+        <div class="grid-item" onclick='openJsonFile("${js.path}")'>
+          <div class="grid-item-name">${js.path.split('/').pop()}</div>
+          <div class="grid-item-info">
+            ${(js.size / 1024).toFixed(1)} KB<br>
+            ${js.has_prompts ? '✓ Has prompts' : ''}
+            ${js.entry_count ? `${js.entry_count} entries` : ''}
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+
+  document.getElementById('json').innerHTML = html;
+}
+
+// Render media view
+function renderMediaView() {
+  // This would show media from manifest
+  document.getElementById('media').innerHTML = `
+    <div class="section-title">MEDIA MANIFEST</div>
+    <div class="file-info">
+      Original manifest loaded: ${JSON.stringify(arkadu.media).length} bytes<br>
+      Navigate through Python/JSON tabs to see media references
+    </div>
+  `;
+}
+
+// Render dependencies view
+function renderDepsView() {
+  const pythonNodes = arkadu.graph.nodes.filter(n => n.type === 'python');
+  const jsonNodes = arkadu.graph.nodes.filter(n => n.type === 'json');
+
+  const html = `
+    <div class="section-title">DEPENDENCY GRAPH</div>
+    <div class="file-info">
+      ${arkadu.graph.nodes.length} nodes | ${arkadu.graph.edges.length} edges
+    </div>
+
+    <div class="section-title">PYTHON NODES (${pythonNodes.length})</div>
+    <div>
+      ${pythonNodes.slice(0, 50).map(n => `
+        <span class="dep-node python" onclick='showNodeDeps("${n.id}")'>
+          ${n.label}
+        </span>
+      `).join('')}
+    </div>
+
+    <div class="section-title">JSON NODES (${jsonNodes.length})</div>
+    <div>
+      ${jsonNodes.slice(0, 50).map(n => `
+        <span class="dep-node json" onclick='showNodeDeps("${n.id}")'>
+          ${n.label}
+        </span>
+      `).join('')}
+    </div>
+  `;
+
+  document.getElementById('deps').innerHTML = html;
+}
+
+// Open Python file in window
+function openPythonFile(path) {
+  const py = arkadu.python.find(p => p.path === path);
+  if (!py) return;
+
+  const windowId = 'win_' + Date.now();
+  
+  const windowHtml = `
+    <div class="window" id="${windowId}">
+      <div class="window-header">
+        <span>📄 ${py.path}</span>
+        <div class="window-controls">
+          <button class="window-btn" onclick="document.getElementById('${windowId}').remove()">CLOSE</button>
+        </div>
+      </div>
+      <div class="window-content">
+        <div class="file-info">
+          ${py.lines} lines | ${py.imports.length} imports | ${py.file_references.length} file refs
+          ${py.docstring ? `<br><br><strong>Doc:</strong> ${py.docstring.slice(0, 200)}...` : ''}
+        </div>
+
+        ${py.file_references.length > 0 ? `
+          <div class="section-title">FILE REFERENCES (${py.file_references.length})</div>
+          <div>
+            ${py.file_references.slice(0, 20).map(ref => `
+              <div class="dep-node">${ref}</div>
+            `).join('')}
+          </div>
+        ` : ''}
+
+        <div class="section-title">SOURCE CODE</div>
+        <div class="code-view">${escapeHtml(py.source)}</div>
+      </div>
+    </div>
+  `;
+
+  const container = document.getElementById(document.querySelector('.tab.active').textContent.toLowerCase());
+  container.insertAdjacentHTML('afterbegin', windowHtml);
+  
+  // Scroll to top of window
+  document.getElementById(windowId).scrollIntoView({ behavior: 'smooth' });
+}
+
+// Open JSON file in window
+function openJsonFile(path) {
+  const js = arkadu.json.find(j => j.path === path);
+  if (!js) return;
+
+  const windowId = 'win_' + Date.now();
+  
+  const windowHtml = `
+    <div class="window" id="${windowId}">
+      <div class="window-header">
+        <span>📋 ${js.path}</span>
+        <div class="window-controls">
+          <button class="window-btn" onclick="document.getElementById('${windowId}').remove()">CLOSE</button>
+        </div>
+      </div>
+      <div class="window-content">
+        <div class="file-info">
+          ${(js.size / 1024).toFixed(1)} KB | ${js.structure}
+          ${js.entry_count ? ` | ${js.entry_count} entries` : ''}
+          ${js.has_prompts ? ' | ✓ Has prompts' : ''}
+        </div>
+
+        ${js.prompts ? `
+          <div class="section-title">PROMPTS (${js.prompts.length})</div>
+          ${js.prompts.map(p => `
+            <div style="padding: 8px; margin: 5px 0; background: rgba(255,0,255,0.1); border: 1px solid #f0f;">
+              "${p}"
+            </div>
+          `).join('')}
+        ` : ''}
+
+        <div class="section-title">JSON CONTENT</div>
+        <div class="json-view">${JSON.stringify(js.data, null, 2)}</div>
+      </div>
+    </div>
+  `;
+
+  const container = document.getElementById(document.querySelector('.tab.active').textContent.toLowerCase());
+  container.insertAdjacentHTML('afterbegin', windowHtml);
+  
+  document.getElementById(windowId).scrollIntoView({ behavior: 'smooth' });
+}
+
+// Show node dependencies
+function showNodeDeps(nodeId) {
+  const edges = arkadu.graph.edges.filter(e => e.source === nodeId || e.target === nodeId);
+  
+  const windowId = 'win_' + Date.now();
+  
+  const inbound = edges.filter(e => e.target === nodeId);
+  const outbound = edges.filter(e => e.source === nodeId);
+
+  const windowHtml = `
+    <div class="window" id="${windowId}">
+      <div class="window-header">
+        <span>🔗 Dependencies: ${nodeId.split('/').pop()}</span>
+        <div class="window-controls">
+          <button class="window-btn" onclick="document.getElementById('${windowId}').remove()">CLOSE</button>
+        </div>
+      </div>
+      <div class="window-content">
+        <div class="file-info">
+          ${inbound.length} inbound | ${outbound.length} outbound
+        </div>
+
+        ${outbound.length > 0 ? `
+          <div class="section-title">REFERENCES (${outbound.length})</div>
+          <div>
+            ${outbound.slice(0, 30).map(e => `
+              <div class="dep-node" onclick='showNodeDeps("${e.target}")'>
+                ${e.target.split('/').pop()}
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
+
+        ${inbound.length > 0 ? `
+          <div class="section-title">REFERENCED BY (${inbound.length})</div>
+          <div>
+            ${inbound.slice(0, 30).map(e => `
+              <div class="dep-node" onclick='showNodeDeps("${e.source}")'>
+                ${e.source.split('/').pop()}
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
+      </div>
+    </div>
+  `;
+
+  const container = document.getElementById('deps');
+  container.insertAdjacentHTML('afterbegin', windowHtml);
+  
+  document.getElementById(windowId).scrollIntoView({ behavior: 'smooth' });
+}
+
+// Render file tree
+function renderFileTree() {
+  // Build tree structure from all files
+  const tree = {};
+  
+  [...arkadu.python, ...arkadu.json].forEach(file => {
+    const parts = file.path.split('/');
+    let current = tree;
+    
+    parts.forEach((part, i) => {
+      if (!current[part]) {
+        current[part] = i === parts.length - 1 ? file : {};
+      }
+      current = current[part];
+    });
+  });
+
+  function renderTree(node, depth = 0) {
+    let html = '';
+    const indent = '  '.repeat(depth);
+    
+    for (const [key, value] of Object.entries(node)) {
+      if (value.path) {
+        // It's a file
+        const fileClass = value.path.endsWith('.py') ? 'python' : 
+                         value.path.endsWith('.json') ? 'json' : 'file';
+        const handler = value.path.endsWith('.py') ? `openPythonFile("${value.path}")` : 
+                       value.path.endsWith('.json') ? `openJsonFile("${value.path}")` : '';
+        html += `<div class="tree-item tree-file ${fileClass}" onclick='${handler}'>${indent}📄 ${key}</div>`;
+      } else {
+        // It's a folder
+        html += `<div class="tree-item tree-folder" onclick="this.classList.toggle('collapsed')">${indent}📁 ${key}</div>`;
+        html += renderTree(value, depth + 1);
+      }
+    }
+    
+    return html;
+  }
+
+  document.getElementById('fileTree').innerHTML = renderTree(tree);
+}
+
+// Search
+document.getElementById('searchBox').addEventListener('input', (e) => {
+  const query = e.target.value.toLowerCase();
+  const items = document.querySelectorAll('.tree-item');
+  
+  items.forEach(item => {
+    if (item.textContent.toLowerCase().includes(query)) {
+      item.style.display = 'block';
+    } else {
+      item.style.display = 'none';
+    }
+  });
+});
+
+// Utility
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// Initialize
+loadData();
+</script>
+
+</body>
+</html>

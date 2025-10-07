@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARKADU ECOLOGY - Visual Media Ecosystem</title>
+<style>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+  background: #000;
+  color: #0f0;
+  overflow: hidden;
+}
+
+.container {
+  display: grid;
+  grid-template-columns: 250px 1fr;
+  grid-template-rows: 60px 1fr 40px;
+  height: 100vh;
+  gap: 2px;
+  background: #0f0;
+}
+
+.header {
+  grid-column: 1 / -1;
+  background: #000;
+  border: 2px solid #0f0;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  justify-content: space-between;
+}
+
+.header h1 {
+  font-size: 16px;
+  color: #0f0;
+}
+
+.header-stats {
+  font-size: 11px;
+  color: #0a0;
+}
+
+.controls {
+  background: #000;
+  border: 2px solid #0f0;
+  padding: 15px;
+  overflow-y: auto;
+}
+
+.control-section {
+  margin-bottom: 20px;
+}
+
+.control-title {
+  color: #0ff;
+  font-size: 12px;
+  font-weight: bold;
+  margin-bottom: 8px;
+  border-bottom: 1px solid #0f0;
+  padding-bottom: 4px;
+}
+
+.species-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.species-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.species-checkbox:hover {
+  background: rgba(0, 255, 0, 0.1);
+}
+
+.species-checkbox input {
+  cursor: pointer;
+}
+
+.species-checkbox label {
+  cursor: pointer;
+  font-size: 11px;
+  flex: 1;
+}
+
+.species-color {
+  width: 12px;
+  height: 12px;
+  border: 1px solid #0f0;
+}
+
+.chamber-list {
+  max-height: 200px;
+  overflow-y: auto;
+  font-size: 11px;
+}
+
+.chamber-item {
+  padding: 5px;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+}
+
+.chamber-item:hover {
+  background: rgba(0, 255, 0, 0.1);
+  border-left-color: #0f0;
+}
+
+.chamber-item.active {
+  background: rgba(0, 255, 0, 0.2);
+  border-left-color: #0ff;
+}
+
+.canvas-container {
+  background: #000;
+  border: 2px solid #0f0;
+  position: relative;
+  overflow: hidden;
+}
+
+#ecologyCanvas {
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+}
+
+.footer {
+  grid-column: 1 / -1;
+  background: #000;
+  border: 2px solid #0f0;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+}
+
+.view-mode {
+  display: flex;
+  gap: 10px;
+}
+
+.view-btn {
+  padding: 5px 12px;
+  background: transparent;
+  border: 1px solid #0f0;
+  color: #0f0;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 11px;
+  transition: all 0.2s;
+}
+
+.view-btn:hover {
+  background: #0f0;
+  color: #000;
+}
+
+.view-btn.active {
+  background: #0f0;
+  color: #000;
+}
+
+.tooltip {
+  position: absolute;
+  background: rgba(0, 0, 0, 0.95);
+  border: 1px solid #0f0;
+  padding: 8px 12px;
+  font-size: 11px;
+  pointer-events: none;
+  z-index: 1000;
+  display: none;
+  max-width: 300px;
+}
+
+.tooltip.visible {
+  display: block;
+}
+
+.slider-control {
+  margin: 10px 0;
+}
+
+.slider-control label {
+  display: block;
+  font-size: 11px;
+  margin-bottom: 5px;
+  color: #0a0;
+}
+
+.slider-control input {
+  width: 100%;
+}
+
+.mode-info {
+  font-size: 10px;
+  color: #0a0;
+  margin-top: 5px;
+}
+</style>
+  <script src="ecology-data.js"></script>
+</head>
+<body>
+
+<div class="container">
+  <div class="header">
+    <h1>ARKADU ECOLOGY | Visual Media Ecosystem</h1>
+    <div class="header-stats" id="headerStats">Loading...</div>
+  </div>
+
+  <div class="controls">
+    <div class="control-section">
+      <div class="control-title">SPECIES FILTER</div>
+      <div class="species-filter" id="speciesFilter"></div>
+    </div>
+
+    <div class="control-section">
+      <div class="control-title">VIEW DEPTH</div>
+      <div class="slider-control">
+        <label>Chamber Depth: <span id="depthValue">1</span></label>
+        <input type="range" id="depthSlider" min="1" max="5" value="1" step="1">
+      </div>
+    </div>
+
+    <div class="control-section">
+      <div class="control-title">PARTICLE SIZE</div>
+      <div class="slider-control">
+        <label>Organism Size: <span id="sizeValue">3</span></label>
+        <input type="range" id="sizeSlider" min="1" max="10" value="3" step="1">
+      </div>
+    </div>
+
+    <div class="control-section">
+      <div class="control-title">CHAMBERS</div>
+      <div class="chamber-list" id="chamberList"></div>
+    </div>
+  </div>
+
+  <div class="canvas-container">
+    <canvas id="ecologyCanvas"></canvas>
+    <div class="tooltip" id="tooltip"></div>
+  </div>
+
+  <div class="footer">
+    <div class="view-mode">
+      <button class="view-btn active" onclick="setViewMode('grid')" id="btnGrid">GRID</button>
+      <button class="view-btn" onclick="setViewMode('nested')" id="btnNested">NESTED</button>
+      <button class="view-btn" onclick="setViewMode('flow')" id="btnFlow">FLOW</button>
+      <button class="view-btn" onclick="setViewMode('ecology')" id="btnEcology">ECOLOGY</button>
+    </div>
+    <div id="footerInfo">Click organisms to see details | Drag to pan | Scroll to zoom</div>
+  </div>
+</div>
+
+<script>
+// Color palette for species
+const SPECIES_COLORS = {
+  '.mp4': '#ff00ff',   // Magenta - Video
+  '.png': '#00ffff',   // Cyan - Images
+  '.jpg': '#00aaff',   // Blue - Images
+  '.wav': '#ffff00',   // Yellow - Audio
+  '.mp3': '#ffaa00',   // Orange - Audio
+  '.json': '#ff00aa',  // Pink - Data
+  '.py': '#00ff00',    // Green - Code
+  '.html': '#00ff88',  // Teal - Web
+  '.md': '#88ff00',    // Lime - Docs
+  '.js': '#aaff00'     // Yellow-green - Code
+};
+
+let ecology = {
+  data: null,
+  chambers: [],
+  particles: [],
+  viewMode: 'grid',
+  selectedSpecies: new Set(Object.keys(SPECIES_COLORS)),
+  selectedChamber: null,
+  particleSize: 3,
+  viewDepth: 1,
+  camera: { x: 0, y: 0, zoom: 1 },
+  hoveredParticle: null
+};
+
+const canvas = document.getElementById('ecologyCanvas');
+const ctx = canvas.getContext('2d');
+const tooltip = document.getElementById('tooltip');
+
+// Resize canvas
+function resizeCanvas() {
+  const container = canvas.parentElement;
+  canvas.width = container.clientWidth;
+  canvas.height = container.clientHeight;
+  render();
+}
+
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+// Load data
+async function loadData() {
+  try {
+    // Try embedded data first
+    if (typeof EMBEDDED_DATA !== 'undefined') {
+      console.log('Using embedded data...');
+      ecology.data = EMBEDDED_DATA;
+      console.log(`Loaded ${ecology.data.length} artifacts (embedded)`);
+    } else {
+      // Fallback to fetch
+      const resp = await fetch('sys/primitive.jsonl');
+      const text = await resp.text();
+      ecology.data = text.trim().split('\n').map(line => JSON.parse(line));
+      console.log(`Loaded ${ecology.data.length} artifacts (fetched)`);
+    }
+    
+    console.log(`Loaded ${ecology.data.length} artifacts`);
+    
+    // Build chamber structure
+    buildChambers();
+    buildParticles();
+    renderSpeciesFilter();
+    renderChamberList();
+    updateStats();
+    render();
+  } catch (error) {
+    console.error('Error loading data:', error);
+  }
+}
+
+// Build chamber hierarchy
+function buildChambers() {
+  const chamberMap = {};
+  
+  ecology.data.forEach(artifact => {
+    const parts = artifact.path.split('/');
+    for (let depth = 1; depth <= Math.min(parts.length - 1, 5); depth++) {
+      const chamberPath = parts.slice(0, depth).join('/');
+      if (!chamberMap[chamberPath]) {
+        chamberMap[chamberPath] = {
+          path: chamberPath,
+          depth: depth,
+          name: parts[depth - 1],
+          artifacts: [],
+          children: new Set()
+        };
+      }
+      chamberMap[chamberPath].artifacts.push(artifact);
+      
+      // Track parent-child
+      if (depth > 1) {
+        const parentPath = parts.slice(0, depth - 1).join('/');
+        if (chamberMap[parentPath]) {
+          chamberMap[parentPath].children.add(chamberPath);
+        }
+      }
+    }
+  });
+  
+  ecology.chambers = Object.values(chamberMap);
+  console.log(`Built ${ecology.chambers.length} chambers`);
+}
+
+// Build particles (organisms) from artifacts
+function buildParticles() {
+  if (!ecology.data) {
+    console.error('No data available to build particles');
+    return;
+  }
+  
+  ecology.particles = ecology.data.map((artifact, index) => {
+    const species = artifact.ext || 'unknown';
+    const chamber = getChamberForArtifact(artifact, ecology.viewDepth);
+    
+    // Initialize with random positions within canvas
+    const x = Math.random() * canvas.width;
+    const y = Math.random() * canvas.height;
+    
+    return {
+      id: index,
+      artifact: artifact,
+      species: species,
+      chamber: chamber,
+      x: x,
+      y: y,
+      vx: (Math.random() - 0.5) * 0.5,
+      vy: (Math.random() - 0.5) * 0.5,
+      size: Math.log(artifact.size + 1) / 2,
+      color: SPECIES_COLORS[species] || '#888888',
+      age: 0
+    };
+  });
+  
+  console.log(`Built ${ecology.particles.length} particles`);
+}
+
+// Get chamber for artifact at given depth
+function getChamberForArtifact(artifact, depth) {
+  const parts = artifact.path.split('/');
+  if (depth >= parts.length) return artifact.path;
+  return parts.slice(0, depth).join('/');
+}
+
+// Render species filter checkboxes
+function renderSpeciesFilter() {
+  const speciesCount = {};
+  ecology.data.forEach(a => {
+    const species = a.ext || 'unknown';
+    speciesCount[species] = (speciesCount[species] || 0) + 1;
+  });
+  
+  const sorted = Object.entries(speciesCount)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 15);
+  
+  const html = sorted.map(([species, count]) => {
+    const checked = ecology.selectedSpecies.has(species) ? 'checked' : '';
+    const color = SPECIES_COLORS[species] || '#888';
+    return `
+      <div class="species-checkbox">
+        <input type="checkbox" id="species_${species}" ${checked} 
+               onchange="toggleSpecies('${species}')">
+        <div class="species-color" style="background: ${color}"></div>
+        <label for="species_${species}">${species} (${count})</label>
+      </div>
+    `;
+  }).join('');
+  
+  document.getElementById('speciesFilter').innerHTML = html;
+}
+
+// Render chamber list
+function renderChamberList() {
+  const kingdomChambers = ecology.chambers
+    .filter(c => c.depth === 1)
+    .sort((a, b) => b.artifacts.length - a.artifacts.length);
+  
+  const html = kingdomChambers.map(c => {
+    const active = ecology.selectedChamber === c.path ? 'active' : '';
+    return `
+      <div class="chamber-item ${active}" onclick="selectChamber('${c.path}')">
+        ${c.name} (${c.artifacts.length})
+      </div>
+    `;
+  }).join('');
+  
+  document.getElementById('chamberList').innerHTML = html;
+}
+
+// Toggle species filter
+function toggleSpecies(species) {
+  if (ecology.selectedSpecies.has(species)) {
+    ecology.selectedSpecies.delete(species);
+  } else {
+    ecology.selectedSpecies.add(species);
+  }
+  render();
+}
+
+// Select chamber
+function selectChamber(chamberPath) {
+  ecology.selectedChamber = ecology.selectedChamber === chamberPath ? null : chamberPath;
+  renderChamberList();
+  render();
+}
+
+// Set view mode
+function setViewMode(mode) {
+  ecology.viewMode = mode;
+  document.querySelectorAll('.view-btn').forEach(btn => btn.classList.remove('active'));
+  document.getElementById('btn' + mode.charAt(0).toUpperCase() + mode.slice(1)).classList.add('active');
+  render();
+}
+
+// Update stats
+function updateStats() {
+  const visible = ecology.particles.filter(p => ecology.selectedSpecies.has(p.species)).length;
+  document.getElementById('headerStats').textContent = 
+    `${visible} / ${ecology.particles.length} organisms visible`;
+}
+
+// Main render function
+function render() {
+  if (!ecology.data) return;
+  
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  switch (ecology.viewMode) {
+    case 'grid':
+      renderGridView();
+      break;
+    case 'nested':
+      renderNestedView();
+      break;
+    case 'flow':
+      renderFlowView();
+      break;
+    case 'ecology':
+      renderEcologyView();
+      break;
+  }
+  
+  updateStats();
+}
+
+// GRID VIEW: Chambers as grids with organisms
+function renderGridView() {
+  const chambers = ecology.chambers.filter(c => c.depth === ecology.viewDepth);
+  
+  if (ecology.selectedChamber) {
+    const chamber = chambers.find(c => c.path === ecology.selectedChamber);
+    if (chamber) {
+      renderChamberGrid(chamber, 0, 0, canvas.width, canvas.height);
+      return;
+    }
+  }
+  
+  // Show all chambers as tiles
+  const cols = Math.ceil(Math.sqrt(chambers.length));
+  const tileWidth = canvas.width / cols;
+  const tileHeight = canvas.height / Math.ceil(chambers.length / cols);
+  
+  chambers.forEach((chamber, index) => {
+    const col = index % cols;
+    const row = Math.floor(index / cols);
+    const x = col * tileWidth;
+    const y = row * tileHeight;
+    
+    renderChamberGrid(chamber, x, y, tileWidth, tileHeight);
+  });
+}
+
+// Render single chamber as grid
+function renderChamberGrid(chamber, x, y, width, height) {
+  // Draw chamber border
+  ctx.strokeStyle = '#0f0';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(x, y, width, height);
+  
+  // Draw chamber label
+  ctx.fillStyle = '#0f0';
+  ctx.font = '12px Menlo';
+  ctx.fillText(chamber.name, x + 5, y + 15);
+  ctx.fillText(`${chamber.artifacts.length} organisms`, x + 5, y + 30);
+  
+  // Filter artifacts
+  const visibleArtifacts = chamber.artifacts.filter(a => 
+    ecology.selectedSpecies.has(a.ext || 'unknown')
+  );
+  
+  // Place organisms in grid
+  const gridCols = Math.ceil(Math.sqrt(visibleArtifacts.length));
+  const cellWidth = (width - 20) / gridCols;
+  const cellHeight = (height - 50) / Math.ceil(visibleArtifacts.length / gridCols);
+  
+  visibleArtifacts.forEach((artifact, index) => {
+    const col = index % gridCols;
+    const row = Math.floor(index / gridCols);
+    const px = x + 10 + col * cellWidth + cellWidth / 2;
+    const py = y + 40 + row * cellHeight + cellHeight / 2;
+    
+    const species = artifact.ext || 'unknown';
+    const color = SPECIES_COLORS[species] || '#888';
+    const size = ecology.particleSize + Math.log(artifact.size + 1) / 5;
+    
+    // Draw organism
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(px, py, size, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Check hover
+    if (ecology.hoveredParticle && ecology.hoveredParticle.artifact === artifact) {
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+  });
+}
+
+// NESTED VIEW: Hierarchical chambers
+function renderNestedView() {
+  const kingdoms = ecology.chambers.filter(c => c.depth === 1);
+  
+  kingdoms.forEach((kingdom, index) => {
+    const padding = 10;
+    const boxWidth = (canvas.width - padding * 2) / Math.ceil(Math.sqrt(kingdoms.length));
+    const boxHeight = (canvas.height - padding * 2) / Math.ceil(kingdoms.length / Math.ceil(Math.sqrt(kingdoms.length)));
+    
+    const col = index % Math.ceil(Math.sqrt(kingdoms.length));
+    const row = Math.floor(index / Math.ceil(Math.sqrt(kingdoms.length)));
+    
+    const x = padding + col * boxWidth;
+    const y = padding + row * boxHeight;
+    
+    renderNestedChamber(kingdom, x, y, boxWidth - padding, boxHeight - padding, 1);
+  });
+}
+
+// Render nested chamber recursively
+function renderNestedChamber(chamber, x, y, width, height, depth) {
+  // Draw chamber box
+  const alpha = 1 - (depth * 0.15);
+  ctx.strokeStyle = `rgba(0, 255, 0, ${alpha})`;
+  ctx.lineWidth = Math.max(1, 3 - depth);
+  ctx.strokeRect(x, y, width, height);
+  
+  // Label
+  if (width > 50 && height > 30) {
+    ctx.fillStyle = `rgba(0, 255, 0, ${alpha})`;
+    ctx.font = `${Math.max(8, 14 - depth * 2)}px Menlo`;
+    ctx.fillText(chamber.name, x + 3, y + 12);
+  }
+  
+  // Draw organisms
+  const visibleArtifacts = chamber.artifacts.filter(a => 
+    ecology.selectedSpecies.has(a.ext || 'unknown')
+  );
+  
+  visibleArtifacts.forEach((artifact, i) => {
+    const px = x + 5 + (i % Math.floor(width / 10)) * 10;
+    const py = y + 20 + Math.floor(i / Math.floor(width / 10)) * 10;
+    
+    if (px < x + width - 5 && py < y + height - 5) {
+      const species = artifact.ext || 'unknown';
+      const color = SPECIES_COLORS[species] || '#888';
+      
+      ctx.fillStyle = color;
+      ctx.fillRect(px, py, ecology.particleSize, ecology.particleSize);
+    }
+  });
+  
+  // Recurse into children if space allows
+  if (depth < 3 && width > 100 && height > 100) {
+    const childrenArray = Array.from(chamber.children || [])
+      .map(childPath => ecology.chambers.find(c => c.path === childPath))
+      .filter(Boolean);
+    
+    const childWidth = width / 2 - 5;
+    const childHeight = height / 2 - 15;
+    
+    childrenArray.slice(0, 4).forEach((child, i) => {
+      const cx = x + 5 + (i % 2) * (childWidth + 5);
+      const cy = y + 20 + Math.floor(i / 2) * (childHeight + 5);
+      renderNestedChamber(child, cx, cy, childWidth, childHeight, depth + 1);
+    });
+  }
+}
+
+// FLOW VIEW: Organisms flowing through ecosystem
+function renderFlowView() {
+  // Update particle positions (simple flow simulation)
+  ecology.particles.forEach(p => {
+    if (!ecology.selectedSpecies.has(p.species)) return;
+    
+    p.x += p.vx;
+    p.y += p.vy;
+    
+    // Bounce off edges
+    if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
+    if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
+    
+    // Keep in bounds
+    p.x = Math.max(0, Math.min(canvas.width, p.x));
+    p.y = Math.max(0, Math.min(canvas.height, p.y));
+    
+    p.age++;
+  });
+  
+  // Draw particles
+  ecology.particles.forEach(p => {
+    if (!ecology.selectedSpecies.has(p.species)) return;
+    
+    ctx.fillStyle = p.color;
+    ctx.globalAlpha = 0.8;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, ecology.particleSize + p.size, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  });
+  
+  // Request animation frame
+  requestAnimationFrame(render);
+}
+
+// ECOLOGY VIEW: Living ecosystem simulation
+function renderEcologyView() {
+  // Group by species
+  const speciesGroups = {};
+  ecology.particles.forEach(p => {
+    if (!ecology.selectedSpecies.has(p.species)) return;
+    if (!speciesGroups[p.species]) speciesGroups[p.species] = [];
+    speciesGroups[p.species].push(p);
+  });
+  
+  // Arrange species in clusters
+  const species = Object.keys(speciesGroups);
+  const radius = Math.min(canvas.width, canvas.height) / 3;
+  const centerX = canvas.width / 2;
+  const centerY = canvas.height / 2;
+  
+  species.forEach((sp, i) => {
+    const angle = (i / species.length) * Math.PI * 2;
+    const clusterX = centerX + Math.cos(angle) * radius;
+    const clusterY = centerY + Math.sin(angle) * radius;
+    
+    const particles = speciesGroups[sp];
+    
+    // Draw species cluster
+    particles.forEach((p, j) => {
+      const localAngle = (j / particles.length) * Math.PI * 2;
+      const localRadius = 50 + (j % 10) * 10;
+      
+      p.x = clusterX + Math.cos(localAngle) * localRadius;
+      p.y = clusterY + Math.sin(localAngle) * localRadius;
+      
+      ctx.fillStyle = p.color;
+      ctx.globalAlpha = 0.7;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, ecology.particleSize + p.size / 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    });
+    
+    // Label species
+    ctx.fillStyle = SPECIES_COLORS[sp] || '#888';
+    ctx.font = '14px Menlo';
+    ctx.fillText(`${sp} (${particles.length})`, clusterX - 40, clusterY - 70);
+  });
+}
+
+// Mouse interaction
+canvas.addEventListener('mousemove', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const mouseX = e.clientX - rect.left;
+  const mouseY = e.clientY - rect.top;
+  
+  // Find hovered particle
+  ecology.hoveredParticle = null;
+  
+  for (const particle of ecology.particles) {
+    if (!ecology.selectedSpecies.has(particle.species)) continue;
+    
+    const dx = particle.x - mouseX;
+    const dy = particle.y - mouseY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    
+    if (dist < ecology.particleSize + particle.size + 3) {
+      ecology.hoveredParticle = particle;
+      
+      // Show tooltip
+      tooltip.style.left = (e.clientX + 15) + 'px';
+      tooltip.style.top = (e.clientY + 15) + 'px';
+      tooltip.innerHTML = `
+        <strong>${particle.artifact.name}</strong><br>
+        Species: ${particle.species}<br>
+        Size: ${(particle.artifact.size / 1024).toFixed(1)} KB<br>
+        Chamber: ${particle.chamber}<br>
+        Path: ${particle.artifact.path}
+      `;
+      tooltip.classList.add('visible');
+      break;
+    }
+  }
+  
+  if (!ecology.hoveredParticle) {
+    tooltip.classList.remove('visible');
+  }
+  
+  if (ecology.viewMode === 'grid' || ecology.viewMode === 'nested') {
+    render();
+  }
+});
+
+// Sliders
+document.getElementById('depthSlider').addEventListener('input', (e) => {
+  ecology.viewDepth = parseInt(e.target.value);
+  document.getElementById('depthValue').textContent = ecology.viewDepth;
+  buildParticles();
+  render();
+});
+
+document.getElementById('sizeSlider').addEventListener('input', (e) => {
+  ecology.particleSize = parseInt(e.target.value);
+  document.getElementById('sizeValue').textContent = ecology.particleSize;
+  render();
+});
+
+// Initialize
+loadData();
+</script>
+
+</body>
+</html>

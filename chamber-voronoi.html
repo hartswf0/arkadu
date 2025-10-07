@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<title>ARKADU Voronoi Chambers — Space-Filling Topology</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0e1a;color:#4dd9cc;font-family:monospace;overflow:hidden}
+#canvas{display:block;cursor:pointer}
+.hud{position:fixed;top:20px;left:20px;background:rgba(0,0,0,.95);border:1px solid #4dd9cc;
+padding:16px;width:340px;z-index:100;font-size:11px;border-radius:8px}
+.stat{margin:6px 0;padding:6px;background:rgba(77,217,204,.05);border-radius:4px}
+.label{color:#6b8a96;font-size:9px;text-transform:uppercase}
+.value{color:#4dd9cc;font-size:11px;font-weight:bold;margin-top:2px}
+.breadcrumb{display:inline-block;padding:6px 10px;margin:2px;background:rgba(77,217,204,.1);
+border-radius:4px;font-size:10px;cursor:pointer;transition:all .2s}
+.breadcrumb:hover{background:rgba(77,217,204,.25)}
+.breadcrumb.active{background:#4dd9cc;color:#000;font-weight:bold}
+.inspector{position:fixed;top:20px;right:20px;background:rgba(0,0,0,.95);
+border:1px solid #d97b8f;padding:16px;width:380px;max-height:80vh;overflow-y:auto;
+z-index:100;border-radius:8px;transform:translateX(420px);transition:transform .3s}
+.inspector.open{transform:translateX(0)}
+.close{position:absolute;top:16px;right:16px;cursor:pointer;color:#d97b8f;font-size:18px}
+.info-block{margin:10px 0;padding:10px;background:rgba(77,217,204,.05);border-radius:6px;font-size:10px}
+.loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+flex-direction:column;gap:20px;background:#000;z-index:200;color:#4dd9cc;transition:opacity .3s}
+.loading.hidden{opacity:0;pointer-events:none}
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+
+<div class="loading" id="loading">
+<div>⬢ BUILDING VORONOI TOPOLOGY ⬢</div>
+<div id="status">Loading...</div>
+</div>
+
+<div class="hud">
+<div style="font-size:14px;color:#4dd9cc;font-weight:bold;margin-bottom:12px">
+VORONOI CHAMBERS
+</div>
+<div id="breadcrumbs" style="margin-bottom:12px"></div>
+<div class="stat"><div class="label">Current Chamber</div><div class="value" id="currentChamber">ROOT</div></div>
+<div class="stat"><div class="label">Children Visible</div><div class="value" id="childrenCount">0</div></div>
+<div class="stat"><div class="label">Total Artifacts</div><div class="value" id="totalArtifacts">0</div></div>
+<div style="font-size:9px;color:#6b8a96;margin-top:12px">
+<strong>NAVIGATION</strong><br>
+• Click chamber to zoom in<br>
+• Click outside to zoom out<br>
+• Hover to highlight<br>
+• Space-filling proportional layout
+</div>
+</div>
+
+<div class="inspector" id="inspector">
+<div class="close" onclick="closeInspector()">×</div>
+<div style="font-size:13px;color:#d97b8f;font-weight:bold;margin-bottom:12px">CHAMBER</div>
+<div id="inspectorContent"></div>
+</div>
+
+<script>
+const CAN=document.getElementById('canvas');
+const CTX=CAN.getContext('2d');
+let DPR=window.devicePixelRatio||1;
+let W,H;
+
+const STATE={
+artifacts:[],
+chambers:[],
+chamberMap:{},
+rootChambers:[],
+currentChamber:null,
+viewStack:[],
+hoverChamber:null,
+animating:false,
+animProgress:0
+};
+
+const SPECIES_COLORS={
+jpg:'#d97b8f',jpeg:'#d97b8f',png:'#d97b8f',gif:'#d97b8f',webp:'#d97b8f',
+mp4:'#e8b849',mov:'#e8b849',avi:'#e8b849',webm:'#e8b849',
+mp3:'#9d7be8',wav:'#9d7be8',flac:'#9d7be8',ogg:'#9d7be8',
+json:'#6bbd8f',txt:'#6bbd8f',md:'#6bbd8f',
+py:'#4dd9cc',js:'#4dd9cc',html:'#4dd9cc',css:'#4dd9cc'
+};
+
+async function load(){
+try{
+document.getElementById('status').textContent='Loading artifacts...';
+const r=await fetch('sys/primitive.jsonl');
+const t=await r.text();
+STATE.artifacts=t.trim().split('\n').map(l=>JSON.parse(l));
+console.log(`Loaded ${STATE.artifacts.length} artifacts`);
+
+document.getElementById('status').textContent='Building hierarchy...';
+buildHierarchy();
+
+document.getElementById('status').textContent='Complete!';
+document.getElementById('loading').classList.add('hidden');
+
+resize();
+viewRoot();
+animate();
+}catch(e){
+console.error(e);
+document.getElementById('status').innerHTML=`<span style="color:#d97b8f">ERROR: ${e.message}</span>`;
+}}
+
+function buildHierarchy(){
+STATE.chamberMap={};
+
+STATE.artifacts.forEach(art=>{
+const parts=art.path.split('/');
+for(let d=0;d<parts.length-1;d++){
+const id=parts.slice(0,d+1).join('/');
+if(!STATE.chamberMap[id]){
+STATE.chamberMap[id]={
+id:id,
+name:parts[d],
+depth:d,
+parent:d>0?parts.slice(0,d).join('/'):null,
+children:[],
+artifacts:[],
+totalCount:0,
+totalSize:0,
+species:{}
+};
+}
+}
+
+const leafId=parts.slice(0,-1).join('/');
+if(STATE.chamberMap[leafId]){
+STATE.chamberMap[leafId].artifacts.push(art);
+const ext=(art.ext||'').replace(/^\./,'')||'unknown';
+STATE.chamberMap[leafId].species[ext]=(STATE.chamberMap[leafId].species[ext]||0)+1;
+}
+});
+
+Object.values(STATE.chamberMap).forEach(ch=>{
+if(ch.parent&&STATE.chamberMap[ch.parent]){
+const p=STATE.chamberMap[ch.parent];
+if(!p.children.includes(ch.id)){
+p.children.push(ch.id);
+}
+}
+});
+
+function aggregate(ch){
+ch.totalCount=ch.artifacts.length;
+ch.totalSize=ch.artifacts.reduce((s,a)=>s+(a.size||0),0);
+ch.children.forEach(cid=>{
+const child=STATE.chamberMap[cid];
+if(child){
+aggregate(child);
+ch.totalCount+=child.totalCount;
+ch.totalSize+=child.totalSize;
+Object.entries(child.species).forEach(([sp,cnt])=>{
+ch.species[sp]=(ch.species[sp]||0)+cnt;
+});
+}
+});
+}
+
+STATE.chambers=Object.values(STATE.chamberMap);
+STATE.chambers.forEach(aggregate);
+STATE.rootChambers=STATE.chambers.filter(ch=>!ch.parent);
+
+console.log(`Built ${STATE.chambers.length} chambers, ${STATE.rootChambers.length} roots`);
+}
+
+function viewRoot(){
+STATE.currentChamber=null;
+STATE.viewStack=[];
+layoutVoronoi(STATE.rootChambers,0,0,W,H);
+updateBreadcrumbs();
+updateHUD();
+}
+
+function viewChamber(chamber){
+STATE.currentChamber=chamber;
+STATE.viewStack.push(chamber);
+const children=chamber.children.map(cid=>STATE.chamberMap[cid]).filter(Boolean);
+layoutVoronoi(children,0,0,W,H);
+updateBreadcrumbs();
+updateHUD();
+}
+
+function goUp(){
+if(STATE.viewStack.length>0){
+STATE.viewStack.pop();
+if(STATE.viewStack.length===0){
+viewRoot();
+}else{
+const parent=STATE.viewStack[STATE.viewStack.length-1];
+viewChamber(parent);
+}
+}
+}
+
+function layoutVoronoi(chambers,x,y,width,height){
+if(chambers.length===0)return;
+
+// Sort by size
+const sorted=[...chambers].sort((a,b)=>b.totalSize-a.totalSize);
+const totalSize=sorted.reduce((s,ch)=>s+ch.totalSize,0);
+
+// Squarified treemap algorithm
+function squarify(chambers,x,y,w,h){
+if(chambers.length===0)return;
+
+const totalSize=chambers.reduce((s,ch)=>s+ch.totalSize,0);
+if(totalSize===0){
+chambers.forEach(ch=>{
+ch.x=x;
+ch.y=y;
+ch.width=w/chambers.length;
+ch.height=h;
+ch.color=getDominantColor(ch.species);
+});
+return;
+}
+
+const chamber=chambers[0];
+const ratio=chamber.totalSize/totalSize;
+
+if(w>h){
+const cw=w*ratio;
+chamber.x=x;
+chamber.y=y;
+chamber.width=cw;
+chamber.height=h;
+chamber.color=getDominantColor(chamber.species);
+squarify(chambers.slice(1),x+cw,y,w-cw,h);
+}else{
+const ch=h*ratio;
+chamber.x=x;
+chamber.y=y;
+chamber.width=w;
+chamber.height=ch;
+chamber.color=getDominantColor(chamber.species);
+squarify(chambers.slice(1),x,y+ch,w,h-ch);
+}
+}
+
+squarify(sorted,x,y,width,height);
+}
+
+function getDominantColor(species){
+if(!species||Object.keys(species).length===0)return '#4dd9cc';
+const sorted=Object.entries(species).sort((a,b)=>b[1]-a[1]);
+return SPECIES_COLORS[sorted[0][0]]||'#4dd9cc';
+}
+
+function draw(){
+CTX.fillStyle='#0a0e1a';
+CTX.fillRect(0,0,W*DPR,H*DPR);
+
+CTX.save();
+CTX.scale(DPR,DPR);
+
+const visible=STATE.currentChamber?
+STATE.currentChamber.children.map(cid=>STATE.chamberMap[cid]).filter(Boolean):
+STATE.rootChambers;
+
+visible.forEach(ch=>{
+const hover=ch===STATE.hoverChamber;
+
+// Fill
+CTX.fillStyle=hexToRgba(ch.color,hover?0.4:0.25);
+CTX.fillRect(ch.x,ch.y,ch.width,ch.height);
+
+// Border
+CTX.strokeStyle=hexToRgba(ch.color,hover?1:0.6);
+CTX.lineWidth=hover?3:1.5;
+CTX.strokeRect(ch.x,ch.y,ch.width,ch.height);
+
+// Label
+if(ch.width>60&&ch.height>40){
+CTX.fillStyle=ch.color;
+CTX.font='bold 13px monospace';
+CTX.textAlign='center';
+CTX.textBaseline='top';
+const maxW=ch.width-10;
+let name=ch.name;
+CTX.fillText(name,ch.x+ch.width/2,ch.y+10,maxW);
+
+CTX.fillStyle='#6b8a96';
+CTX.font='10px monospace';
+CTX.fillText(`${ch.totalCount} files`,ch.x+ch.width/2,ch.y+28,maxW);
+CTX.fillText(formatSize(ch.totalSize),ch.x+ch.width/2,ch.y+42,maxW);
+
+if(ch.children.length>0){
+CTX.fillStyle='#4dd9cc';
+CTX.fillText(`${ch.children.length} →`,ch.x+ch.width/2,ch.y+56,maxW);
+}
+}
+});
+
+CTX.restore();
+}
+
+function animate(){
+requestAnimationFrame(animate);
+draw();
+}
+
+function formatSize(bytes){
+if(bytes<1024)return bytes+'B';
+if(bytes<1024*1024)return(bytes/1024).toFixed(1)+'KB';
+if(bytes<1024*1024*1024)return(bytes/1024/1024).toFixed(1)+'MB';
+return(bytes/1024/1024/1024).toFixed(2)+'GB';
+}
+
+function hexToRgba(hex,alpha){
+const h=hex.replace('#','');
+const r=parseInt(h.slice(0,2),16);
+const g=parseInt(h.slice(2,4),16);
+const b=parseInt(h.slice(4,6),16);
+return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function updateBreadcrumbs(){
+let html='<div class="breadcrumb '+(STATE.currentChamber?'':'active')+'" onclick="viewRoot()">ROOT</div>';
+STATE.viewStack.forEach((ch,i)=>{
+const isLast=i===STATE.viewStack.length-1;
+html+=`<div class="breadcrumb ${isLast?'active':''}" onclick="goToDepth(${i})">${ch.name}</div>`;
+});
+document.getElementById('breadcrumbs').innerHTML=html;
+}
+
+window.goToDepth=function(index){
+STATE.viewStack=STATE.viewStack.slice(0,index+1);
+const ch=STATE.viewStack[index];
+viewChamber(ch);
+};
+
+function updateHUD(){
+const current=STATE.currentChamber;
+document.getElementById('currentChamber').textContent=current?current.name:'ROOT';
+const children=current?current.children.length:STATE.rootChambers.length;
+document.getElementById('childrenCount').textContent=children;
+document.getElementById('totalArtifacts').textContent=STATE.artifacts.length.toLocaleString();
+}
+
+function resize(){
+W=window.innerWidth;
+H=window.innerHeight;
+CAN.width=W*DPR;
+CAN.height=H*DPR;
+CAN.style.width=W+'px';
+CAN.style.height=H+'px';
+
+if(STATE.currentChamber){
+viewChamber(STATE.currentChamber);
+}else if(STATE.rootChambers.length>0){
+viewRoot();
+}
+}
+
+window.addEventListener('resize',resize);
+
+CAN.addEventListener('mousemove',e=>{
+const rect=CAN.getBoundingClientRect();
+const mx=e.clientX-rect.left;
+const my=e.clientY-rect.top;
+
+const visible=STATE.currentChamber?
+STATE.currentChamber.children.map(cid=>STATE.chamberMap[cid]).filter(Boolean):
+STATE.rootChambers;
+
+STATE.hoverChamber=null;
+visible.forEach(ch=>{
+if(mx>=ch.x&&mx<=ch.x+ch.width&&my>=ch.y&&my<=ch.y+ch.height){
+STATE.hoverChamber=ch;
+}
+});
+});
+
+CAN.addEventListener('click',e=>{
+const rect=CAN.getBoundingClientRect();
+const mx=e.clientX-rect.left;
+const my=e.clientY-rect.top;
+
+const visible=STATE.currentChamber?
+STATE.currentChamber.children.map(cid=>STATE.chamberMap[cid]).filter(Boolean):
+STATE.rootChambers;
+
+let clicked=null;
+visible.forEach(ch=>{
+if(mx>=ch.x&&mx<=ch.x+ch.width&&my>=ch.y&&my<=ch.y+ch.height){
+clicked=ch;
+}
+});
+
+if(clicked){
+if(clicked.children.length>0){
+viewChamber(clicked);
+}else{
+inspectChamber(clicked);
+}
+}else{
+goUp();
+}
+});
+
+function inspectChamber(ch){
+let html=`
+<div class="info-block">
+<div class="label">Name</div><div class="value" style="color:${ch.color}">${ch.name}</div>
+<div class="label">Depth</div><div class="value">${ch.depth}</div>
+<div class="label">Artifacts</div><div class="value">${ch.totalCount.toLocaleString()}</div>
+<div class="label">Size</div><div class="value">${formatSize(ch.totalSize)}</div>
+<div class="label">Children</div><div class="value">${ch.children.length}</div>
+</div>`;
+
+if(Object.keys(ch.species).length>0){
+html+=`<div style="font-size:11px;color:#e8b849;font-weight:bold;margin:12px 0">
+SPECIES COMPOSITION</div>`;
+Object.entries(ch.species).sort((a,b)=>b[1]-a[1]).slice(0,10).forEach(([sp,cnt])=>{
+const pct=(cnt/ch.totalCount*100).toFixed(1);
+const col=SPECIES_COLORS[sp]||'#888';
+html+=`<div style="padding:5px;margin:3px 0;background:${hexToRgba(col,0.08)};
+border-left:3px solid ${col};font-size:10px">
+<strong>${sp.toUpperCase()}</strong>: ${cnt} (${pct}%)
+</div>`;
+});
+}
+
+document.getElementById('inspectorContent').innerHTML=html;
+document.getElementById('inspector').classList.add('open');
+}
+
+function closeInspector(){
+document.getElementById('inspector').classList.remove('open');
+}
+
+load();
+</script>
+</body></html>

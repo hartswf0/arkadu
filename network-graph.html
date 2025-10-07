@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ARKADU Network Graph — Provenance Visualization</title>
+    <style>
+        :root {
+            --void: #0a0a0f;
+            --strata: #1a1a2e;
+            --excavate: #36cfc9;
+            --artifact: #ffd700;
+            --trace: #ff6b6b;
+            --persist: #95e1d3;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Monaco', 'Courier New', monospace;
+            background: var(--void);
+            color: var(--persist);
+            overflow: hidden;
+        }
+        #canvas {
+            width: 100vw;
+            height: 100vh;
+            background: radial-gradient(circle at center, var(--strata), var(--void));
+        }
+        .hud {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(26, 26, 46, 0.9);
+            border: 2px solid var(--excavate);
+            padding: 20px;
+            max-width: 300px;
+            z-index: 100;
+        }
+        .hud h2 {
+            color: var(--artifact);
+            font-size: 1.2rem;
+            margin-bottom: 10px;
+        }
+        .hud-stat {
+            margin: 8px 0;
+            font-size: 0.85rem;
+        }
+        .hud-label {
+            color: var(--excavate);
+            font-weight: 700;
+        }
+        .legend {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(26, 26, 46, 0.9);
+            border: 2px solid var(--excavate);
+            padding: 15px;
+            z-index: 100;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin: 8px 0;
+            font-size: 0.8rem;
+        }
+        .legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+        .tooltip {
+            position: fixed;
+            background: rgba(26, 26, 46, 0.95);
+            border: 2px solid var(--artifact);
+            padding: 15px;
+            display: none;
+            max-width: 350px;
+            z-index: 200;
+            pointer-events: none;
+            font-size: 0.85rem;
+        }
+        .tooltip h3 {
+            color: var(--artifact);
+            margin-bottom: 8px;
+            word-break: break-word;
+        }
+        .tooltip-meta {
+            margin: 4px 0;
+            color: var(--persist);
+        }
+        button {
+            background: var(--strata);
+            color: var(--excavate);
+            border: 2px solid var(--excavate);
+            padding: 8px 15px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.8rem;
+            margin: 5px 0;
+            width: 100%;
+            transition: all 0.2s;
+        }
+        button:hover {
+            background: var(--excavate);
+            color: var(--void);
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    
+    <div class="hud">
+        <h2>ARKADU NETWORK</h2>
+        <div class="hud-stat">
+            <span class="hud-label">Nodes:</span> <span id="nodeCount">0</span>
+        </div>
+        <div class="hud-stat">
+            <span class="hud-label">Links:</span> <span id="linkCount">0</span>
+        </div>
+        <div class="hud-stat">
+            <span class="hud-label">Orphans:</span> <span id="orphanCount">0</span>
+        </div>
+        <button onclick="resetView()">↻ Reset View</button>
+        <button onclick="toggleOrphans()">👁️ Toggle Orphans</button>
+        <button onclick="toggleAnimals()">🦁 Color by Animal</button>
+    </div>
+
+    <div class="legend">
+        <div class="legend-item">
+            <div class="legend-dot" style="background: var(--artifact);"></div>
+            HTML Files
+        </div>
+        <div class="legend-item">
+            <div class="legend-dot" style="background: var(--excavate);"></div>
+            Linked Media
+        </div>
+        <div class="legend-item">
+            <div class="legend-dot" style="background: var(--trace);"></div>
+            Orphaned Media
+        </div>
+    </div>
+
+    <div class="tooltip" id="tooltip"></div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const tooltip = document.getElementById('tooltip');
+
+        let width, height;
+        let nodes = [];
+        let links = [];
+        let showOrphans = false;
+        let colorByAnimal = false;
+        let simulation;
+
+        // Resize canvas
+        function resizeCanvas() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Load manifest and build graph
+        async function loadGraph() {
+            try {
+                const response = await fetch('media-manifest.json');
+                const manifest = await response.json();
+                buildGraph(manifest);
+            } catch (e) {
+                console.error('Could not load manifest:', e);
+            }
+        }
+
+        function buildGraph(manifest) {
+            nodes = [];
+            links = [];
+
+            const htmlNodes = new Map();
+            const mediaNodes = new Map();
+            
+            // Create HTML nodes
+            for (const html in manifest.circulation) {
+                const node = {
+                    id: html,
+                    type: 'html',
+                    x: Math.random() * width,
+                    y: Math.random() * height,
+                    vx: 0,
+                    vy: 0,
+                    radius: 10,
+                    artifactCount: manifest.circulation[html].length
+                };
+                nodes.push(node);
+                htmlNodes.set(html, node);
+            }
+
+            // Create media nodes
+            const allArtifacts = [
+                ...manifest.artifacts.images,
+                ...manifest.artifacts.videos,
+                ...manifest.artifacts.audio
+            ];
+
+            allArtifacts.forEach(artifact => {
+                const isLinked = artifact.used_by && artifact.used_by.length > 0;
+                
+                if (!showOrphans && !isLinked) return;
+
+                const node = {
+                    id: artifact.path,
+                    type: isLinked ? 'media' : 'orphan',
+                    x: Math.random() * width,
+                    y: Math.random() * height,
+                    vx: 0,
+                    vy: 0,
+                    radius: 5,
+                    size: artifact.size,
+                    animal: artifact.animal,
+                    usedBy: artifact.used_by || []
+                };
+                nodes.push(node);
+                mediaNodes.set(artifact.path, node);
+
+                // Create links
+                if (isLinked) {
+                    artifact.used_by.forEach(html => {
+                        if (htmlNodes.has(html)) {
+                            links.push({
+                                source: mediaNodes.get(artifact.path),
+                                target: htmlNodes.get(html)
+                            });
+                        }
+                    });
+                }
+            });
+
+            updateStats();
+            startSimulation();
+        }
+
+        function updateStats() {
+            document.getElementById('nodeCount').textContent = nodes.length;
+            document.getElementById('linkCount').textContent = links.length;
+            const orphans = nodes.filter(n => n.type === 'orphan').length;
+            document.getElementById('orphanCount').textContent = orphans;
+        }
+
+        // Simple force simulation
+        function startSimulation() {
+            function tick() {
+                // Apply forces
+                nodes.forEach(node => {
+                    // Center gravity
+                    node.vx += (width/2 - node.x) * 0.0001;
+                    node.vy += (height/2 - node.y) * 0.0001;
+                    
+                    // Damping
+                    node.vx *= 0.95;
+                    node.vy *= 0.95;
+                });
+
+                // Link forces
+                links.forEach(link => {
+                    const dx = link.target.x - link.source.x;
+                    const dy = link.target.y - link.source.y;
+                    const dist = Math.sqrt(dx*dx + dy*dy) || 1;
+                    const targetDist = 100;
+                    const force = (dist - targetDist) * 0.01;
+                    
+                    const fx = (dx / dist) * force;
+                    const fy = (dy / dist) * force;
+                    
+                    link.source.vx += fx;
+                    link.source.vy += fy;
+                    link.target.vx -= fx;
+                    link.target.vy -= fy;
+                });
+
+                // Collision detection
+                for (let i = 0; i < nodes.length; i++) {
+                    for (let j = i + 1; j < nodes.length; j++) {
+                        const n1 = nodes[i];
+                        const n2 = nodes[j];
+                        const dx = n2.x - n1.x;
+                        const dy = n2.y - n1.y;
+                        const dist = Math.sqrt(dx*dx + dy*dy);
+                        const minDist = n1.radius + n2.radius + 10;
+                        
+                        if (dist < minDist && dist > 0) {
+                            const force = (minDist - dist) * 0.5;
+                            const fx = (dx / dist) * force;
+                            const fy = (dy / dist) * force;
+                            n1.vx -= fx * 0.1;
+                            n1.vy -= fy * 0.1;
+                            n2.vx += fx * 0.1;
+                            n2.vy += fy * 0.1;
+                        }
+                    }
+                }
+
+                // Update positions
+                nodes.forEach(node => {
+                    node.x += node.vx;
+                    node.y += node.vy;
+                    
+                    // Boundary
+                    if (node.x < 20) { node.x = 20; node.vx = 0; }
+                    if (node.x > width - 20) { node.x = width - 20; node.vx = 0; }
+                    if (node.y < 20) { node.y = 20; node.vy = 0; }
+                    if (node.y > height - 20) { node.y = height - 20; node.vy = 0; }
+                });
+
+                render();
+                requestAnimationFrame(tick);
+            }
+            tick();
+        }
+
+        function render() {
+            ctx.clearRect(0, 0, width, height);
+
+            // Draw links
+            ctx.strokeStyle = 'rgba(54, 207, 201, 0.2)';
+            ctx.lineWidth = 1;
+            links.forEach(link => {
+                ctx.beginPath();
+                ctx.moveTo(link.source.x, link.source.y);
+                ctx.lineTo(link.target.x, link.target.y);
+                ctx.stroke();
+            });
+
+            // Draw nodes
+            nodes.forEach(node => {
+                ctx.beginPath();
+                ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
+                
+                if (node.type === 'html') {
+                    ctx.fillStyle = '#ffd700';
+                } else if (node.type === 'media') {
+                    if (colorByAnimal) {
+                        ctx.fillStyle = getAnimalColor(node.animal);
+                    } else {
+                        ctx.fillStyle = '#36cfc9';
+                    }
+                } else {
+                    ctx.fillStyle = '#ff6b6b';
+                }
+                
+                ctx.fill();
+                
+                // Glow for HTML nodes
+                if (node.type === 'html') {
+                    ctx.strokeStyle = 'rgba(255, 215, 0, 0.5)';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                }
+            });
+        }
+
+        function getAnimalColor(animal) {
+            const colors = {
+                'CAT': '#ff6b6b',
+                'DOG': '#4ecdc4',
+                'HORSE': '#ffd93d',
+                'ELEPHANT': '#95e1d3',
+                'TIGER': '#ff8c42',
+                'WHALE': '#6c5ce7',
+                'LIZARD': '#a8e6cf',
+                'JELLYFISH': '#00b8d4',
+                'ANT': '#ff6348',
+                'BOY': '#ffd700'
+            };
+            return colors[animal] || '#95e1d3';
+        }
+
+        // Mouse interaction
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            let hovered = null;
+            for (const node of nodes) {
+                const dx = node.x - mouseX;
+                const dy = node.y - mouseY;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                if (dist < node.radius + 5) {
+                    hovered = node;
+                    break;
+                }
+            }
+
+            if (hovered) {
+                showTooltip(hovered, e.clientX, e.clientY);
+            } else {
+                hideTooltip();
+            }
+        });
+
+        function showTooltip(node, x, y) {
+            let html = '';
+            if (node.type === 'html') {
+                html = `
+                    <h3>${node.id}</h3>
+                    <div class="tooltip-meta">Type: HTML File</div>
+                    <div class="tooltip-meta">Uses ${node.artifactCount} artifacts</div>
+                `;
+            } else {
+                const name = node.id.split('/').pop();
+                const sizeMB = (node.size / 1_000_000).toFixed(2);
+                html = `
+                    <h3>${name}</h3>
+                    <div class="tooltip-meta">Path: ${node.id}</div>
+                    <div class="tooltip-meta">Size: ${sizeMB} MB</div>
+                    <div class="tooltip-meta">Animal: ${node.animal}</div>
+                    ${node.usedBy.length > 0 ? 
+                        `<div class="tooltip-meta">Used by: ${node.usedBy.join(', ')}</div>` :
+                        '<div class="tooltip-meta" style="color: #ff6b6b;">Orphaned</div>'}
+                `;
+            }
+            
+            tooltip.innerHTML = html;
+            tooltip.style.display = 'block';
+            tooltip.style.left = (x + 15) + 'px';
+            tooltip.style.top = (y + 15) + 'px';
+        }
+
+        function hideTooltip() {
+            tooltip.style.display = 'none';
+        }
+
+        function resetView() {
+            nodes.forEach(node => {
+                node.x = width/2 + (Math.random() - 0.5) * 200;
+                node.y = height/2 + (Math.random() - 0.5) * 200;
+                node.vx = 0;
+                node.vy = 0;
+            });
+        }
+
+        function toggleOrphans() {
+            showOrphans = !showOrphans;
+            loadGraph();
+        }
+
+        function toggleAnimals() {
+            colorByAnimal = !colorByAnimal;
+        }
+
+        // Start
+        loadGraph();
+    </script>
+</body>
+</html>

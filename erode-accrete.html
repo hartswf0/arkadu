@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>🌊 ERODE-ACCRETE - Adaptive Organic Growth</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'SF Mono',Monaco,monospace;background:#000;color:#0f0;padding:20px}
+.container{max-width:1600px;margin:0 auto}
+h1{color:#0ff;font-size:2.5rem;margin-bottom:10px;text-shadow:0 0 20px #0ff}
+.subtitle{color:#0f0;margin-bottom:30px;font-size:1.15rem}
+.main-view{display:grid;grid-template-columns:800px 1fr;gap:30px}
+canvas{border:3px solid #0f0;background:#000;display:block;box-shadow:0 0 30px rgba(0,255,255,.2)}
+.controls{background:#0a0a0a;border:2px solid #0f0;border-radius:10px;padding:20px}
+.control-title{color:#0ff;font-size:1.3rem;font-weight:900;margin-bottom:15px}
+.control-group{margin-bottom:20px;padding-bottom:20px;border-bottom:1px solid #333}
+.control-group:last-child{border-bottom:none}
+.slider-row{display:flex;align-items:center;gap:15px;margin:10px 0}
+.slider-label{color:#888;min-width:140px;font-size:.9rem}
+.slider{flex:1;height:6px;background:#333;border-radius:3px;outline:none;cursor:pointer}
+.slider::-webkit-slider-thumb{width:16px;height:16px;background:#0ff;border-radius:50%;cursor:pointer}
+.slider-value{color:#0ff;font-weight:900;min-width:60px;text-align:right}
+.btn{background:#0f0;color:#000;border:none;padding:10px 20px;border-radius:5px;cursor:pointer;font-weight:900;font-size:1rem;font-family:inherit;width:100%;margin:5px 0}
+.btn:hover{background:#0ff;box-shadow:0 0 15px #0ff}
+.btn-secondary{background:#333;color:#0f0;border:1px solid #0f0}
+.stats{background:#1a1a1a;padding:15px;border:1px solid #333;border-radius:5px;margin-top:15px}
+.stat-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #222}
+.stat-row:last-child{border-bottom:none}
+.stat-label{color:#888}
+.stat-value{color:#0ff;font-weight:bold}
+.progress-bar{background:#333;height:20px;border-radius:10px;overflow:hidden;margin-top:10px}
+.progress-fill{background:linear-gradient(90deg,#0f0,#0ff);height:100%;transition:width .3s;display:flex;align-items:center;justify-content:center;color:#000;font-weight:900;font-size:.85rem}
+.territory-list{margin-top:15px}
+.territory-item{background:#1a1a1a;padding:10px;border-radius:5px;margin:5px 0;border-left:4px solid}
+.territory-name{color:#0ff;font-weight:900;margin-bottom:5px}
+.territory-progress{font-size:.85rem;color:#888}
+.phase-indicator{background:#1a1a1a;padding:15px;border:2px solid;border-radius:10px;margin-bottom:15px;text-align:center}
+.phase-erode{border-color:#f00;color:#f00}
+.phase-accrete{border-color:#0f0;color:#0f0}
+.phase-balance{border-color:#0ff;color:#0ff}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>🌊 ERODE-ACCRETE - Adaptive Territory Growth</h1>
+<p class="subtitle">Self-balancing erosion + accretion • Natural drift • Organic equilibrium</p>
+
+<div class="main-view">
+<div>
+<canvas id="canvas" width="800" height="800"></canvas>
+</div>
+
+<div class="controls">
+<div id="phaseIndicator" class="phase-indicator phase-balance">⚖️ INITIALIZING</div>
+
+<div class="control-title">⚙️ Growth Parameters</div>
+<div class="control-group">
+<div class="slider-row">
+<span class="slider-label">Accrete Rate:</span>
+<input type="range" class="slider" id="accreteRate" min="1" max="100" value="30">
+<span class="slider-value" id="accreteRateVal">30</span>
+</div>
+<div class="slider-row">
+<span class="slider-label">Erode Rate:</span>
+<input type="range" class="slider" id="erodeRate" min="1" max="100" value="20">
+<span class="slider-value" id="erodeRateVal">20</span>
+</div>
+<div class="slider-row">
+<span class="slider-label">Drift Amount:</span>
+<input type="range" class="slider" id="drift" min="0" max="50" value="10">
+<span class="slider-value" id="driftVal">10%</span>
+</div>
+<div class="slider-row">
+<span class="slider-label">Tolerance:</span>
+<input type="range" class="slider" id="tolerance" min="1" max="10" value="2">
+<span class="slider-value" id="toleranceVal">2%</span>
+</div>
+</div>
+
+<div class="control-title">🎮 Control</div>
+<div class="control-group">
+<button class="btn" onclick="startAdaptive()">▶ Start Adaptive Growth</button>
+<button class="btn btn-secondary" onclick="step()">➡ Single Step</button>
+<button class="btn btn-secondary" onclick="reset()">↻ Reset</button>
+<button class="btn btn-secondary" onclick="togglePause()">⏸ Pause/Resume</button>
+</div>
+
+<div class="stats" id="stats">
+<div class="stat-row"><span class="stat-label">Iteration:</span><span class="stat-value">0</span></div>
+<div class="stat-row"><span class="stat-label">Phase:</span><span class="stat-value">Idle</span></div>
+<div class="stat-row"><span class="stat-label">Erode Actions:</span><span class="stat-value">0</span></div>
+<div class="stat-row"><span class="stat-label">Accrete Actions:</span><span class="stat-value">0</span></div>
+<div class="stat-row"><span class="stat-label">Equilibrium:</span><span class="stat-value">0%</span></div>
+</div>
+
+<div class="territory-list" id="territoryList"></div>
+</div>
+</div>
+</div>
+
+<div style="background:#1a1a1a;padding:20px;border:2px solid #0ff;border-radius:10px;margin-top:20px">
+<h2 style="color:#0ff;margin-bottom:15px">🌊 THE ERODE-ACCRETE PRINCIPLE</h2>
+<p style="color:#0f0;line-height:1.8">
+<strong>Natural Systems:</strong> Erosion (rivers carving, wind scouring) + Deposition (sediment building, coral growing)<br>
+<strong>Equilibrium:</strong> System balances when erosion rate = deposition rate<br>
+<strong>Organic Drift:</strong> Boundaries wander naturally, never perfectly static<br>
+<strong>Self-Correction:</strong> Overgrown territories erode more, undergrown territories accrete more<br>
+<strong>Fractal Beauty:</strong> Constant reshaping creates natural, irregular boundaries
+</p>
+</div>
+
+<script>
+const W=800,H=800;
+let grid,territories,state;
+const COLORS=['#FF6B6B','#4ECDC4','#45B7D1','#FFA07A','#98D8C8','#F7DC6F','#BB8FCE','#85C1E2'];
+const DATA=[
+  {name:'LIZARD',value:250},{name:'MANTA',value:200},{name:'CAT',value:150},
+  {name:'DOG',value:100},{name:'JELLYFISH',value:80},{name:'HORSE',value:60}
+];
+
+function reset(){
+  // Phase 1: BSP for initial exact subdivision
+  grid=new Uint8Array(W*H).fill(255);
+  const total=DATA.reduce((s,d)=>s+d.value,0);
+  
+  territories=DATA.map((d,i)=>({
+    id:i,
+    name:d.name,
+    color:COLORS[i],
+    target:(d.value/total)*(W*H),
+    current:0,
+    deficit:0
+  }));
+  
+  // Quick BSP initialization
+  function bsp(rect,items,iter=0){
+    if(items.length===1){
+      const t=items[0];
+      for(let y=rect.y;y<rect.y+rect.h;y++){
+        for(let x=rect.x;x<rect.x+rect.w;x++){
+          if(x>=0&&x<W&&y>=0&&y<H){
+            grid[y*W+x]=t.id;
+            t.current++;
+          }
+        }
+      }
+      return;
+    }
+    const first=items[0],rest=items.slice(1);
+    const ratio=first.target/(first.target+rest.reduce((s,i)=>s+i.target,0));
+    if(iter%2===0){
+      const split=Math.floor(rect.y+rect.h*ratio);
+      bsp({x:rect.x,y:rect.y,w:rect.w,h:split-rect.y},[first],iter+1);
+      bsp({x:rect.x,y:split,w:rect.w,h:rect.y+rect.h-split},rest,iter+1);
+    }else{
+      const split=Math.floor(rect.x+rect.w*ratio);
+      bsp({x:rect.x,y:rect.y,w:split-rect.x,h:rect.h},[first],iter+1);
+      bsp({x:split,y:rect.y,w:rect.x+rect.w-split,h:rect.h},rest,iter+1);
+    }
+  }
+  
+  bsp({x:0,y:0,w:W,h:H},[...territories].sort((a,b)=>b.target-a.target));
+  
+  state={
+    iter:0,
+    erodeCount:0,
+    accreteCount:0,
+    running:false,
+    paused:false
+  };
+  
+  updateDeficits();
+  draw();
+  updateStats();
+  updateTerritoryList();
+}
+
+function updateDeficits(){
+  territories.forEach(t=>{
+    t.deficit=t.target-t.current;
+  });
+}
+
+function step(){
+  const tolerance=parseInt(document.getElementById('tolerance').value)/100;
+  const driftAmount=parseInt(document.getElementById('drift').value)/100;
+  
+  updateDeficits();
+  
+  // Determine phase based on deficits
+  const overGrown=territories.filter(t=>t.deficit<-t.target*tolerance);
+  const underGrown=territories.filter(t=>t.deficit>t.target*tolerance);
+  
+  let phase='BALANCE';
+  if(overGrown.length>underGrown.length)phase='ERODE';
+  else if(underGrown.length>overGrown.length)phase='ACCRETE';
+  
+  // Update phase indicator
+  const indicator=document.getElementById('phaseIndicator');
+  if(phase==='ERODE'){
+    indicator.className='phase-indicator phase-erode';
+    indicator.textContent='🔴 ERODING - Removing excess material';
+  }else if(phase==='ACCRETE'){
+    indicator.className='phase-indicator phase-accrete';
+    indicator.textContent='🟢 ACCRETING - Growing territories';
+  }else{
+    indicator.className='phase-indicator phase-balance';
+    indicator.textContent='⚖️ BALANCED - Natural drift only';
+  }
+  
+  // ACCRETE: Grow undergrown territories
+  const accreteRate=parseInt(document.getElementById('accreteRate').value);
+  if(underGrown.length>0){
+    for(let i=0;i<accreteRate;i++){
+      const target=underGrown[Math.floor(Math.random()*underGrown.length)];
+      
+      // Find boundary pixels
+      const boundary=[];
+      for(let y=1;y<H-1;y++){
+        for(let x=1;x<W-1;x++){
+          if(grid[y*W+x]===target.id){
+            const n=[grid[(y-1)*W+x],grid[(y+1)*W+x],grid[y*W+x-1],grid[y*W+x+1]];
+            if(n.includes(255))boundary.push({x,y});
+          }
+        }
+      }
+      
+      if(boundary.length===0)continue;
+      
+      // Clustered release from boundary
+      const spawn=boundary[Math.floor(Math.random()*boundary.length)];
+      let px=spawn.x,py=spawn.y;
+      
+      // Short random walk
+      for(let step=0;step<20;step++){
+        const dir=Math.floor(Math.random()*4);
+        const nx=px+(dir===0?-1:dir===1?1:0);
+        const ny=py+(dir===2?-1:dir===3?1:0);
+        
+        if(nx>=0&&nx<W&&ny>=0&&ny<H){
+          px=nx;py=ny;
+          
+          if(grid[py*W+px]===255){
+            const neighbors=[
+              grid[(py-1)*W+px],grid[(py+1)*W+px],
+              grid[py*W+px-1],grid[py*W+px+1]
+            ];
+            if(neighbors.includes(target.id)){
+              grid[py*W+px]=target.id;
+              target.current++;
+              state.accreteCount++;
+              break;
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  // ERODE: Remove from overgrown territories
+  const erodeRate=parseInt(document.getElementById('erodeRate').value);
+  if(overGrown.length>0){
+    for(let i=0;i<erodeRate;i++){
+      const target=overGrown[Math.floor(Math.random()*overGrown.length)];
+      
+      // Find erode candidates (boundary pixels, especially thin tips)
+      const candidates=[];
+      for(let y=1;y<H-1;y++){
+        for(let x=1;x<W-1;x++){
+          if(grid[y*W+x]===target.id){
+            const neighbors=[
+              grid[(y-1)*W+x],grid[(y+1)*W+x],
+              grid[y*W+x-1],grid[y*W+x+1]
+            ];
+            const sameCount=neighbors.filter(n=>n===target.id).length;
+            
+            // Prioritize thin edges (fewer same neighbors)
+            if(sameCount<4){
+              const weight=4-sameCount; // 1-3, lower = thinner
+              for(let w=0;w<weight;w++)candidates.push({x,y});
+            }
+          }
+        }
+      }
+      
+      if(candidates.length===0)continue;
+      
+      const erode=candidates[Math.floor(Math.random()*candidates.length)];
+      grid[erode.y*W+erode.x]=255;
+      target.current--;
+      state.erodeCount++;
+    }
+  }
+  
+  // DRIFT: Random boundary wandering (natural variation)
+  if(Math.random()<driftAmount){
+    const allBoundary=[];
+    for(let y=1;y<H-1;y++){
+      for(let x=1;x<W-1;x++){
+        if(grid[y*W+x]<255){
+          const neighbors=[
+            grid[(y-1)*W+x],grid[(y+1)*W+x],
+            grid[y*W+x-1],grid[y*W+x+1]
+          ];
+          if(neighbors.some(n=>n!==grid[y*W+x]&&n<255)){
+            allBoundary.push({x,y,id:grid[y*W+x]});
+          }
+        }
+      }
+    }
+    
+    if(allBoundary.length>0){
+      const b=allBoundary[Math.floor(Math.random()*allBoundary.length)];
+      const neighbors=[
+        {x:b.x-1,y:b.y},{x:b.x+1,y:b.y},
+        {x:b.x,y:b.y-1},{x:b.x,y:b.y+1}
+      ].filter(n=>n.x>=0&&n.x<W&&n.y>=0&&n.y<H);
+      
+      const swap=neighbors[Math.floor(Math.random()*neighbors.length)];
+      const otherId=grid[swap.y*W+swap.x];
+      
+      if(otherId<255&&otherId!==b.id){
+        // Swap pixels (natural drift)
+        grid[b.y*W+b.x]=otherId;
+        grid[swap.y*W+swap.x]=b.id;
+        // No net change in areas
+      }
+    }
+  }
+  
+  state.iter++;
+  updateDeficits();
+  draw();
+  updateStats();
+  updateTerritoryList();
+  
+  // Check equilibrium
+  const inBalance=territories.filter(t=>Math.abs(t.deficit)<t.target*tolerance).length;
+  const equilibrium=(inBalance/territories.length)*100;
+  
+  return equilibrium>=95; // Stop when 95% in equilibrium
+}
+
+function startAdaptive(){
+  if(state.running)return;
+  state.running=true;
+  state.paused=false;
+  
+  const interval=setInterval(()=>{
+    if(state.paused)return;
+    
+    const done=step();
+    
+    if(done){
+      clearInterval(interval);
+      state.running=false;
+      const indicator=document.getElementById('phaseIndicator');
+      indicator.className='phase-indicator phase-balance';
+      indicator.textContent='✅ EQUILIBRIUM REACHED';
+    }
+  },16);
+}
+
+function togglePause(){
+  state.paused=!state.paused;
+}
+
+function draw(){
+  const canvas=document.getElementById('canvas');
+  const ctx=canvas.getContext('2d');
+  const img=ctx.createImageData(W,H);
+  
+  for(let i=0;i<grid.length;i++){
+    const id=grid[i];
+    if(id<255){
+      const c=territories[id].color;
+      const r=parseInt(c.slice(1,3),16);
+      const g=parseInt(c.slice(3,5),16);
+      const b=parseInt(c.slice(5,7),16);
+      img.data[i*4]=r;
+      img.data[i*4+1]=g;
+      img.data[i*4+2]=b;
+      img.data[i*4+3]=255;
+    }
+  }
+  ctx.putImageData(img,0,0);
+}
+
+function updateStats(){
+  const tolerance=parseInt(document.getElementById('tolerance').value)/100;
+  const inBalance=territories.filter(t=>Math.abs(t.deficit)<t.target*tolerance).length;
+  const equilibrium=(inBalance/territories.length)*100;
+  
+  const phase=state.iter===0?'Idle':equilibrium>95?'Equilibrium':'Active';
+  
+  document.getElementById('stats').innerHTML=`
+    <div class="stat-row"><span class="stat-label">Iteration:</span><span class="stat-value">${state.iter}</span></div>
+    <div class="stat-row"><span class="stat-label">Phase:</span><span class="stat-value">${phase}</span></div>
+    <div class="stat-row"><span class="stat-label">Erode Actions:</span><span class="stat-value">${state.erodeCount}</span></div>
+    <div class="stat-row"><span class="stat-label">Accrete Actions:</span><span class="stat-value">${state.accreteCount}</span></div>
+    <div class="stat-row"><span class="stat-label">Equilibrium:</span><span class="stat-value">${equilibrium.toFixed(1)}%</span></div>
+  `;
+}
+
+function updateTerritoryList(){
+  const tolerance=parseInt(document.getElementById('tolerance').value)/100;
+  
+  const html=territories.map(t=>{
+    const percent=(t.current/t.target)*100;
+    const balanced=Math.abs(t.deficit)<t.target*tolerance;
+    const status=balanced?'✓':t.deficit>0?'↑':'↓';
+    
+    return `
+      <div class="territory-item" style="border-color:${t.color}">
+        <div class="territory-name">${status} ${t.name}</div>
+        <div class="territory-progress">
+          ${t.current.toFixed(0)} / ${t.target.toFixed(0)} px² (${percent.toFixed(1)}%)
+          <div class="progress-bar">
+            <div class="progress-fill" style="width:${Math.min(100,percent)}%">
+              ${balanced?'BALANCED':t.deficit>0?'GROWING':'SHRINKING'}
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+  
+  document.getElementById('territoryList').innerHTML=html;
+}
+
+// Slider updates
+['accreteRate','erodeRate','drift','tolerance'].forEach(id=>{
+  document.getElementById(id).addEventListener('input',e=>{
+    const val=e.target.value;
+    const suffix=id==='drift'||id==='tolerance'?'%':'';
+    document.getElementById(id+'Val').textContent=val+suffix;
+  });
+});
+
+window.addEventListener('load',reset);
+</script>
+</body>
+</html>

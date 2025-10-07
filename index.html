@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ARKADU — Media Archaeology Engine</title>
+    <style>
+        :root {
+            --void: #0a0a0f;
+            --strata: #1a1a2e;
+            --excavate: #36cfc9;
+            --artifact: #ffd700;
+            --trace: #ff6b6b;
+            --persist: #95e1d3;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Monaco', 'Courier New', monospace;
+            background: var(--void);
+            color: var(--persist);
+            line-height: 1.6;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            max-width: 900px;
+            padding: 40px;
+            text-align: center;
+        }
+        h1 {
+            font-size: 4rem;
+            color: var(--artifact);
+            text-shadow: 0 0 30px rgba(255, 215, 0, 0.4);
+            letter-spacing: 0.4em;
+            margin-bottom: 20px;
+            animation: glow 3s ease-in-out infinite alternate;
+        }
+        @keyframes glow {
+            from { text-shadow: 0 0 20px rgba(255, 215, 0, 0.3); }
+            to { text-shadow: 0 0 40px rgba(255, 215, 0, 0.6); }
+        }
+        .subtitle {
+            font-size: 1.5rem;
+            color: var(--excavate);
+            margin-bottom: 40px;
+        }
+        .tagline {
+            font-size: 1rem;
+            color: var(--persist);
+            margin-bottom: 60px;
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
+            line-height: 1.8;
+        }
+        .tools-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 25px;
+            margin: 50px 0;
+        }
+        .tool-card {
+            background: linear-gradient(135deg, rgba(26, 26, 46, 0.8), rgba(10, 10, 15, 0.8));
+            border: 2px solid var(--excavate);
+            padding: 30px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: left;
+        }
+        .tool-card:hover {
+            border-color: var(--artifact);
+            box-shadow: 0 0 30px rgba(54, 207, 201, 0.3);
+            transform: translateY(-5px);
+        }
+        .tool-icon {
+            font-size: 3rem;
+            margin-bottom: 15px;
+            display: block;
+        }
+        .tool-title {
+            color: var(--artifact);
+            font-size: 1.3rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        .tool-desc {
+            color: var(--persist);
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+        .commands {
+            background: rgba(26, 26, 46, 0.5);
+            border: 1px solid var(--excavate);
+            padding: 30px;
+            margin: 40px 0;
+            text-align: left;
+        }
+        .commands h2 {
+            color: var(--artifact);
+            margin-bottom: 20px;
+        }
+        .cmd {
+            background: rgba(0, 0, 0, 0.5);
+            padding: 12px;
+            margin: 10px 0;
+            font-family: inherit;
+            color: var(--excavate);
+            border-left: 3px solid var(--excavate);
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin: 40px 0;
+        }
+        .stat-box {
+            background: rgba(54, 207, 201, 0.1);
+            border: 2px solid var(--excavate);
+            padding: 20px;
+        }
+        .stat-number {
+            font-size: 2rem;
+            color: var(--artifact);
+            font-weight: 700;
+            display: block;
+        }
+        .stat-label {
+            color: var(--persist);
+            font-size: 0.85rem;
+            text-transform: uppercase;
+        }
+        footer {
+            margin-top: 60px;
+            padding-top: 30px;
+            border-top: 1px solid var(--strata);
+            font-size: 0.85rem;
+            color: var(--persist);
+            opacity: 0.7;
+        }
+        a {
+            color: var(--excavate);
+            text-decoration: none;
+        }
+        a:hover {
+            color: var(--artifact);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>ARKADU</h1>
+        <div class="subtitle">Noah's Ark ⊗ Xanadu</div>
+        <div class="tagline">
+            A <strong>Media Archaeology Engine</strong> that excavates technocultural strata, 
+            documents provenance, and maps circulation networks across 7,697 artifacts.
+        </div>
+
+        <div class="stats" id="stats">
+            <div class="stat-box">
+                <span class="stat-number">—</span>
+                <span class="stat-label">Images</span>
+            </div>
+            <div class="stat-box">
+                <span class="stat-number">—</span>
+                <span class="stat-label">Videos</span>
+            </div>
+            <div class="stat-box">
+                <span class="stat-number">—</span>
+                <span class="stat-label">Audio</span>
+            </div>
+            <div class="stat-box">
+                <span class="stat-number">—</span>
+                <span class="stat-label">Total GB</span>
+            </div>
+        </div>
+
+        <div class="tools-grid">
+            <div class="tool-card" onclick="location.href='viewer.html'">
+                <span class="tool-icon">📊</span>
+                <div class="tool-title">Viewer</div>
+                <div class="tool-desc">
+                    Browse artifacts by animal kingdom, view orphans, examine provenance links, 
+                    and analyze GitHub storage requirements.
+                </div>
+            </div>
+
+            <div class="tool-card" onclick="location.href='network-graph.html'">
+                <span class="tool-icon">🕸️</span>
+                <div class="tool-title">Network Graph</div>
+                <div class="tool-desc">
+                    Interactive force-directed graph showing HTML↔Media relationships. 
+                    Visualize circulation networks and identify hub nodes.
+                </div>
+            </div>
+
+            <div class="tool-card" onclick="alert('Run: python3 ARKADU/arkadu-scan.py .')">
+                <span class="tool-icon">⚒️</span>
+                <div class="tool-title">Scanner</div>
+                <div class="tool-desc">
+                    Excavate all media artifacts, catalog metadata, reconstruct provenance, 
+                    and generate the master manifest.
+                </div>
+            </div>
+
+            <div class="tool-card" onclick="alert('Run: python3 ARKADU/analyze-provenance.py')">
+                <span class="tool-icon">🔗</span>
+                <div class="tool-title">Provenance Analyzer</div>
+                <div class="tool-desc">
+                    Analyze circulation patterns, find shared artifacts, identify hub nodes, 
+                    and recommend Git storage strategy.
+                </div>
+            </div>
+
+            <div class="tool-card" onclick="alert('Run: python3 ARKADU/generate-gitignore.py')">
+                <span class="tool-icon">📝</span>
+                <div class="tool-title">.gitignore Generator</div>
+                <div class="tool-desc">
+                    Generate intelligent .gitignore based on size analysis, usage patterns, 
+                    and GitHub constraints. 80% space savings.
+                </div>
+            </div>
+
+            <div class="tool-card" onclick="location.href='README.md'">
+                <span class="tool-icon">📖</span>
+                <div class="tool-title">Documentation</div>
+                <div class="tool-desc">
+                    Complete guide to ARKADU's media archaeology ontology, 
+                    tools, and strategies for archival distribution.
+                </div>
+            </div>
+        </div>
+
+        <div class="commands">
+            <h2>🚀 Quick Start</h2>
+            <div class="cmd">python3 ARKADU/arkadu-scan.py .</div>
+            <p style="margin: 10px 0; font-size: 0.9rem;">Excavates all media and generates media-manifest.json</p>
+            
+            <div class="cmd">python3 ARKADU/analyze-provenance.py</div>
+            <p style="margin: 10px 0; font-size: 0.9rem;">Analyzes provenance networks and exports recommendations</p>
+            
+            <div class="cmd">python3 ARKADU/generate-gitignore.py</div>
+            <p style="margin: 10px 0; font-size: 0.9rem;">Generates .gitignore.arkadu with selective archival rules</p>
+            
+            <div class="cmd">open ARKADU/viewer.html</div>
+            <p style="margin: 10px 0; font-size: 0.9rem;">Opens interactive artifact browser</p>
+        </div>
+
+        <footer>
+            <p>
+                <strong>ARKADU</strong> — Where every &lt;artifact&gt; leaves &lt;traces&gt;<br>
+                Media Archaeology for <em>Resurrecting Atlantis</em> | Excavated October 2025
+            </p>
+        </footer>
+    </div>
+
+    <script>
+        // Load stats from manifest
+        async function loadStats() {
+            try {
+                const response = await fetch('media-manifest.json');
+                const manifest = await response.json();
+                
+                const stats = document.querySelectorAll('.stat-number');
+                stats[0].textContent = manifest.stats.total_images.toLocaleString();
+                stats[1].textContent = manifest.stats.total_videos.toLocaleString();
+                stats[2].textContent = manifest.stats.total_audio.toLocaleString();
+                stats[3].textContent = (manifest.github_analysis.total_size_mb / 1000).toFixed(1);
+            } catch (e) {
+                console.log('Manifest not yet generated. Run arkadu-scan.py first.');
+            }
+        }
+        loadStats();
+    </script>
+</body>
+</html>

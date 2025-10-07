@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>ARKADU Fluid Ecology</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+--void:#0a0e1a;--panel:#0f1419;--grid:#1a3a52;--text:#b8dbd9;--dim:#6b8a96;
+--blue:#4dd9cc;--coral:#d97b8f;--amber:#e8b849;--purple:#9d7be8;--green:#6bbd8f;
+}
+body{background:var(--void);color:var(--text);font-family:'Courier New',monospace;overflow:hidden;height:100vh}
+
+/* Full-screen continuous space */
+.universe{position:absolute;inset:0;overflow:hidden;cursor:grab}
+.universe.grabbing{cursor:grabbing}
+.space{position:absolute;width:4000px;height:4000px;transform-origin:0 0;transition:transform .4s cubic-bezier(.4,0,.2,1)}
+
+/* Chambers float in space */
+.chamber{position:absolute;border:2px solid var(--grid);border-radius:12px;background:rgba(15,20,25,.7);backdrop-filter:blur(8px);padding:16px;cursor:pointer;transition:all .3s}
+.chamber:hover{border-color:var(--blue);box-shadow:0 0 30px rgba(77,217,204,.4);transform:scale(1.05)}
+.chamber.focused{border-color:var(--blue);border-width:3px;box-shadow:0 0 50px rgba(77,217,204,.6);z-index:100}
+.chamber.dimmed{opacity:.3}
+
+.ch-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--grid)}
+.ch-name{font-size:13px;font-weight:bold;color:var(--blue)}
+.ch-badge{font-size:9px;color:var(--dim);background:rgba(77,217,204,.1);padding:3px 7px;border-radius:4px}
+
+.ch-species{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
+.species-chip{font-size:9px;padding:3px 7px;border:1px solid var(--grid);border-radius:4px;display:flex;align-items:center;gap:4px}
+.species-dot{width:6px;height:6px;border-radius:50%}
+
+.ch-grains{display:flex;flex-wrap:wrap;gap:2px;margin-top:10px;max-height:100px;overflow:hidden}
+.grain{width:6px;height:6px;border-radius:50%;cursor:pointer;transition:transform .15s}
+.grain:hover{transform:scale(2.5);z-index:1000}
+.grain[data-s="png"],.grain[data-s="jpg"]{background:var(--blue)}
+.grain[data-s="mp4"]{background:var(--coral)}
+.grain[data-s="mp3"],.grain[data-s="py"]{background:var(--amber)}
+.grain[data-s="json"]{background:var(--purple)}
+.grain[data-s="html"]{background:var(--green)}
+
+/* Connections between chambers */
+svg.connections{position:absolute;inset:0;pointer-events:none;z-index:50}
+.link{stroke:var(--grid);stroke-width:2;fill:none;opacity:.3;transition:opacity .3s}
+.link.active{stroke:var(--blue);stroke-width:3;opacity:.8}
+.link.child{stroke:var(--coral);opacity:.5}
+.link.chain{stroke:var(--purple);stroke-width:3;stroke-dasharray:8,4;opacity:.7}
+
+/* Transclusion panel */
+.transclude{position:fixed;right:0;top:0;bottom:0;width:400px;background:rgba(15,20,25,.95);backdrop-filter:blur(16px);border-left:2px solid var(--grid);transform:translateX(100%);transition:transform .3s;z-index:200;overflow-y:auto;padding:20px}
+.transclude.open{transform:translateX(0)}
+.transclude-close{position:absolute;top:12px;right:12px;width:24px;height:24px;cursor:pointer;color:var(--text);font-size:20px;line-height:24px;text-align:center}
+.transclude-title{font-size:14px;font-weight:bold;color:var(--blue);margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid var(--grid)}
+.transclude-section{margin-bottom:20px}
+.transclude-label{font-size:10px;text-transform:uppercase;color:var(--dim);margin-bottom:6px}
+.transclude-content{font-size:11px;line-height:1.6;color:var(--text);background:rgba(10,14,26,.6);padding:12px;border-radius:6px;border:1px solid var(--grid)}
+.file-list{display:flex;flex-direction:column;gap:4px}
+.file-item{padding:8px;background:rgba(77,217,204,.08);border:1px solid var(--grid);border-radius:4px;cursor:pointer;font-size:10px;transition:all .2s}
+.file-item:hover{background:rgba(77,217,204,.2);border-color:var(--blue)}
+.chain-viz{background:rgba(157,123,232,.08);border-left:3px solid var(--purple);padding:10px;margin:8px 0;font-size:10px}
+.chain-step{display:flex;align-items:center;gap:6px;margin:4px 0}
+.chain-arrow{color:var(--purple);font-weight:bold}
+
+/* Minimap */
+.minimap{position:fixed;bottom:20px;right:20px;width:200px;height:150px;background:rgba(15,20,25,.9);border:2px solid var(--grid);border-radius:8px;overflow:hidden;z-index:150}
+.minimap-content{position:relative;width:100%;height:100%}
+.minimap-chamber{position:absolute;background:var(--blue);border-radius:2px;opacity:.6}
+.minimap-viewport{position:absolute;border:2px solid var(--coral);background:rgba(217,123,143,.1)}
+
+/* Controls HUD */
+.hud{position:fixed;top:16px;left:16px;background:rgba(15,20,25,.9);border:2px solid var(--grid);border-radius:8px;padding:12px;z-index:150;backdrop-filter:blur(8px)}
+.hud-title{font-size:14px;font-weight:bold;color:var(--blue);margin-bottom:10px}
+.hud-stats{font-size:10px;color:var(--dim);display:flex;flex-direction:column;gap:4px}
+.hud-controls{margin-top:12px;padding-top:12px;border-top:1px solid var(--grid)}
+.hud-btn{display:block;width:100%;padding:6px 10px;background:var(--void);border:1px solid var(--grid);color:var(--text);cursor:pointer;font-size:10px;border-radius:4px;margin:4px 0;font-family:inherit}
+.hud-btn:hover{border-color:var(--blue);background:rgba(77,217,204,.1)}
+.hud-btn.active{background:var(--blue);color:var(--void);border-color:var(--blue)}
+
+.depth-label{position:absolute;left:20px;font-size:11px;color:var(--dim);background:rgba(15,20,25,.8);padding:4px 10px;border-radius:4px;border:1px solid var(--grid)}
+
+.loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:var(--void);z-index:300;font-size:14px;color:var(--blue)}
+.loading.hidden{display:none}
+</style>
+</head><body>
+<div class="loading" id="loading">Loading fluid space...</div>
+
+<!-- Main continuous space -->
+<div class="universe" id="universe">
+<svg class="connections" id="connections"></svg>
+<div class="space" id="space">
+<!-- Chambers positioned in continuous 2D space -->
+</div>
+</div>
+
+<!-- Minimap -->
+<div class="minimap">
+<div class="minimap-content" id="minimapContent"></div>
+</div>
+
+<!-- HUD -->
+<div class="hud">
+<div class="hud-title">ARKADU FLUID</div>
+<div class="hud-stats">
+<div id="stats1">—</div>
+<div id="stats2">—</div>
+<div id="stats3">—</div>
+</div>
+<div class="hud-controls">
+<button class="hud-btn active" id="btnAll">Show All Layers</button>
+<button class="hud-btn" id="btnDepth0">Depth 0 Only</button>
+<button class="hud-btn" id="btnDepth1">Depth 1 Only</button>
+<button class="hud-btn" id="btnDepth2">Depth 2 Only</button>
+<button class="hud-btn" id="btnChains">Show Chains</button>
+<button class="hud-btn" id="btnReset">Reset View</button>
+</div>
+</div>
+
+<!-- Transclusion Panel -->
+<div class="transclude" id="transclude">
+<div class="transclude-close" onclick="closeTransclude()">×</div>
+<div class="transclude-title" id="transTitle">Select a chamber</div>
+<div id="transContent"></div>
+</div>
+
+<script>
+const S={
+chambers:[],artifacts:[],chains:[],
+camX:0,camY:0,zoom:1,
+focused:null,
+dragging:false,dragStartX:0,dragStartY:0,
+showDepth:null,showChains:false
+};
+
+async function load(){
+try{
+const r=await fetch('/sys/primitive.jsonl');
+const t=await r.text();
+S.artifacts=t.trim().split('\n').map(l=>JSON.parse(l));
+try{
+const cr=await fetch('/sys/ekphrasis.jsonl');
+const ct=await cr.text();
+S.chains=ct.trim().split('\n').map(l=>JSON.parse(l));
+}catch(e){S.chains=[];}
+buildChambers();
+layoutSpace();
+init();
+}catch(e){
+document.getElementById('loading').innerHTML=`<div style="color:var(--coral)">ERROR: ${e.message}</div>`;
+}}
+
+function buildChambers(){
+const m={};
+S.artifacts.forEach(a=>{
+const p=a.path.split('/');
+for(let d=1;d<=Math.min(p.length-1,3);d++){
+const cp=p.slice(0,d).join('/');
+if(!m[cp]){
+m[cp]={id:cp,name:p[d-1],depth:d-1,parent:d>1?p.slice(0,d-1).join('/'):null,children:[],artifacts:[],species:{},totalSize:0};
+}
+if(d===p.length-1){
+m[cp].artifacts.push(a);
+const s=(a.ext||'unknown').replace(/^\./,'');
+m[cp].species[s]=(m[cp].species[s]||0)+1;
+m[cp].totalSize+=(a.size||0);
+}
+}
+});
+Object.values(m).forEach(c=>{
+if(c.parent&&m[c.parent]){
+if(!m[c.parent].children.includes(c.id))m[c.parent].children.push(c.id);
+}
+});
+S.chambers=Object.values(m);
+}
+
+function layoutSpace(){
+// Position chambers in continuous 2D space
+// Depth 0: top row (y=400)
+// Depth 1: middle row (y=1200)
+// Depth 2: bottom row (y=2000)
+const depths=[
+{y:400,chambers:S.chambers.filter(c=>c.depth===0)},
+{y:1200,chambers:S.chambers.filter(c=>c.depth===1)},
+{y:2000,chambers:S.chambers.filter(c=>c.depth===2)}
+];
+
+depths.forEach(layer=>{
+const spacing=Math.max(300,3800/layer.chambers.length);
+layer.chambers.forEach((ch,i)=>{
+ch.x=200+i*spacing;
+ch.y=layer.y;
+ch.width=Math.min(280,spacing-40);
+ch.height=180;
+});
+});
+
+renderChambers();
+renderConnections();
+renderMinimap();
+}
+
+function renderChambers(){
+const space=document.getElementById('space');
+space.innerHTML='';
+
+// Add depth labels
+[{d:0,y:300},{d:1,y:1100},{d:2,y:1900}].forEach(({d,y})=>{
+const label=document.createElement('div');
+label.className='depth-label';
+label.style.top=y+'px';
+label.textContent=`DEPTH ${d}`;
+space.appendChild(label);
+});
+
+S.chambers.forEach(ch=>{
+if(S.showDepth!==null&&ch.depth!==S.showDepth)return;
+
+const el=document.createElement('div');
+el.className='chamber';
+el.dataset.id=ch.id;
+el.style.left=ch.x+'px';
+el.style.top=ch.y+'px';
+el.style.width=ch.width+'px';
+el.style.minHeight=ch.height+'px';
+
+const header=document.createElement('div');
+header.className='ch-header';
+header.innerHTML=`
+<div class="ch-name">${ch.name}</div>
+<div class="ch-badge">D${ch.depth} • ${ch.artifacts.length}</div>
+`;
+el.appendChild(header);
+
+const species=document.createElement('div');
+species.className='ch-species';
+Object.entries(ch.species).slice(0,5).forEach(([sp,cnt])=>{
+const chip=document.createElement('div');
+chip.className='species-chip';
+chip.innerHTML=`<div class="species-dot" style="background:${getColor(sp)}"></div>${sp} (${cnt})`;
+species.appendChild(chip);
+});
+el.appendChild(species);
+
+const grains=document.createElement('div');
+grains.className='ch-grains';
+Object.entries(ch.species).forEach(([sp,cnt])=>{
+const toShow=Math.min(cnt,100);
+for(let i=0;i<toShow;i++){
+const g=document.createElement('div');
+g.className='grain';
+g.dataset.s=sp;
+g.dataset.ch=ch.id;
+g.onclick=e=>{e.stopPropagation();openGrain(ch,sp,i);};
+grains.appendChild(g);
+}
+});
+el.appendChild(grains);
+
+el.onclick=()=>focusChamber(ch);
+space.appendChild(el);
+});
+}
+
+function renderConnections(){
+const svg=document.getElementById('connections');
+svg.innerHTML='';
+svg.setAttribute('width','4000');
+svg.setAttribute('height','4000');
+
+S.chambers.forEach(ch=>{
+if(S.showDepth!==null&&ch.depth!==S.showDepth)return;
+ch.children.forEach(cid=>{
+const child=S.chambers.find(c=>c.id===cid);
+if(!child)return;
+if(S.showDepth!==null&&child.depth!==S.showDepth)return;
+
+const line=document.createElementNS('http://www.w3.org/2000/svg','line');
+line.setAttribute('class',S.focused===ch.id||S.focused===child.id?'link active':'link child');
+line.setAttribute('x1',ch.x+ch.width/2);
+line.setAttribute('y1',ch.y+ch.height);
+line.setAttribute('x2',child.x+child.width/2);
+line.setAttribute('y2',child.y);
+svg.appendChild(line);
+});
+});
+
+if(S.showChains){
+S.chains.forEach(chain=>{
+const srcCh=S.chambers.find(c=>c.artifacts.some(a=>a.path===chain.prompt_file));
+const tgtCh=S.chambers.find(c=>c.artifacts.some(a=>a.path===chain.script));
+if(!srcCh||!tgtCh)return;
+
+const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+path.setAttribute('class','link chain');
+const d=`M ${srcCh.x+srcCh.width/2},${srcCh.y+srcCh.height/2} Q ${(srcCh.x+tgtCh.x)/2},${(srcCh.y+tgtCh.y)/2-100} ${tgtCh.x+tgtCh.width/2},${tgtCh.y+tgtCh.height/2}`;
+path.setAttribute('d',d);
+svg.appendChild(path);
+});
+}
+}
+
+function focusChamber(ch){
+S.focused=ch.id;
+document.querySelectorAll('.chamber').forEach(el=>{
+const id=el.dataset.id;
+if(id===ch.id){
+el.classList.add('focused');
+el.classList.remove('dimmed');
+}else if(ch.children.includes(id)||ch.parent===id){
+el.classList.remove('focused','dimmed');
+}else{
+el.classList.remove('focused');
+el.classList.add('dimmed');
+}
+});
+renderConnections();
+openTransclude(ch);
+panTo(ch.x,ch.y);
+}
+
+function panTo(x,y){
+S.camX=-(x-window.innerWidth/2+150);
+S.camY=-(y-window.innerHeight/2);
+updateCamera();
+}
+
+function updateCamera(){
+const space=document.getElementById('space');
+space.style.transform=`translate(${S.camX}px,${S.camY}px) scale(${S.zoom})`;
+renderMinimap();
+}
+
+function openTransclude(ch){
+const panel=document.getElementById('transclude');
+const title=document.getElementById('transTitle');
+const content=document.getElementById('transContent');
+
+title.textContent=ch.name;
+let html=`
+<div class="transclude-section">
+<div class="transclude-label">Chamber Info</div>
+<div class="transclude-content">
+Depth: ${ch.depth}<br>
+Artifacts: ${ch.artifacts.length}<br>
+Total Size: ${(ch.totalSize/1024/1024).toFixed(2)} MB<br>
+Species: ${Object.keys(ch.species).length}
+</div>
+</div>`;
+
+if(ch.children.length>0){
+html+=`<div class="transclude-section">
+<div class="transclude-label">Children (${ch.children.length})</div>
+<div class="file-list">`;
+ch.children.forEach(cid=>{
+const child=S.chambers.find(c=>c.id===cid);
+if(child){
+html+=`<div class="file-item" onclick="focusChamberById('${cid}')">${child.name} (${child.artifacts.length})</div>`;
+}
+});
+html+=`</div></div>`;
+}
+
+const files=ch.artifacts.slice(0,20);
+html+=`<div class="transclude-section">
+<div class="transclude-label">Files (showing ${files.length} of ${ch.artifacts.length})</div>
+<div class="file-list">`;
+files.forEach(art=>{
+const ext=(art.ext||'').replace(/^\./,'');
+html+=`<div class="file-item" style="border-left:3px solid ${getColor(ext)}">${art.name}<br><span style="color:var(--dim);font-size:9px">${(art.size/1024).toFixed(1)} KB</span></div>`;
+});
+html+=`</div></div>`;
+
+const chains=S.chains.filter(c=>ch.artifacts.some(a=>a.path===c.prompt_file||a.path===c.script));
+if(chains.length>0){
+html+=`<div class="transclude-section">
+<div class="transclude-label">Ekphrasis Chains (${chains.length})</div>`;
+chains.slice(0,3).forEach(chain=>{
+html+=`<div class="chain-viz">
+<div class="chain-step">
+<span>${chain.prompt_file.split('/').pop()}</span>
+<span class="chain-arrow">→</span>
+<span>${chain.script.split('/').pop()}</span>
+</div>
+${chain.sample_prompts&&chain.sample_prompts.length>0?`<div style="margin-top:6px;font-style:italic;color:var(--purple)">"${chain.sample_prompts[0].substring(0,80)}..."</div>`:''}
+</div>`;
+});
+html+=`</div>`;
+}
+
+content.innerHTML=html;
+panel.classList.add('open');
+}
+
+function closeTransclude(){
+document.getElementById('transclude').classList.remove('open');
+S.focused=null;
+document.querySelectorAll('.chamber').forEach(el=>el.classList.remove('focused','dimmed'));
+renderConnections();
+}
+
+function focusChamberById(id){
+const ch=S.chambers.find(c=>c.id===id);
+if(ch)focusChamber(ch);
+}
+
+function openGrain(ch,sp,idx){
+const arts=ch.artifacts.filter(a=>(a.ext||'').replace(/^\./,'')===sp);
+const art=arts[idx]||arts[0];
+if(!art)return;
+alert(`${art.name}\n${sp.toUpperCase()}\n${(art.size/1024).toFixed(1)} KB\n\nPath: ${art.path}`);
+}
+
+function renderMinimap(){
+const cont=document.getElementById('minimapContent');
+cont.innerHTML='';
+const scale=200/4000;
+S.chambers.forEach(ch=>{
+const el=document.createElement('div');
+el.className='minimap-chamber';
+el.style.left=(ch.x*scale)+'px';
+el.style.top=(ch.y*scale)+'px';
+el.style.width=Math.max(2,ch.width*scale)+'px';
+el.style.height=Math.max(2,ch.height*scale)+'px';
+cont.appendChild(el);
+});
+
+const vp=document.createElement('div');
+vp.className='minimap-viewport';
+vp.style.left=(-S.camX*scale)+'px';
+vp.style.top=(-S.camY*scale)+'px';
+vp.style.width=(window.innerWidth*scale/S.zoom)+'px';
+vp.style.height=(window.innerHeight*scale/S.zoom)+'px';
+cont.appendChild(vp);
+}
+
+function getColor(sp){
+const cols={png:'var(--blue)',jpg:'var(--blue)',mp4:'var(--coral)',mp3:'var(--amber)',json:'var(--purple)',py:'var(--amber)',html:'var(--green)'};
+return cols[sp]||'var(--dim)';
+}
+
+function init(){
+document.getElementById('loading').classList.add('hidden');
+document.getElementById('stats1').textContent=`${S.chambers.length} chambers`;
+document.getElementById('stats2').textContent=`${S.artifacts.length} artifacts`;
+const total=S.chambers.reduce((s,c)=>s+c.totalSize,0);
+document.getElementById('stats3').textContent=`${(total/1024/1024/1024).toFixed(2)} GB`;
+
+setupControls();
+panTo(S.chambers[0].x,S.chambers[0].y);
+}
+
+function setupControls(){
+const universe=document.getElementById('universe');
+
+universe.onmousedown=e=>{
+if(e.target===universe||e.target.id==='space'||e.target.id==='connections'){
+S.dragging=true;
+S.dragStartX=e.clientX-S.camX;
+S.dragStartY=e.clientY-S.camY;
+universe.classList.add('grabbing');
+}
+};
+
+universe.onmousemove=e=>{
+if(S.dragging){
+S.camX=e.clientX-S.dragStartX;
+S.camY=e.clientY-S.dragStartY;
+updateCamera();
+}
+};
+
+universe.onmouseup=()=>{
+S.dragging=false;
+universe.classList.remove('grabbing');
+};
+
+universe.onwheel=e=>{
+e.preventDefault();
+const delta=e.deltaY>0?0.9:1.1;
+S.zoom=Math.max(0.3,Math.min(2,S.zoom*delta));
+updateCamera();
+};
+
+document.getElementById('btnAll').onclick=()=>{
+S.showDepth=null;
+setActiveBtn('btnAll');
+renderChambers();
+renderConnections();
+};
+document.getElementById('btnDepth0').onclick=()=>{
+S.showDepth=0;
+setActiveBtn('btnDepth0');
+renderChambers();
+renderConnections();
+panTo(S.chambers.find(c=>c.depth===0).x,400);
+};
+document.getElementById('btnDepth1').onclick=()=>{
+S.showDepth=1;
+setActiveBtn('btnDepth1');
+renderChambers();
+renderConnections();
+panTo(S.chambers.find(c=>c.depth===1).x,1200);
+};
+document.getElementById('btnDepth2').onclick=()=>{
+S.showDepth=2;
+setActiveBtn('btnDepth2');
+renderChambers();
+renderConnections();
+panTo(S.chambers.find(c=>c.depth===2).x,2000);
+};
+document.getElementById('btnChains').onclick=()=>{
+S.showChains=!S.showChains;
+document.getElementById('btnChains').classList.toggle('active',S.showChains);
+renderConnections();
+};
+document.getElementById('btnReset').onclick=()=>{
+S.camX=0;S.camY=0;S.zoom=1;S.focused=null;S.showDepth=null;
+updateCamera();
+renderChambers();
+renderConnections();
+closeTransclude();
+setActiveBtn('btnAll');
+};
+
+window.onresize=()=>renderMinimap();
+}
+
+function setActiveBtn(id){
+['btnAll','btnDepth0','btnDepth1','btnDepth2'].forEach(bid=>{
+document.getElementById(bid).classList.toggle('active',bid===id);
+});
+}
+
+load();
+</script>
+</body></html>

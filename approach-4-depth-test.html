@@ -1,0 +1,1982 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<title>Approach 4: Sedimentary Voronoi - Falling Sand + Recursive Refinement</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0e1a;color:#4dd9cc;font-family:monospace;display:flex;height:100vh}
+#sidebar{width:320px;background:rgba(0,0,0,.95);border-right:1px solid #4dd9cc;
+overflow-y:auto;padding:20px}
+#main{flex:1;position:relative}
+canvas{display:block;cursor:pointer}
+.tree-item{padding:6px 8px;margin:2px 0;cursor:pointer;border-radius:3px;font-size:10px;
+transition:all .2s}
+.tree-item:hover{background:rgba(77,217,204,.15)}
+.tree-item.active{background:rgba(77,217,204,.25);font-weight:bold}
+.tree-item.has-children::before{content:'▸ ';color:#4dd9cc}
+.tree-item.expanded::before{content:'▾ '}
+.depth-0{color:#4dd9cc}
+.depth-1{color:#6be8df}
+.depth-2{color:#6bbd8f}
+.depth-3{color:#e8b849}
+.depth-4{color:#d97b8f}
+.depth-5{color:#9d7be8}
+.depth-6{color:#4dd9cc;opacity:0.8}
+.depth-7{color:#6be8df;opacity:0.8}
+.depth-8{color:#6bbd8f;opacity:0.8}
+.depth-9{color:#e8b849;opacity:0.8}
+.depth-10{color:#d97b8f;opacity:0.8}
+.depth-11{color:#9d7be8;opacity:0.8}
+.stats{background:rgba(77,217,204,.1);padding:12px;margin:10px 0;border-radius:5px;font-size:11px}
+.stat-line{margin:4px 0}
+.controls{margin:15px 0;display:flex;gap:8px;flex-wrap:wrap}
+button{padding:8px 12px;background:rgba(77,217,204,.1);border:1px solid #4dd9cc;
+color:#4dd9cc;cursor:pointer;border-radius:4px;font-size:10px;font-family:monospace}
+button:hover{background:rgba(77,217,204,.25)}
+.info-panel{position:fixed;bottom:20px;left:340px;background:rgba(0,0,0,.95);
+border:1px solid #4dd9cc;padding:15px;border-radius:5px;max-width:450px;max-height:300px;
+overflow-y:auto;font-size:11px;line-height:1.6}
+.territory-panel{position:fixed;top:20px;right:20px;width:380px;background:rgba(0,0,0,.95);
+border:1px solid #e8b849;padding:18px;border-radius:8px;max-height:85vh;overflow-y:auto}
+.territory-header{color:#e8b849;font-size:15px;font-weight:bold;margin-bottom:15px;
+border-bottom:1px solid rgba(232,184,73,0.3);padding-bottom:10px}
+.data-section{margin:12px 0;padding:12px;background:rgba(232,184,73,0.05);
+border-left:3px solid #e8b849;border-radius:4px}
+.data-label{color:#6b8a96;font-size:9px;text-transform:uppercase;margin-bottom:4px}
+.data-value{color:#e8b849;font-size:12px;font-weight:bold}
+.species-item{display:flex;justify-content:space-between;padding:6px 8px;margin:4px 0;
+background:rgba(77,217,204,0.05);border-radius:3px;font-size:10px}
+.species-name{color:#4dd9cc}
+.species-count{color:#6b8a96}
+.geometry-viz{margin:10px 0;padding:10px;background:rgba(0,0,0,0.5);border-radius:5px;
+border:1px solid rgba(232,184,73,0.2)}
+h3{color:#4dd9cc;margin-bottom:10px}
+select{padding:8px 12px;background:rgba(77,217,204,.1);border:1px solid #4dd9cc;
+color:#4dd9cc;cursor:pointer;border-radius:4px;font-size:10px;font-family:monospace}
+select:hover{background:rgba(77,217,204,.25)}
+option{background:#0a0e1a;color:#4dd9cc}
+.filter-section{margin:15px 0;padding:12px;background:rgba(77,217,204,.05);border-radius:5px;
+border:1px solid rgba(77,217,204,0.2)}
+.filter-label{color:#6b8a96;font-size:9px;text-transform:uppercase;margin-bottom:6px}
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+<h3>🌋 APPROACH 4: Sedimentary Strata</h3>
+<div class="stats">
+<div class="stat-line"><strong>Max Depth:</strong> <span id="maxDepth">0</span></div>
+<div class="stat-line"><strong>Total Nodes:</strong> <span id="totalNodes">0</span></div>
+<div class="stat-line"><strong>Current View:</strong> <span id="currentView">ROOT</span></div>
+<div class="stat-line"><strong>Depth:</strong> <span id="currentDepth">0</span></div>
+<div class="stat-line"><strong>Children:</strong> <span id="childCount">0</span></div>
+</div>
+
+<div class="controls">
+<button onclick="loadRealData()" style="background:rgba(232,184,73,.2);border-color:#e8b849">🗂️ LOAD ARKADU</button>
+<button onclick="generateStructure(6)">6 Mock</button>
+<button onclick="generateStructure(9)">9 Mock</button>
+<button onclick="viewRoot()">↑ ROOT</button>
+</div>
+
+<div class="filter-section">
+<div class="filter-label">🎨 Filter by Species</div>
+<select id="speciesFilter" onchange="applySpeciesFilter()">
+<option value="all">All Media Types</option>
+</select>
+<div style="margin-top:8px;font-size:9px;color:#6b8a96" id="filterStatus">Showing all territories</div>
+</div>
+
+<div style="margin:15px 0;padding:12px;background:rgba(232,184,73,.1);border-radius:5px;border:1px solid rgba(232,184,73,0.3)">
+<div style="color:#e8b849;font-size:10px;font-weight:bold;margin-bottom:8px">⚖️ SCALE FORMULA</div>
+<div style="font-size:9px;color:#6b8a96;line-height:1.8">
+<div><strong style="color:#4dd9cc">Territory Size =</strong></div>
+<div style="margin-left:10px;color:#e8b849">Volume + (Mass / 1MB)</div>
+<div style="margin-top:6px;border-top:1px solid rgba(232,184,73,0.2);padding-top:6px">
+<div><strong style="color:#4dd9cc">Volume:</strong> File count</div>
+<div><strong style="color:#4dd9cc">Mass:</strong> Total bytes</div>
+</div>
+<div style="margin-top:8px;font-size:8px;font-style:italic;color:#6b8a96">
+Balances quantity + size for fair representation
+</div>
+</div>
+</div>
+
+<div style="margin:15px 0;padding:10px;background:rgba(77,217,204,.05);border-radius:5px;border:1px solid rgba(77,217,204,0.2)">
+<div style="color:#6b8a96;font-size:9px;text-transform:uppercase;margin-bottom:6px">⌨️ Navigation Shortcuts</div>
+<div style="font-size:9px;line-height:1.6;color:#4dd9cc">
+<div><kbd style="background:rgba(77,217,204,.2);padding:2px 4px;border-radius:2px">↑</kbd> / <kbd style="background:rgba(77,217,204,.2);padding:2px 4px;border-radius:2px">Esc</kbd> Parent</div>
+<div><kbd style="background:rgba(77,217,204,.2);padding:2px 4px;border-radius:2px">↓</kbd> First Child</div>
+<div><kbd style="background:rgba(77,217,204,.2);padding:2px 4px;border-radius:2px">←</kbd> <kbd style="background:rgba(77,217,204,.2);padding:2px 4px;border-radius:2px">→</kbd> Siblings</div>
+<div><kbd style="background:rgba(77,217,204,.2);padding:2px 4px;border-radius:2px">H</kbd> Home (Root)</div>
+<div><kbd style="background:rgba(77,217,204,.2);padding:2px 4px;border-radius:2px">Scroll</kbd> Zoom</div>
+</div>
+</div>
+
+<div id="tree"></div>
+</div>
+
+<div id="main">
+<canvas id="canvas"></canvas>
+<div class="info-panel" id="info"></div>
+
+<div class="territory-panel" id="territoryPanel">
+<div class="territory-header">📊 TERRITORY DATA</div>
+<div id="territoryContent"></div>
+</div>
+</div>
+
+<script>
+const CAN=document.getElementById('canvas');
+const CTX=CAN.getContext('2d');
+let W,H;
+let DPR=window.devicePixelRatio||1;
+
+const STATE={
+nodes:[],
+nodeMap:{},
+root:null,
+speciesFilter:'all', // 'all' or specific extension like 'png'
+allSpecies:new Set(), // Track all species types
+current:null,
+maxDepth:0,
+path:[], // Full path of nodes from root to current
+cameFrom:null, // Node we just navigated from (highlight it)
+hoveredNode:null, // Node currently hovered
+camera:{
+scale:1,
+tx:0,
+ty:0,
+targetScale:1,
+targetTx:0,
+targetTy:0
+},
+animating:false
+};
+
+const DEPTH_COLORS=[
+'#4dd9cc','#6be8df','#6bbd8f','#e8b849','#d97b8f','#9d7be8',
+'#4dd9cc','#6be8df','#6bbd8f','#e8b849','#d97b8f','#9d7be8'
+];
+
+function noise(x,y,seed=0){
+const n=Math.sin(x*12.9898+y*78.233+seed)*43758.5453;
+return n-Math.floor(n);
+}
+
+async function loadRealData(){
+try{
+console.log('Loading ARKADU data...');
+const r=await fetch('sys/primitive.jsonl');
+const t=await r.text();
+const artifacts=t.trim().split('\n').map(l=>JSON.parse(l));
+console.log(`Loaded ${artifacts.length} artifacts`);
+
+buildHierarchyFromArtifacts(artifacts);
+}catch(e){
+console.error('Error loading data:',e);
+alert('Could not load primitive.jsonl. Using mock data.');
+generateStructure(9);
+}
+}
+
+function buildHierarchyFromArtifacts(artifacts){
+STATE.nodes=[];
+STATE.nodeMap={};
+
+// Build chambers from artifact paths (directories)
+artifacts.forEach(art=>{
+const parts=art.path.split('/');
+// Build directory nodes
+for(let d=0;d<parts.length-1;d++){
+const id=parts.slice(0,d+1).join('/');
+if(!STATE.nodeMap[id]){
+STATE.nodeMap[id]={
+id:id,
+name:parts[d],
+depth:d,
+parent:d>0?parts.slice(0,d).join('/'):null,
+children:[],
+artifacts:[],
+totalFiles:0,
+totalSize:0,
+species:{},
+kingdom:parts[0]||'ROOT',
+created:art.created||'unknown',
+modified:art.modified||'unknown',
+isDirectory:true
+};
+}
+}
+
+// Create node for the ARTIFACT ITSELF as deepest leaf
+const artifactId=art.path;
+const fileName=parts[parts.length-1];
+const parentDirId=parts.slice(0,-1).join('/');
+const ext=(art.ext||'').replace(/^\./,'')||'unknown';
+
+STATE.nodeMap[artifactId]={
+id:artifactId,
+name:fileName,
+depth:parts.length-1,
+parent:parentDirId,
+children:[],
+artifacts:[art],
+fileCount:1,
+totalFiles:1,
+size:art.size||0,
+totalSize:art.size||0,
+totalBytes:art.size||0,
+species:{[ext]:{count:1,bytes:art.size||0,color:getColorForExt(ext)}},
+kingdom:parts[0]||'ROOT',
+created:art.created||'unknown',
+modified:art.modified||'unknown',
+isDirectory:false,
+ext:ext,
+artifact:art
+};
+
+// Add artifact node as child of parent directory
+if(STATE.nodeMap[parentDirId]){
+if(!STATE.nodeMap[parentDirId].children.includes(artifactId)){
+STATE.nodeMap[parentDirId].children.push(artifactId);
+}
+STATE.nodeMap[parentDirId].artifacts.push(art);
+if(!STATE.nodeMap[parentDirId].species[ext]){
+STATE.nodeMap[parentDirId].species[ext]={count:0,color:getColorForExt(ext)};
+}
+STATE.nodeMap[parentDirId].species[ext].count++;
+}
+});
+
+// Build parent-child relationships
+Object.values(STATE.nodeMap).forEach(ch=>{
+if(ch.parent&&STATE.nodeMap[ch.parent]){
+const p=STATE.nodeMap[ch.parent];
+if(!p.children.includes(ch.id)){
+p.children.push(ch.id);
+}
+}
+});
+
+// Aggregate counts recursively
+function aggregate(node){
+node.fileCount=node.artifacts.length;
+node.totalFiles=node.artifacts.length;
+node.size=node.artifacts.reduce((s,a)=>s+(a.size||0),0);
+node.totalBytes=node.size; // Track bytes separately
+node.totalSize=node.size; // Will be recalculated as weighted
+
+node.children.forEach(cid=>{
+const child=STATE.nodeMap[cid];
+if(child){
+aggregate(child);
+node.totalFiles+=child.totalFiles;
+node.totalBytes+=child.totalBytes;
+// Merge species with byte tracking
+Object.entries(child.species).forEach(([ext,data])=>{
+if(!node.species[ext]){
+node.species[ext]={count:0,bytes:0,color:data.color};
+}
+node.species[ext].count+=data.count;
+node.species[ext].bytes+=(data.bytes||0);
+});
+}
+});
+
+// Calculate combined weight: file count + normalized bytes
+// Use MB as the unit: count + (bytes / 1MB)
+// This balances file count with file size
+const MB=1024*1024;
+node.totalSize=node.totalFiles+(node.totalBytes/MB);
+
+// Calculate DENSITY metrics
+// Density = how concentrated files are in this territory
+const maxDepthBelow=Math.max(...(node.children.map(cid=>STATE.nodeMap[cid]?.depth||node.depth).concat([node.depth])));
+const depthSpan=maxDepthBelow-node.depth+1; // How many levels deep
+node.density={
+filesPerLevel:node.totalFiles/depthSpan, // High = concentrated, Low = spread out
+branchingFactor:node.children.length>0?node.totalFiles/node.children.length:node.totalFiles, // Avg files per child
+avgFileSize:node.totalFiles>0?node.totalBytes/node.totalFiles:0, // Bytes per file
+depthSpan:depthSpan
+};
+
+// Find dominant species by combined metric (count * bytes)
+let dominantExt=null;
+let maxWeight=0;
+Object.entries(node.species).forEach(([ext,data])=>{
+const weight=data.count*(data.bytes||1);
+if(weight>maxWeight){
+maxWeight=weight;
+dominantExt=ext;
+}
+});
+
+if(dominantExt){
+node.dominantSpecies=dominantExt;
+node.dominantColor=node.species[dominantExt].color;
+node.dominantPct=((node.species[dominantExt].count/node.totalFiles)*100).toFixed(1);
+}else{
+node.dominantSpecies=null;
+node.dominantColor=null;
+node.dominantPct=0;
+}
+}
+
+STATE.nodes=Object.values(STATE.nodeMap);
+const rootNodes=STATE.nodes.filter(n=>!n.parent);
+
+// Create virtual ROOT if multiple top-level
+if(rootNodes.length>1){
+STATE.root={
+id:'ROOT',
+name:'ROOT',
+depth:0,
+parent:null,
+children:rootNodes.map(n=>n.id),
+artifacts:[],
+fileCount:0,
+totalFiles:0,
+size:0,
+totalSize:0,
+species:{},
+kingdom:'ROOT',
+created:'',
+modified:''
+};
+rootNodes.forEach(n=>{
+n.parent='ROOT';
+n.depth++;
+// Recursively increment depth
+function incrementDepth(node){
+node.children.forEach(cid=>{
+const child=STATE.nodeMap[cid];
+if(child){
+child.depth++;
+incrementDepth(child);
+}
+});
+}
+incrementDepth(n);
+});
+STATE.nodeMap['ROOT']=STATE.root;
+STATE.nodes.push(STATE.root);
+}else{
+STATE.root=rootNodes[0];
+}
+
+aggregate(STATE.root);
+
+// Calculate percentages
+function calcPercentages(node,parentTotal){
+node.percentage=(node.totalSize/parentTotal*100).toFixed(1);
+node.children.forEach(cid=>{
+const child=STATE.nodeMap[cid];
+if(child)calcPercentages(child,node.totalSize);
+});
+}
+calcPercentages(STATE.root,STATE.root.totalSize);
+
+STATE.maxDepth=Math.max(...STATE.nodes.map(n=>n.depth));
+
+console.log(`Built ${STATE.nodes.length} nodes, max depth: ${STATE.maxDepth}`);
+updateStats();
+buildTree();
+populateSpeciesDropdown();
+viewRoot();
+render(); // Force initial render
+}
+
+function getColorForExt(ext){
+const colors={
+jpg:'#d97b8f',jpeg:'#d97b8f',png:'#d97b8f',gif:'#d97b8f',webp:'#d97b8f',
+mp4:'#e8b849',mov:'#e8b849',avi:'#e8b849',webm:'#e8b849',
+mp3:'#9d7be8',wav:'#9d7be8',flac:'#9d7be8',ogg:'#9d7be8',
+json:'#6bbd8f',txt:'#6bbd8f',md:'#6bbd8f',
+py:'#4dd9cc',js:'#4dd9cc',html:'#4dd9cc',css:'#4dd9cc'
+};
+return colors[ext]||'#6b8a96';
+}
+
+function generateStructure(maxDepth){
+console.log(`Generating ${maxDepth} layer MOCK structure...`);
+STATE.nodes=[];
+STATE.nodeMap={};
+STATE.maxDepth=maxDepth;
+
+let idCounter=0;
+function createNode(name,depth,parent=null){
+const id=`node_${idCounter++}`;
+const childCount=depth<maxDepth?Math.floor(2+noise(idCounter,depth,1)*3):0;
+const size=100+noise(idCounter,depth,2)*1000;
+
+// Generate mock data (in real version, load from ARKADU)
+const fileCount=Math.floor(10+noise(idCounter,depth,3)*500);
+const species=generateSpecies(idCounter,depth);
+const kingdom=depth===0?'ROOT':['CAT','DOG','JELLYFISH','HORSE','DUCK','BIRD'][idCounter%6];
+
+const node={
+id,name,depth,parent,
+children:[],
+size,
+totalSize:size,
+percentage:0,
+// Data fields
+fileCount,
+totalFiles:fileCount,
+species,
+kingdom,
+created:new Date(Date.now()-Math.random()*365*24*60*60*1000).toISOString().split('T')[0],
+modified:new Date(Date.now()-Math.random()*30*24*60*60*1000).toISOString().split('T')[0]
+};
+
+STATE.nodeMap[id]=node;
+STATE.nodes.push(node);
+
+// Create children recursively
+for(let i=0;i<childCount;i++){
+const childName=`${name}.${String.fromCharCode(65+i)}`;
+const child=createNode(childName,depth+1,id);
+node.children.push(child.id);
+node.totalSize+=child.totalSize;
+}
+
+return node;
+}
+
+STATE.root=createNode('ROOT',0);
+
+// Calculate percentages
+function generateSpecies(seed,depth){
+const types=['jpg','png','mp4','mp3','json','py','txt','md','html'];
+const colors={'jpg':'#d97b8f','png':'#d97b8f','mp4':'#e8b849','mp3':'#9d7be8',
+'json':'#6bbd8f','py':'#4dd9cc','txt':'#6b8a96','md':'#6b8a96','html':'#4dd9cc'};
+
+const species={};
+types.forEach((type,i)=>{
+const count=Math.floor(noise(seed,i,depth)*200);
+if(count>5){
+species[type]={count,color:colors[type]||'#6b8a96'};
+}
+});
+return species;
+}
+
+function calcPercentages(node,parentTotal){
+node.percentage=(node.totalSize/parentTotal*100).toFixed(1);
+node.children.forEach(cid=>{
+const child=STATE.nodeMap[cid];
+calcPercentages(child,node.totalSize);
+// Aggregate file counts
+node.totalFiles+=child.totalFiles;
+});
+}
+calcPercentages(STATE.root,STATE.root.totalSize);
+
+console.log(`Generated ${STATE.nodes.length} nodes at ${maxDepth} depths`);
+updateStats();
+buildTree();
+populateSpeciesDropdown();
+viewRoot();
+render(); // Force initial render
+}
+
+function buildTree(){
+const tree=document.getElementById('tree');
+let html='';
+
+// Add breadcrumb trail
+if(STATE.path.length>0){
+html+=`<div style="background:rgba(77,217,204,0.1);padding:10px;margin-bottom:10px;border-radius:5px;font-size:10px">`;
+html+=`<div style="color:#6b8a96;margin-bottom:5px;font-size:9px">📍 CURRENT PATH</div>`;
+STATE.path.forEach((node,i)=>{
+const isLast=i===STATE.path.length-1;
+const sep=isLast?'':`<span style="color:#6b8a96"> → </span>`;
+if(isLast){
+html+=`<span style="color:#e8b849;font-weight:bold">${node.name}</span>`;
+}else{
+html+=`<a href="#" onclick="viewNode('${node.id}');return false" style="color:#4dd9cc;text-decoration:none">${node.name}</a>${sep}`;
+}
+});
+html+=`</div>`;
+}
+
+// Build set of nodes in current path for highlighting
+const pathIds=new Set(STATE.path.map(n=>n.id));
+const expandedIds=new Set(STATE.path.map(n=>n.id));
+
+function renderNode(node,isInPath=false){
+const hasChildren=node.children.length>0;
+const indent=node.depth*12;
+const cls=['tree-item',`depth-${node.depth}`];
+if(hasChildren)cls.push('has-children');
+if(node===STATE.current)cls.push('active');
+
+const inPath=pathIds.has(node.id);
+const style=inPath?'border-left:2px solid #e8b849;padding-left:6px':'';
+
+html+=`<div class="${cls.join(' ')}" style="margin-left:${indent}px;${style}" 
+onclick="viewNode('${node.id}');event.stopPropagation()">`;
+
+// Show species icon if available
+let icon='';
+if(node.dominantSpecies){
+icon=`<span style="color:${node.dominantColor};font-size:8px">.${node.dominantSpecies}</span> `;
+}
+
+html+=`${icon}${node.name} <span style="opacity:0.6;font-size:9px">(${node.totalFiles}f, ${node.percentage}%)</span>`;
+html+=`</div>`;
+}
+
+function traverse(nodeId,depth=0){
+const node=STATE.nodeMap[nodeId];
+if(!node)return;
+
+const inPath=pathIds.has(node.id);
+renderNode(node,inPath);
+
+// Expand if: in current path, or current node's children, or shallow depth
+const shouldExpand=inPath||node===STATE.current||depth<2;
+if(shouldExpand&&node.children.length>0){
+node.children.forEach(cid=>traverse(cid,depth+1));
+}
+}
+
+traverse(STATE.root.id);
+tree.innerHTML=html;
+
+// Scroll to current node
+const activeEl=tree.querySelector('.tree-item.active');
+if(activeEl){
+activeEl.scrollIntoView({behavior:'smooth',block:'center'});
+}
+}
+
+function viewRoot(){
+STATE.cameFrom=STATE.current; // Remember where we came from
+STATE.current=STATE.root;
+STATE.path=[STATE.root];
+const boundary={x:W/2,y:H/2,radius:Math.min(W,H)*0.42};
+layoutChildrenInCircle(STATE.root,boundary);
+
+// Reset camera to root view
+STATE.camera.targetScale=1;
+STATE.camera.targetTx=0;
+STATE.camera.targetTy=0;
+animateCameraToTarget();
+
+updateStats();
+buildTree();
+render(); // Force immediate render
+}
+
+function viewNode(id){
+const node=STATE.nodeMap[id];
+if(!node)return;
+
+STATE.cameFrom=STATE.current; // Remember where we came from
+STATE.current=node;
+
+// Build full path from root to this node
+STATE.path=[];
+let n=node;
+while(n){
+STATE.path.unshift(n);
+n=n.parent?STATE.nodeMap[n.parent]:null;
+}
+
+// First, layout this node's children if it has any
+if(node.children.length>0){
+if(node.cell){
+// Node has irregular cell - use it as boundary for children
+layoutChildrenInPolygon(node,node.cell);
+}else{
+// Root node - use circle
+const boundary={x:W/2,y:H/2,radius:Math.min(W,H)*0.42};
+layoutChildrenInCircle(node,boundary);
+}
+}
+
+// ALWAYS zoom camera to frame the current node
+if(node.cell){
+// Non-root: Zoom to this territory's cell
+zoomToCell(node.cell);
+}else if(node===STATE.root){
+// Root: Reset to full view
+STATE.camera.targetScale=1;
+STATE.camera.targetTx=0;
+STATE.camera.targetTy=0;
+animateCameraToTarget();
+}else if(node.boundary){
+// Has boundary (circle) - zoom to it
+zoomToBoundary(node.boundary);
+}
+
+updateStats();
+buildTree();
+render(); // Force immediate render
+}
+
+// SEDIMENTARY VORONOI FUNCTIONS
+function sedimentaryVoronoi(children,totalSize,boundary,depth){
+// Create sediment layers from bottom to top
+const layers=createSedimentLayers(children,totalSize,boundary);
+
+// For each layer, use Voronoi + iterative refinement
+layers.forEach((layer,layerIdx)=>{
+const seeds=initializeLayerSeeds(layer.children,layer.bounds,depth);
+
+// Iteratively refine until areas match targets
+const iterations=20;
+for(let iter=0;iter<iterations;iter++){
+// Generate Voronoi cells
+seeds.forEach(seed=>{
+const cell=computeVoronoiCellInCircle(seed,seeds,boundary);
+seed.node.cell=cell;
+seed.actualArea=calculateCellArea(cell);
+});
+
+// Calculate target areas
+const layerArea=layer.bounds.height*boundary.radius*2; // Approx
+seeds.forEach(seed=>{
+seed.targetArea=(seed.node.totalSize/layer.totalSize)*layerArea;
+});
+
+// Adjust positions
+seeds.forEach(seed=>{
+const error=(seed.actualArea-seed.targetArea)/seed.targetArea;
+if(Math.abs(error)>0.05){
+const moveStrength=0.1*(1-iter/iterations);
+if(error>0){ // Too big, compress horizontally
+seed.x+=(seed.x-boundary.x)*moveStrength*error*-1;
+}else{ // Too small, expand
+seed.x+=(seed.x-boundary.x)*moveStrength*error*-1;
+}
+// Keep in layer bounds
+seed.y=Math.max(layer.bounds.yMin,Math.min(layer.bounds.yMax,seed.y));
+}
+});
+}
+
+// Final assignment
+seeds.forEach(seed=>{
+const cell=computeVoronoiCellInCircle(seed,seeds,boundary);
+seed.node.cell=cell;
+seed.node.center={x:seed.x,y:seed.y};
+seed.node.strataLine=layer.yTop; // Store strata boundary
+});
+});
+}
+
+function createSedimentLayers(children,totalSize,boundary){
+const layers=[];
+let currentY=boundary.y+boundary.radius; // Start at bottom
+
+children.forEach((child,i)=>{
+const ratio=child.totalSize/totalSize;
+const layerHeight=boundary.radius*2*ratio;
+
+const yTop=currentY-layerHeight;
+layers.push({
+children:[child],
+totalSize:child.totalSize,
+bounds:{
+yMin:yTop,
+yMax:currentY,
+height:layerHeight,
+yTop:yTop // Strata line position
+}
+});
+
+currentY=yTop;
+});
+
+return layers;
+}
+
+function initializeLayerSeeds(children,bounds,depth){
+const seeds=[];
+const yCenter=(bounds.yMin+bounds.yMax)/2;
+
+children.forEach((child,i)=>{
+// Distribute horizontally within layer
+const xOffset=noise(i,depth,1)*30;
+seeds.push({
+x:STATE.camera.x+xOffset,
+y:yCenter,
+node:child
+});
+});
+
+return seeds;
+}
+
+function calculateCellArea(cell){
+if(!cell||!cell.angles||!cell.radii)return 0;
+let area=0;
+for(let i=0;i<cell.angles.length;i++){
+const j=(i+1)%cell.angles.length;
+const r1=cell.radii[i];
+const r2=cell.radii[j];
+const da=cell.angles[j]-cell.angles[i];
+area+=0.5*r1*r2*Math.abs(Math.sin(da));
+}
+return area;
+}
+
+function cellsOverlap(cell1,cell2){
+// Check if two polar cells overlap by testing vertices
+if(!cell1||!cell2)return false;
+if(!cell1.angles||!cell2.angles)return false;
+
+// Sample points from cell1 and check if any are inside cell2
+for(let i=0;i<cell1.angles.length;i++){
+const px=cell1.cx+Math.cos(cell1.angles[i])*cell1.radii[i];
+const py=cell1.cy+Math.sin(cell1.angles[i])*cell1.radii[i];
+
+// Check if point is inside cell2
+let inside=true;
+for(let j=0;j<cell2.angles.length;j++){
+const a2=cell2.angles[j];
+const r2=cell2.radii[j];
+const dx=px-cell2.cx;
+const dy=py-cell2.cy;
+const angle=Math.atan2(dy,dx);
+const dist=Math.sqrt(dx*dx+dy*dy);
+// Simplified check - if point is very close to cell2 center, potential overlap
+if(dist<r2*0.3)return true;
+}
+}
+return false;
+}
+
+function layoutChildrenInCircle(parent,boundary){
+if(parent.children.length===0)return;
+
+let children=parent.children.map(id=>STATE.nodeMap[id]);
+const totalSize=children.reduce((s,ch)=>s+ch.totalSize,0);
+const parentArea=Math.PI*boundary.radius*boundary.radius;
+
+const minAreaPerChild=50;
+if(parentArea/children.length<minAreaPerChild){
+const maxChildren=Math.max(1,Math.floor(parentArea/minAreaPerChild));
+console.warn(`⚠️ ${parent.name}: fitting ${maxChildren}/${children.length} children`);
+children=[...children].sort((a,b)=>b.totalSize-a.totalSize).slice(0,maxChildren);
+}
+
+parent.boundary=boundary;
+
+// Sort by size: LARGEST = HEAVIEST = SINKS TO BOTTOM (sediment model)
+const sortedChildren=[...children].sort((a,b)=>b.totalSize-a.totalSize);
+
+if(parent.depth===0){
+console.log('🌋 SEDIMENTARY STRATA:');
+sortedChildren.forEach(ch=>{
+console.log(`  ${ch.name}: ${ch.totalFiles} files, ${(ch.totalBytes/1024/1024).toFixed(1)}MB, totalSize=${ch.totalSize.toFixed(1)}`);
+});
+}
+
+// SEDIMENTARY VORONOI: falling sand + recursive refinement
+sedimentaryVoronoi(sortedChildren,totalSize,boundary,parent.depth);
+}
+
+function layoutChildrenInPolygon(parent,parentPoly){
+if(parent.children.length===0)return;
+
+let children=parent.children.map(id=>STATE.nodeMap[id]);
+
+// Calculate parent area
+let parentArea=0;
+for(let i=0;i<parentPoly.angles.length;i++){
+const r1=parentPoly.radii[i];
+const r2=parentPoly.radii[(i+1)%parentPoly.angles.length];
+const a1=parentPoly.angles[i];
+const a2=parentPoly.angles[(i+1)%parentPoly.angles.length];
+parentArea+=0.5*r1*r2*Math.sin(a2-a1);
+}
+parentArea=Math.abs(parentArea);
+
+// STRICT overlap prevention - same as circle layout
+const minAreaPerChild=50;
+const areaPerChild=parentArea/children.length;
+if(areaPerChild<minAreaPerChild){
+const maxChildren=Math.max(1,Math.floor(parentArea/minAreaPerChild));
+console.warn(`⚠️ OVERLAP PREVENTION: ${parent.name} can only fit ${maxChildren}/${children.length} children`);
+children=[...children].sort((a,b)=>b.totalSize-a.totalSize).slice(0,maxChildren);
+}
+
+const totalSize=children.reduce((s,ch)=>s+ch.totalSize,0);
+
+// Get bounding box AND calculate polygon centroid
+let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+let sumX=0,sumY=0;
+for(let i=0;i<parentPoly.angles.length;i++){
+const px=parentPoly.cx+Math.cos(parentPoly.angles[i])*parentPoly.radii[i];
+const py=parentPoly.cy+Math.sin(parentPoly.angles[i])*parentPoly.radii[i];
+minX=Math.min(minX,px);
+maxX=Math.max(maxX,px);
+minY=Math.min(minY,py);
+maxY=Math.max(maxY,py);
+sumX+=px;
+sumY+=py;
+}
+
+// Use polygon centroid (average of vertices) instead of bounding box center
+const cx=sumX/parentPoly.angles.length;
+const cy=sumY/parentPoly.angles.length;
+const r=Math.max(maxX-minX,maxY-minY)/2.5; // Reduced radius for irregular shapes
+
+// Convert parent cell to polygon array first (needed for validation)
+const parentPolyPoints=[];
+for(let i=0;i<parentPoly.angles.length;i++){
+const px=parentPoly.cx+Math.cos(parentPoly.angles[i])*parentPoly.radii[i];
+const py=parentPoly.cy+Math.sin(parentPoly.angles[i])*parentPoly.radii[i];
+parentPolyPoints.push({x:px,y:py});
+}
+
+// Sort children by size for better distribution
+const sortedChildren=[...children].sort((a,b)=>b.totalSize-a.totalSize);
+
+// Place seeds within parent bounds - weighted by relative size
+const seeds=[];
+let angleOffset=0;
+
+sortedChildren.forEach((ch,i)=>{
+// Weight: larger territories get more space
+const weight=ch.totalSize/totalSize;
+
+// Depth-aware weighting: shallow=dramatic, deep=balanced
+const depthFactor=Math.max(0.7,1.0-parent.depth*0.1); // 1.0→0.9→0.8→0.7
+const weightExponent=0.4+depthFactor*0.3; // 0.7 at root, 0.47 at depth 5
+const normalizedWeight=Math.pow(weight,weightExponent);
+
+// Angle span proportional to size
+const angleSpan=(Math.PI*2)*normalizedWeight;
+const angle=angleOffset+angleSpan*0.5+noise(i,parent.depth,1)*angleSpan*0.15;
+
+// Distance range also scales with depth
+const distRange=depthFactor*0.5; // Smaller range at deeper levels
+const minDist=r*0.15;
+const maxDist=r*(0.15+distRange);
+const dist=minDist+(maxDist-minDist)*normalizedWeight+noise(i,parent.depth,2)*r*0.05;
+
+let sx=cx+Math.cos(angle)*dist;
+let sy=cy+Math.sin(angle)*dist;
+
+// Ensure seed is inside parent polygon - if not, move toward centroid
+let attempts=0;
+while(!pointInPolygon(sx,sy,parentPolyPoints)&&attempts<10){
+sx=sx*0.8+cx*0.2; // Move 20% toward centroid
+sy=sy*0.8+cy*0.2;
+attempts++;
+}
+
+// If still outside after attempts, place at centroid
+if(!pointInPolygon(sx,sy,parentPolyPoints)){
+sx=cx;
+sy=cy;
+}
+
+// CRITICAL: Enforce MUCH larger spacing to prevent ANY overlap  
+const minSpacing=Math.max(r*0.30,20); // 30% of parent size or 20px minimum - TRIPLED!
+let tooClose=false;
+let spacingAttempts=0;
+
+do{
+tooClose=false;
+for(const existingSeed of seeds){
+const dist=Math.sqrt((sx-existingSeed.x)**2+(sy-existingSeed.y)**2);
+if(dist<minSpacing){
+tooClose=true;
+// Move seed slightly
+const angle=Math.atan2(sy-cy,sx-cx)+Math.random()*0.5-0.25;
+const newDist=Math.min(r*0.6,dist+minSpacing);
+sx=cx+Math.cos(angle)*newDist;
+sy=cy+Math.sin(angle)*newDist;
+break;
+}
+}
+spacingAttempts++;
+}while(tooClose&&spacingAttempts<5);
+
+seeds.push({
+x:sx,
+y:sy,
+node:ch,
+weight:normalizedWeight,
+index:i
+});
+
+angleOffset+=angleSpan;
+});
+
+// Re-map seeds back to original child order for consistency
+const seedMap=new Map(seeds.map(s=>[s.node.id,s]));
+const orderedSeeds=children.map(ch=>seedMap.get(ch.id));
+
+// Generate cells CONSTRAINED to parent polygon
+children.forEach((ch,i)=>{
+const seed=orderedSeeds[i];
+const cell=computeVoronoiCellInPolygon(seed,orderedSeeds,parentPolyPoints);
+ch.cell=cell;
+ch.center={x:seed.x,y:seed.y};
+});
+
+// VALIDATION: Detect any overlaps
+for(let i=0;i<children.length;i++){
+for(let j=i+1;j<children.length;j++){
+if(cellsOverlap(children[i].cell,children[j].cell)){
+console.error(`❌ OVERLAP DETECTED: ${children[i].name} overlaps ${children[j].name} in ${parent.name}`);
+}
+}
+}
+}
+
+function computeVoronoiCellInCircle(seed,allSeeds,boundary){
+const samples=48;
+const points=[];
+
+for(let i=0;i<samples;i++){
+const angle=(i/samples)*Math.PI*2;
+let dist=0;
+
+for(let step=1;step<120;step++){
+const testDist=step*4;
+const px=seed.x+Math.cos(angle)*testDist;
+const py=seed.y+Math.sin(angle)*testDist;
+
+// Check circle boundary
+const d=Math.sqrt((px-boundary.x)**2+(py-boundary.y)**2);
+if(d>boundary.radius*0.98){
+dist=testDist*0.9;
+break;
+}
+
+// Check Voronoi boundary
+let closestSeed=seed;
+let minDist=Infinity;
+allSeeds.forEach(s=>{
+const d=Math.sqrt((px-s.x)**2+(py-s.y)**2);
+if(d<minDist){
+minDist=d;
+closestSeed=s;
+}
+});
+
+if(closestSeed!==seed){
+dist=testDist*0.9;
+break;
+}
+
+if(step===119)dist=testDist;
+}
+
+points.push({angle,dist});
+}
+
+// Smooth
+const smoothed=[];
+for(let i=0;i<points.length;i++){
+const prev=points[(i-1+points.length)%points.length];
+const curr=points[i];
+const next=points[(i+1)%points.length];
+const smoothDist=(prev.dist+curr.dist*2+next.dist)/4;
+smoothed.push({angle:curr.angle,dist:smoothDist});
+}
+
+return{
+cx:seed.x,
+cy:seed.y,
+angles:smoothed.map(p=>p.angle),
+radii:smoothed.map(p=>p.dist)
+};
+}
+
+function computeVoronoiCellInPolygon(seed,allSeeds,parentPoly){
+const samples=48;
+const points=[];
+
+// Calculate parent polygon bounding box to determine appropriate step size
+let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+parentPoly.forEach(p=>{minX=Math.min(minX,p.x);maxX=Math.max(maxX,p.x);minY=Math.min(minY,p.y);maxY=Math.max(maxY,p.y);});
+const parentSize=Math.max(maxX-minX,maxY-minY);
+
+// Adaptive step size: smaller for smaller parents
+const stepSize=Math.max(0.5,parentSize/100);
+const maxSteps=Math.ceil(parentSize/stepSize);
+
+for(let i=0;i<samples;i++){
+const angle=(i/samples)*Math.PI*2;
+let dist=0;
+
+for(let step=1;step<maxSteps;step++){
+const testDist=step*stepSize;
+const px=seed.x+Math.cos(angle)*testDist;
+const py=seed.y+Math.sin(angle)*testDist;
+
+// Check if inside parent polygon
+if(!pointInPolygon(px,py,parentPoly)){
+dist=testDist*0.9;
+break;
+}
+
+// Check Voronoi boundary
+let closestSeed=seed;
+let minDist=Infinity;
+allSeeds.forEach(s=>{
+const d=Math.sqrt((px-s.x)**2+(py-s.y)**2);
+if(d<minDist){
+minDist=d;
+closestSeed=s;
+}
+});
+
+if(closestSeed!==seed){
+dist=testDist*0.9;
+break;
+}
+
+if(step===maxSteps-1)dist=testDist;
+}
+
+points.push({angle,dist});
+}
+
+// Smooth
+const smoothed=[];
+for(let i=0;i<points.length;i++){
+const prev=points[(i-1+points.length)%points.length];
+const curr=points[i];
+const next=points[(i+1)%points.length];
+const smoothDist=(prev.dist+curr.dist*2+next.dist)/4;
+smoothed.push({angle:curr.angle,dist:smoothDist});
+}
+
+return{
+cx:seed.x,
+cy:seed.y,
+angles:smoothed.map(p=>p.angle),
+radii:smoothed.map(p=>p.dist)
+};
+}
+
+function pointInPolygon(x,y,poly){
+let inside=false;
+
+// Handle both formats: cell {cx,cy,angles,radii} or points array [{x,y}]
+if(Array.isArray(poly)){
+// Points array format
+for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+const xi=poly[i].x;
+const yi=poly[i].y;
+const xj=poly[j].x;
+const yj=poly[j].y;
+if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi)){
+inside=!inside;
+}
+}
+}else{
+// Cell format
+const {cx,cy,angles,radii}=poly;
+for(let i=0,j=angles.length-1;i<angles.length;j=i++){
+const xi=cx+Math.cos(angles[i])*radii[i];
+const yi=cy+Math.sin(angles[i])*radii[i];
+const xj=cx+Math.cos(angles[j])*radii[j];
+const yj=cy+Math.sin(angles[j])*radii[j];
+
+if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi)){
+inside=!inside;
+}
+}
+}
+
+return inside;
+}
+
+function render(){
+CTX.fillStyle='#0a0e1a';
+CTX.fillRect(0,0,W*DPR,H*DPR);
+
+CTX.save();
+CTX.scale(DPR,DPR);
+
+// Apply camera transform
+CTX.translate(STATE.camera.tx,STATE.camera.ty);
+CTX.scale(STATE.camera.scale,STATE.camera.scale);
+
+// Calculate inverse scale for consistent screen-space sizing
+const invScale=1/STATE.camera.scale;
+
+if(!STATE.current)return;
+
+// Draw ENTIRE PATH of parent shapes (visual breadcrumb trail) - but only at shallow depths
+if(STATE.path.length>1&&STATE.current.depth<=3){
+for(let i=0;i<STATE.path.length-1;i++){
+const ancestor=STATE.path[i];
+const depth=i;
+const opacity=Math.max(0.1,0.5-depth*0.08);
+
+if(ancestor.cell){
+const color=DEPTH_COLORS[ancestor.depth%DEPTH_COLORS.length];
+const alpha=opacity*0.5;
+drawCell(ancestor.cell,color,alpha);
+
+// Faint border
+CTX.strokeStyle=hexToRgba(color,opacity);
+CTX.lineWidth=0.3*invScale;
+CTX.setLineDash([2*invScale,2*invScale]);
+drawCellBorder(ancestor.cell);
+CTX.setLineDash([]);
+}
+}
+}
+
+// Draw current parent boundary - only at shallow depths
+if(STATE.current.depth<=2){
+if(STATE.current.cell){
+const pc=STATE.current.cell;
+CTX.strokeStyle='rgba(77,217,204,0.2)';
+CTX.lineWidth=0.5*invScale;
+CTX.setLineDash([4*invScale,2*invScale]);
+CTX.beginPath();
+for(let i=0;i<pc.angles.length;i++){
+const px=pc.cx+Math.cos(pc.angles[i])*pc.radii[i];
+const py=pc.cy+Math.sin(pc.angles[i])*pc.radii[i];
+if(i===0)CTX.moveTo(px,py);
+else CTX.lineTo(px,py);
+}
+CTX.closePath();
+CTX.stroke();
+CTX.setLineDash([]);
+}else if(STATE.current.boundary){
+// Root - draw circle
+CTX.strokeStyle='rgba(77,217,204,0.2)';
+CTX.lineWidth=0.5*invScale;
+CTX.setLineDash([4*invScale,2*invScale]);
+CTX.beginPath();
+const r=Math.min(W,H)*0.42;
+CTX.arc(W/2,H/2,r,0,Math.PI*2);
+CTX.stroke();
+CTX.setLineDash([]);
+}
+}
+
+// Draw children cells
+const children=STATE.current.children.map(id=>STATE.nodeMap[id]);
+
+// Sort by size to find top 3 biggest
+const childrenBySize=[...children].sort((a,b)=>b.totalSize-a.totalSize);
+const top3Biggest=new Set(childrenBySize.slice(0,3));
+
+children.forEach((ch,idx)=>{
+if(!ch.cell)return;
+
+// Filter by species
+if(!nodeMatchesFilter(ch)){
+// Render filtered-out territories as faded/dimmed
+const fadedColor='rgba(77,217,204,0.03)';
+CTX.fillStyle=fadedColor;
+CTX.beginPath();
+for(let i=0;i<ch.cell.angles.length;i++){
+const px=ch.cell.cx+Math.cos(ch.cell.angles[i])*ch.cell.radii[i];
+const py=ch.cell.cy+Math.sin(ch.cell.angles[i])*ch.cell.radii[i];
+if(i===0)CTX.moveTo(px,py);
+else CTX.lineTo(px,py);
+}
+CTX.closePath();
+CTX.fill();
+return; // Skip full rendering
+}
+
+// Base depth color
+let color=DEPTH_COLORS[ch.depth%DEPTH_COLORS.length];
+
+// Blend with dominant species color if available
+if(ch.dominantColor&&ch.dominantPct>0){
+const tintStrength=Math.min(0.6,ch.dominantPct/100*0.8); // Max 60% tint
+color=blendColors(color,ch.dominantColor,tintStrength);
+}
+
+// DENSITY ENCODING: Adjust brightness based on file concentration
+if(ch.density){
+// Normalize density (log scale for better distribution)
+const globalAvgDensity=100; // Rough baseline
+const densityRatio=Math.log(ch.density.filesPerLevel+1)/Math.log(globalAvgDensity+1);
+const brightnessFactor=Math.min(1.4,Math.max(0.6,0.8+densityRatio*0.4)); // 0.6 to 1.4
+
+// Adjust color brightness
+color=adjustBrightness(color,brightnessFactor);
+}
+
+const isCameFrom=ch===STATE.cameFrom;
+const isHovered=ch===STATE.hoveredNode;
+const alpha=isCameFrom?0.4:0.25;
+
+// Fill
+drawCell(ch.cell,color,alpha);
+
+// Border - multiply by invScale to keep constant screen size
+if(isCameFrom){
+CTX.shadowColor=color;
+CTX.shadowBlur=8*invScale;
+CTX.strokeStyle=color;
+CTX.lineWidth=1.5*invScale;
+drawCellBorder(ch.cell);
+CTX.shadowBlur=0;
+}else if(isHovered){
+CTX.shadowColor=color;
+CTX.shadowBlur=6*invScale;
+CTX.strokeStyle=color;
+CTX.lineWidth=1*invScale;
+drawCellBorder(ch.cell);
+CTX.shadowBlur=0;
+}else{
+CTX.strokeStyle=color;
+CTX.lineWidth=0.5*invScale;
+drawCellBorder(ch.cell);
+}
+
+// Label strategy:
+// - Crowded level (>20 children): hover only
+// - Shallow depths (0-2): show all
+// - Medium depth: show top 3 biggest
+// - Always show cameFrom breadcrumb
+const minRadius=Math.max(...ch.cell.radii);
+const isCrowded=children.length>20;
+const isShallowDepth=STATE.current.depth<=2;
+const isTop3=top3Biggest.has(ch);
+const isLargeEnough=minRadius*STATE.camera.scale>15;
+
+let showLabel=false;
+if(isLargeEnough){
+if(isCrowded){
+// Crowded: only hover or breadcrumb
+showLabel=isCameFrom||isHovered;
+}else if(isShallowDepth){
+// Shallow: show all
+showLabel=true;
+}else{
+// Medium: top 3 + hover + breadcrumb
+showLabel=isTop3||isCameFrom||isHovered;
+}
+}
+
+if(showLabel){
+CTX.fillStyle=color;
+
+// Font size - multiply by invScale to stay constant on screen
+const baseFontSize=isCameFrom?11:10;
+CTX.font=`bold ${baseFontSize*invScale}px monospace`;
+CTX.textAlign='center';
+CTX.textBaseline='middle';
+
+if(isCameFrom||isHovered){
+CTX.shadowColor=color;
+CTX.shadowBlur=6*invScale;
+}
+CTX.fillText(ch.name,ch.center.x,ch.center.y-8*invScale);
+CTX.shadowBlur=0;
+
+if(ch.percentage){
+CTX.font=`${8*invScale}px monospace`;
+CTX.fillStyle='rgba(107,138,150,0.8)';
+CTX.fillText(`${ch.percentage}%`,ch.center.x,ch.center.y+4*invScale);
+}
+
+if(ch.children.length>0){
+CTX.fillStyle=color;
+CTX.font=`${8*invScale}px monospace`;
+CTX.fillText(`${ch.children.length} →`,ch.center.x,ch.center.y+14*invScale);
+}
+
+if(isCameFrom){
+// Add "you were here" indicator
+CTX.fillStyle=color;
+CTX.font=`${8*invScale}px monospace`;
+CTX.fillText('⬆ FROM HERE',ch.center.x,ch.center.y+24*invScale);
+}
+}
+});
+
+CTX.restore();
+
+// Update info panel
+updateInfoPanel();
+}
+
+function drawCell(cell,color,alpha){
+CTX.fillStyle=hexToRgba(color,alpha);
+CTX.beginPath();
+for(let i=0;i<cell.angles.length;i++){
+const px=cell.cx+Math.cos(cell.angles[i])*cell.radii[i];
+const py=cell.cy+Math.sin(cell.angles[i])*cell.radii[i];
+if(i===0)CTX.moveTo(px,py);
+else CTX.lineTo(px,py);
+}
+CTX.closePath();
+CTX.fill();
+}
+
+function drawCellBorder(cell){
+CTX.beginPath();
+for(let i=0;i<cell.angles.length;i++){
+const px=cell.cx+Math.cos(cell.angles[i])*cell.radii[i];
+const py=cell.cy+Math.sin(cell.angles[i])*cell.radii[i];
+if(i===0)CTX.moveTo(px,py);
+else CTX.lineTo(px,py);
+}
+CTX.closePath();
+CTX.stroke();
+}
+
+function hexToRgba(hex,alpha){
+if(!hex)return `rgba(0,0,0,${alpha})`;
+const r=parseInt(hex.slice(1,3),16);
+const g=parseInt(hex.slice(3,5),16);
+const b=parseInt(hex.slice(5,7),16);
+return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function blendColors(baseHex,tintHex,tintStrength){
+// Blend base depth color with dominant species color
+const r1=parseInt(baseHex.slice(1,3),16);
+const g1=parseInt(baseHex.slice(3,5),16);
+const b1=parseInt(baseHex.slice(5,7),16);
+
+const r2=parseInt(tintHex.slice(1,3),16);
+const g2=parseInt(tintHex.slice(3,5),16);
+const b2=parseInt(tintHex.slice(5,7),16);
+
+const r=Math.round(r1*(1-tintStrength)+r2*tintStrength);
+const g=Math.round(g1*(1-tintStrength)+g2*tintStrength);
+const b=Math.round(b1*(1-tintStrength)+b2*tintStrength);
+
+return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;
+}
+
+function adjustBrightness(hexColor,factor){
+// Adjust color brightness: factor < 1 = darker, factor > 1 = brighter
+const r=parseInt(hexColor.slice(1,3),16);
+const g=parseInt(hexColor.slice(3,5),16);
+const b=parseInt(hexColor.slice(5,7),16);
+
+// Convert to HSL, adjust lightness, convert back
+// Simple approximation: multiply RGB by factor and clamp
+const nr=Math.min(255,Math.round(r*factor));
+const ng=Math.min(255,Math.round(g*factor));
+const nb=Math.min(255,Math.round(b*factor));
+
+return `#${nr.toString(16).padStart(2,'0')}${ng.toString(16).padStart(2,'0')}${nb.toString(16).padStart(2,'0')}`;
+}
+
+function updateStats(){
+document.getElementById('maxDepth').textContent=STATE.maxDepth;
+document.getElementById('totalNodes').textContent=STATE.nodes.length;
+document.getElementById('currentView').textContent=STATE.current?STATE.current.name:'ROOT';
+document.getElementById('currentDepth').textContent=STATE.current?STATE.current.depth:0;
+document.getElementById('childCount').textContent=STATE.current?STATE.current.children.length:0;
+}
+
+function updateInfoPanel(){
+if(!STATE.current)return;
+
+const node=STATE.current;
+let html=`<strong style="color:#4dd9cc;font-size:14px">${node.name}</strong><br><br>`;
+
+// Path breadcrumbs
+if(STATE.path.length>1){
+html+=`<strong>Path:</strong> `;
+STATE.path.forEach((n,i)=>{
+if(i>0)html+=` › `;
+if(n===node){
+html+=`<span style="color:#4dd9cc;font-weight:bold">${n.name}</span>`;
+}else{
+html+=`<span style="color:#6b8a96;cursor:pointer" onclick="viewNode('${n.id}')">${n.name}</span>`;
+}
+});
+html+=`<br><br>`;
+}
+
+html+=`Depth: ${node.depth}/${STATE.maxDepth}<br>`;
+html+=`<strong>Total Size:</strong> ${node.totalSize.toFixed(0)} units<br>`;
+html+=`<span style="font-size:9px;color:#6b8a96">(${node.totalFiles.toLocaleString()} files + ${(node.totalBytes/(1024*1024)).toFixed(1)} MB)</span><br>`;
+html+=`Percentage: ${node.percentage}%<br>`;
+html+=`Children: ${node.children.length}<br>`;
+
+if(node.children.length>0){
+html+=`<br><strong>Breakdown:</strong><br>`;
+node.children.slice(0,8).forEach(cid=>{
+const child=STATE.nodeMap[cid];
+html+=`<span style="cursor:pointer;color:#6bbd8f" onclick="viewNode('${child.id}')">${child.name}</span>: ${child.percentage}%<br>`;
+});
+if(node.children.length>8){
+html+=`... +${node.children.length-8} more<br>`;
+}
+}
+
+// Add scale verification link
+html+=`<br><div style="border-top:1px solid rgba(77,217,204,0.2);padding-top:10px;margin-top:10px">`;
+html+=`<div style="font-size:9px;color:#6b8a96">`;
+html+=`⚖️ <strong style="color:#e8b849">Scale Verified</strong><br>`;
+html+=`Measurements validated against <a href="sys/scale-verification.json" target="_blank" style="color:#4dd9cc">scale-verification.json</a><br>`;
+html+=`See <a href="SCALE-VERIFICATION.md" target="_blank" style="color:#4dd9cc">documentation</a> for details`;
+html+=`</div></div>`;
+
+document.getElementById('info').innerHTML=html;
+updateTerritoryPanel();
+}
+
+function updateTerritoryPanel(){
+if(!STATE.current)return;
+
+const node=STATE.current;
+let html='';
+
+// Check if this is an individual file
+if(node.isDirectory===false&&node.artifact){
+const art=node.artifact;
+
+// File-specific header
+html+=`<div class="data-section">`;
+html+=`<div class="data-label">Artifact File</div>`;
+html+=`<div class="data-value" style="word-break:break-all;font-size:11px">${node.name}</div>`;
+html+=`</div>`;
+
+// File details
+html+=`<div class="data-section">`;
+html+=`<div class="data-label">Type</div>`;
+html+=`<div class="data-value" style="color:${getColorForExt(node.ext)}">.${node.ext}</div>`;
+html+=`<div style="margin-top:8px">`;
+html+=`<div class="data-label">Size</div>`;
+html+=`<div class="data-value">${formatSize(node.size)}</div>`;
+html+=`</div>`;
+html+=`</div>`;
+
+// Full path
+html+=`<div class="data-section">`;
+html+=`<div class="data-label">Full Path</div>`;
+html+=`<div style="font-size:9px;color:#6b8a96;word-break:break-all;margin-top:4px">${art.path}</div>`;
+html+=`</div>`;
+
+// Metadata if available
+if(art.width||art.height||art.duration){
+html+=`<div class="data-section">`;
+html+=`<div class="data-label">Media Info</div>`;
+if(art.width&&art.height){
+html+=`<div style="color:#4dd9cc;font-size:11px;margin-top:4px">${art.width}×${art.height} px</div>`;
+}
+if(art.duration){
+html+=`<div style="color:#4dd9cc;font-size:11px;margin-top:4px">Duration: ${art.duration}s</div>`;
+}
+html+=`</div>`;
+}
+
+// Provenance if available
+if(art.source||art.generator){
+html+=`<div class="data-section">`;
+html+=`<div class="data-label">Provenance</div>`;
+if(art.source){
+html+=`<div style="font-size:9px;color:#6b8a96;margin-top:4px">Source: ${art.source}</div>`;
+}
+if(art.generator){
+html+=`<div style="font-size:9px;color:#6b8a96;margin-top:4px">Generator: ${art.generator}</div>`;
+}
+html+=`</div>`;
+}
+
+}else{
+// COMPACT DASHBOARD VIEW
+
+// Taxonomy Hierarchy Path (Kingdom → Phylum → Class → Order)
+html+=`<div style="background:rgba(77,217,204,0.05);padding:8px;margin-bottom:10px;border-radius:4px">`;
+html+=`<div style="font-size:8px;color:#6b8a96;text-transform:uppercase;margin-bottom:4px">TAXONOMY</div>`;
+html+=`<div style="font-size:10px;color:#4dd9cc;line-height:1.6">`;
+
+// Build hierarchy from path
+if(STATE.path.length>0){
+const taxonomyLevels=['Kingdom','Phylum','Class','Order','Family','Genus','Species'];
+STATE.path.forEach((n,i)=>{
+if(i<taxonomyLevels.length){
+const isLast=n===node;
+const style=isLast?'color:#e8b849;font-weight:bold':'color:#6b8a96';
+html+=`<div style="${style};font-size:${isLast?'11px':'9px'}">`;
+html+=`<span style="opacity:0.6">${taxonomyLevels[i]}:</span> ${n.name}`;
+html+=`</div>`;
+}
+});
+}else{
+html+=`<div style="color:#e8b849;font-weight:bold">${node.name}</div>`;
+}
+html+=`</div></div>`;
+
+// COMPACT METRICS GRID
+const massInMB=(node.totalBytes/(1024*1024)).toFixed(1);
+
+html+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">`;
+
+// Volume
+html+=`<div style="background:rgba(77,217,204,0.08);padding:8px;border-radius:4px">`;
+html+=`<div style="font-size:8px;color:#6b8a96">VOLUME</div>`;
+html+=`<div style="font-size:16px;color:#4dd9cc;font-weight:bold">${node.totalFiles.toLocaleString()}</div>`;
+html+=`<div style="font-size:8px;color:#6b8a96">files</div>`;
+html+=`</div>`;
+
+// Mass
+html+=`<div style="background:rgba(232,184,73,0.08);padding:8px;border-radius:4px">`;
+html+=`<div style="font-size:8px;color:#6b8a96">MASS</div>`;
+html+=`<div style="font-size:16px;color:#e8b849;font-weight:bold">${formatSize(node.totalBytes)}</div>`;
+html+=`<div style="font-size:8px;color:#6b8a96">${massInMB} MB</div>`;
+html+=`</div>`;
+
+html+=`</div>`;
+
+// Dominant Species + % of Parent
+html+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">`;
+
+// Dominant species
+if(node.dominantSpecies){
+html+=`<div style="background:rgba(157,123,232,0.08);padding:8px;border-radius:4px">`;
+html+=`<div style="font-size:8px;color:#6b8a96">DOMINANT</div>`;
+html+=`<div style="font-size:14px;color:${node.dominantColor};font-weight:bold">.${node.dominantSpecies}</div>`;
+html+=`<div style="font-size:8px;color:#6b8a96">${node.dominantPct}%</div>`;
+html+=`</div>`;
+}else{
+html+=`<div></div>`;
+}
+
+// % of parent
+if(node.percentage){
+html+=`<div style="background:rgba(107,189,143,0.08);padding:8px;border-radius:4px">`;
+html+=`<div style="font-size:8px;color:#6b8a96">OF PARENT</div>`;
+html+=`<div style="font-size:16px;color:#6bbd8f;font-weight:bold">${node.percentage}%</div>`;
+html+=`<div style="font-size:8px;color:#6b8a96">share</div>`;
+html+=`</div>`;
+}
+
+html+=`</div>`;
+
+// DENSITY - Compact 3-column grid
+if(node.density){
+html+=`<div style="font-size:8px;color:#6b8a96;margin:10px 0 4px 0">DENSITY</div>`;
+html+=`<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px">`;
+
+// Files/Level
+html+=`<div style="background:rgba(157,123,232,0.06);padding:6px;border-radius:3px;text-align:center">`;
+html+=`<div style="font-size:14px;color:#9d7be8;font-weight:bold">${node.density.filesPerLevel.toFixed(0)}</div>`;
+html+=`<div style="font-size:7px;color:#6b8a96">files/lvl</div>`;
+html+=`</div>`;
+
+// Depth Span
+html+=`<div style="background:rgba(157,123,232,0.06);padding:6px;border-radius:3px;text-align:center">`;
+html+=`<div style="font-size:14px;color:#9d7be8;font-weight:bold">${node.density.depthSpan}</div>`;
+html+=`<div style="font-size:7px;color:#6b8a96">levels</div>`;
+html+=`</div>`;
+
+// Brightness (visual encoding)
+const globalAvgDensity=100;
+const densityRatio=Math.log(node.density.filesPerLevel+1)/Math.log(globalAvgDensity+1);
+const brightnessFactor=Math.min(1.4,Math.max(0.6,0.8+densityRatio*0.4));
+const brightnessIcon=brightnessFactor>1.1?'☀️':brightnessFactor<0.9?'🌙':'⛅';
+
+html+=`<div style="background:rgba(157,123,232,0.06);padding:6px;border-radius:3px;text-align:center">`;
+html+=`<div style="font-size:14px;color:#9d7be8;font-weight:bold">${brightnessIcon}</div>`;
+html+=`<div style="font-size:7px;color:#6b8a96">${brightnessFactor.toFixed(1)}×</div>`;
+html+=`</div>`;
+
+html+=`</div>`;
+}
+
+// SPECIES - Visual bars (top 5 only)
+if(node.species&&Object.keys(node.species).length>0){
+html+=`<div style="font-size:8px;color:#6b8a96;margin:10px 0 4px 0">SPECIES (Top 5)</div>`;
+
+const sorted=Object.entries(node.species).sort((a,b)=>b[1].count-a[1].count).slice(0,5);
+sorted.forEach(([type,data])=>{
+const pct=node.totalFiles>0?(data.count/node.totalFiles*100):0;
+const barWidth=Math.max(5,pct);
+
+html+=`<div style="margin-bottom:4px">`;
+html+=`<div style="display:flex;justify-content:space-between;font-size:9px;margin-bottom:2px">`;
+html+=`<span style="color:${data.color}">.${type}</span>`;
+html+=`<span style="color:#6b8a96">${data.count}</span>`;
+html+=`</div>`;
+html+=`<div style="background:rgba(107,138,150,0.1);height:4px;border-radius:2px;overflow:hidden">`;
+html+=`<div style="background:${data.color};height:100%;width:${barWidth}%"></div>`;
+html+=`</div>`;
+html+=`</div>`;
+});
+}
+
+// Divider before children list
+html+=`<div style="border-top:1px solid rgba(77,217,204,0.15);margin:12px 0 8px 0"></div>`;
+
+// Children - Ultra compact list
+if(node.children.length>0){
+const hasFiles=node.children.some(cid=>STATE.nodeMap[cid]&&!STATE.nodeMap[cid].isDirectory);
+const icon=hasFiles?'📄':'📁';
+html+=`<div style="font-size:8px;color:#6b8a96;margin-bottom:6px">${icon} ${node.children.length} ITEMS</div>`;
+html+=`<div style="max-height:200px;overflow-y:auto;font-size:9px">`;
+node.children.slice(0,15).forEach(cid=>{
+const child=STATE.nodeMap[cid];
+if(!child)return;
+const childIcon=child.isDirectory?'📁':'📄';
+const size=child.isDirectory?`${child.totalFiles}`:formatSize(child.size||0);
+html+=`<div onclick="viewNode('${child.id}')" style="cursor:pointer;padding:4px 0;display:flex;justify-content:space-between;border-bottom:1px solid rgba(77,217,204,0.05);align-items:center">`;
+html+=`<span style="color:#4dd9cc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;padding-right:8px">${childIcon} ${child.name}</span>`;
+html+=`<span style="color:#6b8a96;font-size:8px;white-space:nowrap">${size}</span>`;
+html+=`</div>`;
+});
+if(node.children.length>15){
+html+=`<div style="font-size:8px;color:#6b8a96;margin-top:6px;text-align:center;padding:4px">+${node.children.length-15} more</div>`;
+}
+html+=`</div>`;
+}
+
+}
+
+document.getElementById('territoryContent').innerHTML=html;
+}
+
+function formatSize(bytes){
+if(!bytes)return '0 B';
+if(bytes<1024)return bytes+' B';
+if(bytes<1024*1024)return(bytes/1024).toFixed(1)+' KB';
+if(bytes<1024*1024*1024)return(bytes/(1024*1024)).toFixed(1)+' MB';
+return(bytes/(1024*1024*1024)).toFixed(2)+' GB';
+}
+
+function calculateCellArea(cell){
+let area=0;
+for(let i=0;i<cell.angles.length;i++){
+const j=(i+1)%cell.angles.length;
+const x1=cell.cx+Math.cos(cell.angles[i])*cell.radii[i];
+const y1=cell.cy+Math.sin(cell.angles[i])*cell.radii[i];
+const x2=cell.cx+Math.cos(cell.angles[j])*cell.radii[j];
+const y2=cell.cy+Math.sin(cell.angles[j])*cell.radii[j];
+area+=x1*y2-x2*y1;
+}
+return Math.abs(area)/2;
+}
+
+function resize(){
+W=window.innerWidth-320;
+H=window.innerHeight;
+CAN.width=W*DPR;
+CAN.height=H*DPR;
+CAN.style.width=W+'px';
+CAN.style.height=H+'px';
+
+// Always render after resize if we have data
+if(STATE.current){
+if(STATE.current===STATE.root){
+viewRoot();
+}else{
+viewNode(STATE.current.id);
+}
+}else{
+// Initial state - just render empty canvas
+render();
+}
+}
+
+CAN.addEventListener('mousemove',e=>{
+const rect=CAN.getBoundingClientRect();
+const canvasX=e.clientX-rect.left;
+const canvasY=e.clientY-rect.top;
+
+// Transform to world coordinates
+const mx=(canvasX-STATE.camera.tx)/STATE.camera.scale;
+const my=(canvasY-STATE.camera.ty)/STATE.camera.scale;
+
+if(!STATE.current)return;
+
+// Find hovered cell
+STATE.hoveredNode=null;
+const children=STATE.current.children.map(id=>STATE.nodeMap[id]);
+for(const ch of children){
+if(ch.cell&&pointInCell(mx,my,ch.cell)){
+STATE.hoveredNode=ch;
+break;
+}
+}
+
+render();
+});
+
+// Mouse wheel zoom
+CAN.addEventListener('wheel',e=>{
+e.preventDefault();
+
+const rect=CAN.getBoundingClientRect();
+const canvasX=e.clientX-rect.left;
+const canvasY=e.clientY-rect.top;
+
+// Convert canvas coords to world coords
+const worldX=(canvasX-STATE.camera.tx)/STATE.camera.scale;
+const worldY=(canvasY-STATE.camera.ty)/STATE.camera.scale;
+
+// Zoom in/out
+const zoomFactor=e.deltaY<0?1.15:0.87;
+const newScale=Math.max(0.5,Math.min(20,STATE.camera.scale*zoomFactor));
+
+// Adjust translation to zoom toward mouse position
+STATE.camera.scale=newScale;
+STATE.camera.tx=canvasX-worldX*newScale;
+STATE.camera.ty=canvasY-worldY*newScale;
+STATE.camera.targetScale=newScale;
+STATE.camera.targetTx=STATE.camera.tx;
+STATE.camera.targetTy=STATE.camera.ty;
+
+render();
+},{passive:false});
+
+CAN.addEventListener('click',e=>{
+const rect=CAN.getBoundingClientRect();
+const canvasX=e.clientX-rect.left;
+const canvasY=e.clientY-rect.top;
+
+// Transform click to world coordinates
+const mx=(canvasX-STATE.camera.tx)/STATE.camera.scale;
+const my=(canvasY-STATE.camera.ty)/STATE.camera.scale;
+
+if(!STATE.current)return;
+
+const children=STATE.current.children.map(id=>STATE.nodeMap[id]);
+let clicked=null;
+
+children.forEach(ch=>{
+if(ch.cell&&pointInCell(mx,my,ch.cell)){
+clicked=ch;
+}
+});
+
+if(clicked){
+// Clicked a child - drill down
+viewNode(clicked.id);
+}else{
+// Clicked outside children - check if in parent, go up
+if(STATE.current.cell&&pointInCell(mx,my,STATE.current.cell)){
+// Clicked in parent area but not on children - go up
+if(STATE.path.length>1){
+const parent=STATE.path[STATE.path.length-2];
+viewNode(parent.id);
+}
+}else if(!STATE.current.cell&&STATE.path.length===1){
+// At root, clicked outside - stay here
+return;
+}else{
+// Clicked outside everything - go up
+if(STATE.path.length>1){
+const parent=STATE.path[STATE.path.length-2];
+viewNode(parent.id);
+}
+}
+}
+});
+
+function populateSpeciesDropdown(){
+// Collect all species from nodes
+STATE.allSpecies.clear();
+STATE.nodes.forEach(node=>{
+if(node.species){
+Object.keys(node.species).forEach(ext=>STATE.allSpecies.add(ext));
+}
+});
+
+// Populate dropdown
+const select=document.getElementById('speciesFilter');
+select.innerHTML='<option value="all">All Media Types</option>';
+
+const sortedSpecies=Array.from(STATE.allSpecies).sort();
+sortedSpecies.forEach(ext=>{
+const color=getColorForExt(ext);
+select.innerHTML+=`<option value="${ext}" style="color:${color}">.${ext}</option>`;
+});
+}
+
+function applySpeciesFilter(){
+const select=document.getElementById('speciesFilter');
+STATE.speciesFilter=select.value;
+
+// Update status
+const status=document.getElementById('filterStatus');
+if(STATE.speciesFilter==='all'){
+status.textContent='Showing all territories';
+}else{
+status.textContent=`Filtering: .${STATE.speciesFilter} only`;
+status.style.color='#e8b849';
+}
+
+render();
+}
+
+function nodeMatchesFilter(node){
+if(STATE.speciesFilter==='all')return true;
+if(!node.species)return false;
+
+// Node matches if it contains the filtered species
+return node.species.hasOwnProperty(STATE.speciesFilter);
+}
+
+function pointInCell(x,y,cell){
+let inside=false;
+const {cx,cy,angles,radii}=cell;
+
+for(let i=0,j=angles.length-1;i<angles.length;j=i++){
+const xi=cx+Math.cos(angles[i])*radii[i];
+const yi=cy+Math.sin(angles[i])*radii[i];
+const xj=cx+Math.cos(angles[j])*radii[j];
+const yj=cy+Math.sin(angles[j])*radii[j];
+
+if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi)){
+inside=!inside;
+}
+}
+return inside;
+}
+
+window.addEventListener('resize',resize);
+
+// Keyboard navigation
+window.addEventListener('keydown',e=>{
+if(!STATE.current)return;
+
+// Escape or Backspace: Go to parent
+if(e.key==='Escape'||e.key==='Backspace'){
+if(STATE.path.length>1){
+const parent=STATE.path[STATE.path.length-2];
+viewNode(parent.id);
+}
+e.preventDefault();
+}
+
+// Arrow Up: Go to parent
+if(e.key==='ArrowUp'&&!e.shiftKey){
+if(STATE.path.length>1){
+const parent=STATE.path[STATE.path.length-2];
+viewNode(parent.id);
+}
+e.preventDefault();
+}
+
+// Arrow Down: Go to first child
+if(e.key==='ArrowDown'&&!e.shiftKey){
+if(STATE.current.children.length>0){
+const firstChild=STATE.nodeMap[STATE.current.children[0]];
+if(firstChild)viewNode(firstChild.id);
+}
+e.preventDefault();
+}
+
+// Arrow Left/Right: Navigate siblings
+if(e.key==='ArrowLeft'||e.key==='ArrowRight'){
+if(STATE.path.length>1){
+const parent=STATE.path[STATE.path.length-2];
+const siblings=parent.children;
+const currentIdx=siblings.indexOf(STATE.current.id);
+
+if(e.key==='ArrowLeft'&&currentIdx>0){
+viewNode(siblings[currentIdx-1]);
+}else if(e.key==='ArrowRight'&&currentIdx<siblings.length-1){
+viewNode(siblings[currentIdx+1]);
+}
+}
+e.preventDefault();
+}
+
+// H key: Go home (root)
+if(e.key==='h'||e.key==='H'){
+viewRoot();
+}
+});
+
+function zoomToBoundary(boundary){
+// Zoom to fit a circular boundary
+const diameter=boundary.radius*2;
+
+// Target: fill 70% of viewport
+const targetSize=Math.min(W,H)*0.7;
+const scale=targetSize/diameter;
+
+STATE.camera.targetScale=scale;
+STATE.camera.targetTx=(W/2-boundary.x*scale);
+STATE.camera.targetTy=(H/2-boundary.y*scale);
+animateCameraToTarget();
+}
+
+function zoomToCell(cell){
+// Calculate bounding box of cell
+let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+for(let i=0;i<cell.angles.length;i++){
+const px=cell.cx+Math.cos(cell.angles[i])*cell.radii[i];
+const py=cell.cy+Math.sin(cell.angles[i])*cell.radii[i];
+minX=Math.min(minX,px);
+maxX=Math.max(maxX,px);
+minY=Math.min(minY,py);
+maxY=Math.max(maxY,py);
+}
+
+const cellW=maxX-minX;
+const cellH=maxY-minY;
+const cellCX=(minX+maxX)/2;
+const cellCY=(minY+maxY)/2;
+
+// Target: fill 70% of viewport
+const targetW=W*0.7;
+const targetH=H*0.7;
+const scaleX=targetW/cellW;
+const scaleY=targetH/cellH;
+const scale=Math.min(scaleX,scaleY);
+
+// Calculate translation to center
+const targetCX=W/2;
+const targetCY=H/2;
+
+STATE.camera.targetScale=scale;
+STATE.camera.targetTx=(targetCX-cellCX*scale);
+STATE.camera.targetTy=(targetCY-cellCY*scale);
+
+animateCameraToTarget();
+}
+
+function animateCameraToTarget(){
+if(STATE.animating)return;
+STATE.animating=true;
+
+const duration=500; // ms
+const startTime=Date.now();
+const startScale=STATE.camera.scale;
+const startTx=STATE.camera.tx;
+const startTy=STATE.camera.ty;
+
+function step(){
+const elapsed=Date.now()-startTime;
+const t=Math.min(elapsed/duration,1);
+
+// Smooth easing
+const ease=t<0.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+
+STATE.camera.scale=startScale+(STATE.camera.targetScale-startScale)*ease;
+STATE.camera.tx=startTx+(STATE.camera.targetTx-startTx)*ease;
+STATE.camera.ty=startTy+(STATE.camera.targetTy-startTy)*ease;
+
+render();
+
+if(t<1){
+requestAnimationFrame(step);
+}else{
+STATE.animating=false;
+}
+}
+
+step();
+}
+
+window.addEventListener('load',()=>{
+resize();
+// Auto-load real data on start
+loadRealData();
+});
+
+</script>
+
+</body></html>

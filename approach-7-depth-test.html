@@ -1,0 +1,1335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+<title>APPROACH 7: Fractal Decks + 3D Topo — ARKADU OS</title>
+<style>
+  /* ======= RESET ======= */
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%}
+  :root{
+    --bg-main:#0a0e1a;--bg-panel:#0f1419;--border:#1a3a52;--text:#b8dbd9;--muted:#6b8a96;
+    --blue:#4dd9cc;--coral:#d97b8f;--amber:#e8b849;--purple:#9d7be8;--green:#6bbd8f;
+    --pink:#ff7ee6;--cyan:#68e8ff;--lime:#8fe66b;
+    --shadow:0 10px 24px rgba(0,0,0,.35);--radius:12px;--grid:20px;--drawerW:300px;
+  }
+  body{background:var(--bg-main);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,Ubuntu,Arial,sans-serif;overflow:hidden}
+
+  /* ======= LAYOUT ======= */
+  .os{display:grid;grid-template-columns:auto 1fr auto;grid-template-rows:64px 1fr 48px;height:100vh}
+  .hdr{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;padding:0 12px;background:var(--bg-panel);border-bottom:1px solid var(--border)}
+  .brand{display:flex;gap:10px;align-items:center;font-weight:800;color:var(--blue);letter-spacing:.5px}
+  .crumbs{font-size:12px;color:var(--muted)}
+  .stats{display:flex;gap:12px;font-size:12px;color:var(--muted)}
+
+  .toolbar{display:flex;gap:8px;align-items:center}
+  .seg{display:flex;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+  .seg button{border:0;background:transparent;color:var(--text);padding:8px 12px;cursor:pointer;font-size:12px}
+  .seg button.active{background:var(--blue);color:#062522}
+  .tog{display:flex;gap:10px;align-items:center;margin-left:10px}
+  .tog label{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--muted)}
+  .sel{display:flex;gap:6px;align-items:center;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:10px;padding:6px 8px}
+  .sel select{background:transparent;border:0;color:var(--text);font-size:12px;outline:none}
+  .btnTiny{background:#0c131a;border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:8px;font-size:12px;cursor:pointer}
+
+  .stage{position:relative;overflow:hidden}
+  .deck{position:absolute;inset:0;padding:16px}
+  .deck .grid{position:relative;height:100%;border-radius:var(--radius);background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:var(--grid) var(--grid);box-shadow:var(--shadow);overflow:auto}
+  .deck.bg{opacity:.35;filter:saturate(.7);transform:translateZ(-60px) scale(.98)}
+  .deck.fg{opacity:1;transform:translateZ(0)}
+
+  /* Atlas & Sideways & Topo canvases */
+  .atlas,.sideways,.topo{position:absolute;inset:0;padding:16px;display:none}
+  .atlas.active,.sideways.active,.topo.active{display:block}
+  .atlas .grid,.sideways .grid{position:relative;height:100%;border-radius:var(--radius);background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:var(--grid) var(--grid);box-shadow:var(--shadow);overflow:auto}
+  .atlas .ball{position:absolute;border-radius:50%;opacity:.92;cursor:pointer;transition:transform .15s, box-shadow .15s}
+  .atlas .ball:hover{transform:scale(1.08);box-shadow:0 0 16px rgba(255,255,255,.25)}
+  .ball.png,.ball.jpg{background:var(--blue)}
+  .ball.mp4{background:var(--coral)}
+  .ball.mp3,.ball.py{background:var(--amber)}
+  .ball.json{background:var(--purple)}
+  .ball.html{background:var(--green)}
+  .ball.more{background:transparent;border:1px dashed var(--muted);color:var(--muted);display:flex;align-items:center;justify-content:center;font-size:11px}
+
+  .badge{position:absolute;left:12px;top:12px;z-index:5;background:rgba(13,21,28,.85);border:1px solid var(--border);padding:6px 10px;border-radius:10px;font-size:12px}
+  .badge b{color:var(--blue)}
+
+  svg.overlay{position:absolute;inset:0;pointer-events:none;z-index:6}
+
+  /* ======= DRAWERS (edge-only UI) ======= */
+  .drawer{position:relative;background:var(--bg-panel);border-left:1px solid var(--border);border-right:1px solid var(--border);display:flex;flex-direction:column;min-width:var(--drawerW)}
+  .drawer .head{padding:10px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:rgba(77,217,204,.06)}
+  .drawer .title{font-size:13px;font-weight:700;color:var(--blue)}
+  .drawer .body{padding:12px;gap:10px;display:flex;flex-direction:column;overflow:auto}
+
+  /* Left: explorer tree + filters */
+  .tree{font-size:13px}
+  .node{display:flex;align-items:center;gap:6px;padding:6px 4px;border-radius:8px;cursor:grab}
+  .node:hover{background:rgba(77,217,204,.08)}
+  .node.active{background:rgba(77,217,204,.16);outline:1px solid var(--blue)}
+  .node.dragging{opacity:.5}
+  .handle{width:12px;height:12px;border-radius:3px;background:rgba(255,255,255,.1);border:1px solid var(--border)}
+  .tw{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;color:var(--muted)}
+  .cnt{font-size:11px;color:var(--muted);background:rgba(255,255,255,.05);padding:2px 6px;border-radius:999px;margin-left:auto}
+  .chips{display:flex;gap:6px;flex-wrap:wrap}
+  .chip{border:1px solid var(--border);padding:6px 10px;border-radius:999px;font-size:12px;cursor:pointer;user-select:none}
+  .chip.active{background:var(--blue);color:#062522;border-color:var(--blue)}
+
+  /* Right: inspector */
+  .kv{font-size:12px;color:var(--muted)}
+  .sect{display:flex;flex-direction:column;gap:8px}
+  .item{border-left:2px solid var(--blue);background:rgba(255,255,255,.03);padding:8px;border-radius:6px}
+  .item small{display:block;color:var(--muted);font-size:10px;margin-bottom:3px;text-transform:uppercase}
+
+  /* Bottom transport */
+  .ftr{grid-column:1/-1;background:var(--bg-panel);border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 12px;font-size:12px;color:var(--muted)}
+  .controls{display:flex;gap:8px}
+  .btn{background:#0c131a;border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:10px;font-size:12px;cursor:pointer}
+  .btn.primary{border-color:var(--blue)}
+  .btn:active{transform:translateY(1px)}
+
+  /* Species clusters (Deck mode) */
+  .cluster{position:absolute;display:flex;flex-wrap:wrap;gap:3px;padding:12px;border:1px solid var(--border);border-radius:12px;background:rgba(15,20,25,.78);backdrop-filter:blur(8px)}
+  .cluster.draggable{cursor:move}
+  .label{position:absolute;left:8px;top:-22px;font-size:11px;color:var(--blue);font-weight:700}
+  .grain{width:9px;height:9px;border-radius:50%;cursor:pointer;transition:transform .12s,box-shadow .12s}
+  .grain:hover{transform:scale(1.7);box-shadow:0 0 10px currentColor}
+  .grain.png,.grain.jpg{background:var(--blue)}
+  .grain.mp4{background:var(--coral)}
+  .grain.mp3,.grain.py{background:var(--amber)}
+  .grain.json{background:var(--purple)}
+  .grain.html{background:var(--green)}
+  /* chamber glyphs */
+  .glyphs{position:absolute;left:8px;right:8px;bottom:-28px;display:flex;gap:6px;align-items:center}
+  .glyph{width:10px;height:10px;border-radius:50%;border:1px solid var(--border);background:rgba(255,255,255,.04);cursor:pointer}
+  .glyph:hover{transform:scale(1.3)}
+  .glyph[data-hot="true"]{outline:2px solid var(--lime)}
+
+  .portal{position:absolute;min-width:220px;min-height:64px;padding:12px 12px 12px 28px;border-radius:12px;border:1px dashed var(--coral);background:rgba(217,123,143,.08);cursor:pointer}
+  .portal .label{color:var(--coral);top:-18px}
+  .portal:after{content:'→';position:absolute;left:8px;top:10px;color:var(--coral)}
+
+  /* Links */
+  .link{fill:none;stroke-width:2}
+  .link.generates{stroke:var(--coral)}
+  .link.reads{stroke:var(--blue)}
+  .link.transforms{stroke:var(--amber)}
+  .link.morphism{stroke:var(--pink);stroke-dasharray:4 3}
+  .link.taxonomy{stroke:var(--cyan);stroke-dasharray:2 2;stroke-opacity:.6}
+
+  /* Minimap */
+  .minimap{position:absolute;right:14px;bottom:14px;background:rgba(6,12,18,.85);border:1px solid var(--border);border-radius:10px;padding:8px 10px;color:var(--muted);font-size:11px;z-index:7}
+  .minimap canvas{display:block}
+
+  /* Responsive */
+  @media (max-width:1080px){
+    .os{grid-template-columns:1fr;grid-template-rows:64px auto auto 48px}
+  }
+  @media (max-width:720px){
+    :root{--drawerW:88vw}
+  }
+</style>
+</head>
+<body>
+<div class="os">
+  <!-- HEADER -->
+  <header class="hdr">
+    <div class="brand">ARKADU OS <span class="crumbs" id="crumbs">/</span></div>
+    <div class="toolbar">
+      <div class="seg" id="modeSeg">
+        <button data-mode="deck" class="active">Deck</button>
+        <button data-mode="atlas">Atlas</button>
+        <button data-mode="sideways">Sideways</button>
+        <button data-mode="topo">Topo</button>
+        <button data-mode="preview">Preview</button> <!-- NEW -->
+      </div>
+      <div class="sel">
+        <span style="color:var(--muted);font-size:12px">Sort</span>
+        <select id="sortKey">
+          <option value="name">Name</option>
+          <option value="modified">Modified</option>
+          <option value="count">Count</option>
+        </select>
+        <button class="btnTiny" id="sortDir">↑</button>
+      </div>
+      <div class="sel">
+        <span style="color:var(--muted);font-size:12px">Layout</span>
+        <select id="layoutMode">
+          <option value="auto">Auto</option>
+          <option value="manual">Manual (drag)</option>
+        </select>
+        <button class="btnTiny" id="snapGrid">Snap</button>
+        <button class="btnTiny" id="resetLayout">Reset</button>
+      </div>
+      <div class="tog" id="linkToggles">
+        <label><input type="checkbox" data-link="reads" checked> reads</label>
+        <label><input type="checkbox" data-link="generates" checked> generates</label>
+        <label><input type="checkbox" data-link="transforms" checked> transforms</label>
+        <label><input type="checkbox" data-link="morphism" checked> morphisms</label>
+        <label><input type="checkbox" data-link="taxonomy" checked> taxonomy</label>
+      </div>
+      <div class="tog"><label><input type="checkbox" id="chAsSpec"> chamber-as-species</label></div>
+    </div>
+    <div class="stats">
+      <span id="stCh">— chambers</span>
+      <span id="stAr">— artifacts</span>
+      <span id="stCn">— connections</span>
+      <span id="stDepth" style="color:var(--blue);font-weight:700">Max Depth: ∞</span>
+    </div>
+  </header>
+
+  <!-- LEFT DRAWER: Explorer Tree & Filters -->
+  <aside class="drawer left" id="left">
+    <div class="head"><div class="title">Explorer</div><button class="btn" id="toggleLeft">Hide</button></div>
+    <div class="body">
+      <div class="tree" id="tree"></div>
+      <div>
+        <div class="title" style="margin:6px 0 8px">Species Filter</div>
+        <div class="chips" id="chips"></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- STAGE (Center) -->
+  <main class="stage">
+    <!-- Deck mode: focus + rear projection -->
+    <div class="deck bg"><div class="grid" id="gridBG"></div></div>
+    <div class="deck fg"><div class="grid" id="gridFG"></div></div>
+    <!-- Atlas: all-species sized balls on grid -->
+    <div class="atlas" id="atlas"><div class="grid" id="atlasGrid"></div></div>
+    <!-- Sideways: stacked strata with cross-layer links -->
+    <div class="sideways" id="sideways"><div class="grid" id="sideGrid"></div></div>
+    <!-- Topography: 3D terrain visualization -->
+    <div class="topo" id="topo"></div>
+    <!-- Preview: Text document viewer -->
+    <div class="preview" id="preview" style="display:none;position:absolute;inset:0;background:var(--bg-main);overflow:auto;padding:20px">
+      <div style="max-width:1400px;margin:0 auto">
+        <div id="previewHeader" style="margin-bottom:20px;padding-bottom:10px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <h2 style="color:var(--blue);margin-bottom:8px" id="previewTitle">Select a text file to preview</h2>
+            <div style="font-size:12px;color:var(--muted)" id="previewMeta"></div>
+          </div>
+          <div id="previewControls" style="display:none;gap:8px">
+            <button id="toggleViewMode" class="btn" style="font-size:12px">View Source</button>
+            <button id="copyContent" class="btn" style="font-size:12px">📋 Copy</button>
+          </div>
+        </div>
+        <div id="previewContainer">
+          <pre id="previewContent" style="background:var(--bg-panel);padding:20px;border-radius:12px;border:1px solid var(--border);color:var(--text);font-family:ui-monospace,monospace;font-size:13px;line-height:1.6;overflow-x:auto;white-space:pre-wrap"></pre>
+          <iframe id="previewIframe" style="display:none;width:100%;height:calc(100vh - 200px);border:1px solid var(--border);border-radius:12px;background:white"></iframe>
+        </div>
+      </div>
+    </div>
+
+    <svg class="overlay" id="svg"></svg>
+    <div class="badge" id="badge">L<b>0</b> — <span id="path">/</span></div>
+    <div class="minimap" id="minimap"><canvas id="mini" width="200" height="120"></canvas><div id="miniLbl">Map</div></div>
+  </main>
+
+  <!-- RIGHT DRAWER: Inspector -->
+  <aside class="drawer right" id="right">
+    <div class="head"><div class="title">Inspector</div><button class="btn" id="toggleRight">Hide</button></div>
+    <div class="body" id="insp">
+      <div class="kv">Tip: drag clusters in Manual layout to arrange the deck. Drag nodes in the Explorer to reorder siblings. Sort by Name / Modified / Count globally. Press 4 for Topography mode.</div>
+    </div>
+  </aside>
+
+  <!-- FOOTER / TRANSPORT -->
+  <footer class="ftr">
+    <div id="status">Ready</div>
+    <div class="controls">
+      <button class="btn" id="btnParent">Parent</button>
+      <button class="btn" id="btnPrevSib">◀︎ Sibling</button>
+      <button class="btn primary" id="btnChild">First Child</button>
+      <button class="btn" id="btnNextSib">Sibling ▶︎</button>
+      <button class="btn" id="btnHideUI">Hide UI</button>
+    </div>
+    <div id="sel">No selection</div>
+  </footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<!-- CORRECTED: Using the /js/ version of OrbitControls which exposes THREE.OrbitControls globally -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/js/controls/OrbitControls.js"></script> 
+<script>
+/*********** DATA (loaded from ARKADU pipeline) ***********/
+const DATA = {
+  chambers:[],
+  artifacts:[],
+  connections:[]
+};
+
+// Load real ARKADU data
+async function loadRealData(){
+  try{
+    console.log('Loading ARKADU data from sys/primitive.jsonl...');
+    const r=await fetch('sys/primitive.jsonl');
+    const t=await r.text();
+    const artifacts=t.trim().split('\n').map(l=>JSON.parse(l));
+    console.log(`Loaded ${artifacts.length} artifacts`);
+    
+    buildHierarchyFromArtifacts(artifacts);
+    
+    // Jump to first root chamber
+    if(DATA.chambers.length>0){
+      current = DATA.chambers[0].id;
+      renderExplorer();
+      jump(current);
+      updateStats();
+    }
+  }catch(e){
+    console.error('Error loading ARKADU data:',e);
+    alert('Could not load sys/primitive.jsonl. Check console.');
+  }
+}
+
+function buildHierarchyFromArtifacts(artifacts){
+  const chamberMap = {};
+  
+  // Build chambers from artifact paths
+  artifacts.forEach(art=>{
+    const parts=art.path.split('/');
+    
+    // Build directory chambers
+    for(let d=0;d<parts.length-1;d++){
+      const id=parts.slice(0,d+1).join('/');
+      if(!chamberMap[id]){
+        chamberMap[id]={
+          id:id,
+          name:parts[d],
+          depth:d,
+          parent:d>0?parts.slice(0,d).join('/'):null,
+          subchambers:[],
+          artifacts:{},
+          mtime:new Date(art.modified||Date.now()).getTime()
+        };
+      }
+      
+      // Add artifact to this chamber
+      const ext=(art.ext||'').replace(/^\./,'')||'unknown';
+      if(!chamberMap[id].artifacts[ext]) chamberMap[id].artifacts[ext]=0;
+      chamberMap[id].artifacts[ext]++;
+    }
+  });
+  
+  // Build parent-child relationships
+  Object.values(chamberMap).forEach(ch=>{
+    if(ch.parent && chamberMap[ch.parent]){
+      if(!chamberMap[ch.parent].subchambers.includes(ch.id)){
+        chamberMap[ch.parent].subchambers.push(ch.id);
+      }
+    }
+  });
+  
+  // Convert to DATA arrays
+  DATA.chambers = Object.values(chamberMap);
+  
+  // Build artifacts array (sample from each chamber)
+  artifacts.slice(0,100).forEach(art=>{
+    const parts=art.path.split('/');
+    const chamber=parts.slice(0,-1).join('/');
+    const ext=(art.ext||'').replace(/^\./,'')||'unknown';
+    DATA.artifacts.push({
+      id:art.path,
+      chamber:chamber,
+      species:ext,
+      size:(art.size/(1024*1024)).toFixed(2),
+      mtime:new Date(art.modified||Date.now()).getTime(),
+      references:[],
+      referencedBy:[]
+    });
+  });
+  
+  console.log(`Built ${DATA.chambers.length} chambers, ${DATA.artifacts.length} artifact samples`);
+}
+
+/*********** STATE ***********/
+let current = null; // Will be set after data loads
+let filters = new Set();
+let sel = null; // selected artifact id
+let uiHidden = false;
+let mode = 'deck';
+const linkVisibility = {reads:true, generates:true, transforms:true, morphism:true, taxonomy:true};
+let chamberAsSpecies = false;
+let sortKey = 'name';
+let sortAsc = true;
+let layoutMode = 'auto';
+// manual positions for clusters per chamber: { [chamberId]: { [spec]: {x,y} } }
+const manualPositions = {};
+// manual order for siblings: { [parentId|null(root)]: [childIds...] }
+const manualOrder = {};
+
+/*********** THREE.JS GLOBALS FOR TOPO MODE ***********/
+let scene, camera, renderer, controls, topoContainer;
+const speciesColors = {
+  'png': new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue('--blue').trim()),
+  'jpg': new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue('--blue').trim()),
+  'mp4': new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue('--coral').trim()),
+  'mp3': new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue('--amber').trim()),
+  'py': new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue('--amber').trim()),
+  'json': new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue('--purple').trim()),
+  'html': new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue('--green').trim()),
+  'chamber': new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue('--pink').trim())
+};
+const chamberMap = new Map(); // Store 3D objects associated with chamber IDs for interaction
+
+/*********** UTIL ***********/
+const byId = id=>document.getElementById(id);
+const getCham = id => DATA.chambers.find(c=>c.id===id);
+const siblingsOf = id => { const p = getCham(id)?.parent; return DATA.chambers.filter(c=> (p? c.parent===p : c.depth===0)); };
+const parentOf = id => getCham(id)?.parent || null;
+const childrenOf = id => (getCham(id)?.subchambers || []).slice();
+const setChildrenOf = (id, arr)=>{ const ch=getCham(id); if(ch) ch.subchambers = arr; };
+const sumArtifacts = ch => Object.values(ch.artifacts||{}).reduce((a,b)=>a+b,0);
+const trail = id => { const parts=id.split('.'); const out=[]; for(let i=0;i<parts.length;i++) out.push(parts.slice(0,i+1).join('.')); return out; };
+const allSpecies = ['png','jpg','mp4','mp3','json','py','html'];
+const fmtDate = t=> new Date(t).toLocaleString();
+
+function cmp(a,b){
+  const dir = sortAsc? 1 : -1;
+  if(sortKey==='name') return a.localeCompare? dir*a.localeCompare(b) : dir*((a.name||a.id).localeCompare(b.name||b.id));
+  if(sortKey==='modified') return dir*((a.mtime||0) - (b.mtime||0));
+  if(sortKey==='count') return dir*((a.count||0) - (b.count||0));
+  return 0;
+}
+
+/*********** INIT ***********/
+function init(){
+  bindGlobal();
+  topoContainer = byId('topo');
+  // Load real data
+  loadRealData();
+}
+
+function updateStats(){
+  byId('stCh').textContent = DATA.chambers.length + ' chambers';
+  const total = DATA.chambers.reduce((s,c)=>s+sumArtifacts(c),0);
+  byId('stAr').textContent = total.toLocaleString() + ' artifacts';
+  byId('stCn').textContent = DATA.connections.length + ' connections';
+  
+  // Calculate max depth
+  const maxDepth = DATA.chambers.reduce((max,c)=>Math.max(max,c.depth||0),0);
+  byId('stDepth').innerHTML = `Max Depth: <b>${maxDepth}</b> (navigates ALL levels)`;
+}
+
+/*********** EXPLORER TREE (sortable + draggable) ***********/
+function renderExplorer(){
+  const t = byId('tree');
+  t.innerHTML = '';
+  const roots = DATA.chambers.filter(c=>c.depth===0);
+  const rootKey = '__ROOT__';
+  const orderedRoots = (manualOrder[rootKey]||roots.map(r=>r.id)).map(id=>getCham(id)).filter(Boolean);
+  if(!manualOrder[rootKey]) manualOrder[rootKey] = orderedRoots.map(c=>c.id);
+  orderedRoots.sort((a,b)=> cmp(a,b));
+  orderedRoots.forEach(r=> t.appendChild(treeNode(r.id,0)) );
+  const chips = byId('chips');
+  chips.innerHTML = allSpecies.map(s=>`<div class="chip ${filters.has(s)?'active':''}" data-s="${s}">${s.toUpperCase()}</div>`).join('');
+  chips.querySelectorAll('.chip').forEach(ch=>{
+    ch.onclick = ()=>{ const s=ch.dataset.s; if(filters.has(s)) filters.delete(s); else filters.add(s); ch.classList.toggle('active'); rerenderMode(); };
+  });
+}
+function treeNode(id,indent){
+  const ch = getCham(id); const el = document.createElement('div'); el.className='node'+(id===current?' active':''); el.draggable = true; el.dataset.id = id;
+  el.style.paddingLeft = (8 + indent*14)+'px';
+  el.innerHTML = `<div class="handle"></div><span class="tw">▧</span><span class="nm">${ch.name||ch.id} [L${ch.depth}]</span><span class="cnt">${sumArtifacts(ch)}</span>`;
+  el.onclick = (e)=>{ if(e.target.classList.contains('handle')) return; jump(id); };
+  // DnD within siblings (or root)
+  el.addEventListener('dragstart',e=>{ el.classList.add('dragging'); e.dataTransfer.setData('text/plain', id); });
+  el.addEventListener('dragend',()=> el.classList.remove('dragging'));
+  el.addEventListener('dragover',e=>{ e.preventDefault(); });
+  el.addEventListener('drop',e=>{ e.preventDefault(); const fromId = e.dataTransfer.getData('text/plain'); if(!fromId||fromId===id) return;
+    const from = getCham(fromId); const to = getCham(id);
+    const parent = (from.parent||'__ROOT__');
+    if( (to.parent||'__ROOT__') !== parent) return; // only reorder inside same parent/root
+    const arr = parent==='__ROOT__' ? (manualOrder['__ROOT__']|| DATA.chambers.filter(c=>c.depth===0).map(c=>c.id)) : childrenOf(parent);
+    const ni = arr.filter(Boolean);
+    const idxFrom = ni.indexOf(fromId); const idxTo = ni.indexOf(id);
+    if(idxFrom<0||idxTo<0) return;
+    ni.splice(idxTo,0, ni.splice(idxFrom,1)[0]);
+    if(parent==='__ROOT__') manualOrder['__ROOT__']=ni; else setChildrenOf(parent,ni);
+    renderExplorer(); rerenderMode();
+  });
+  const wrap = document.createElement('div'); wrap.appendChild(el);
+  const kids = childrenOf(id);
+  // sort children by current sort key unless manual order set
+  let childIds = (kids || []).slice();
+  const mo = kids && kids.length && kids.every(x=>x) ? kids : [];
+  const objs = childIds.map(cid=>getCham(cid)).filter(Boolean);
+  // apply manual order if user re-arranged, else sort by key
+  const manual = childIds;
+  if(manual && manual.length){ childIds = manual; }
+  else childIds = objs.sort((a,b)=>cmp(a,b)).map(o=>o.id);
+  childIds.forEach(sid=> wrap.appendChild(treeNode(sid, indent+1)) );
+  return wrap;
+}
+
+/*********** BREADCRUMBS ***********/
+function breadcrumb(id){
+  const t = trail(id);
+  const html = t.map((seg,i)=>`<a href="#" data-id="${seg}" style="color:${i===t.length-1?'var(--text)':'var(--blue)'};text-decoration:none">${seg.split('.').pop()}</a>`).join(' / ');
+  byId('crumbs').innerHTML = '/ ' + html;
+  byId('path').textContent = id;
+  byId('crumbs').querySelectorAll('a').forEach(a=>a.onclick=(e)=>{e.preventDefault(); jump(a.dataset.id)});
+  const depth = getCham(id)?.depth || 0; byId('badge').querySelector('b').textContent = depth;
+}
+
+/*********** MODES ***********/
+function setMode(m){
+  mode = m; document.querySelectorAll('#modeSeg button').forEach(b=>b.classList.toggle('active', b.dataset.mode===m));
+  document.querySelector('.deck.bg').style.display = (m==='deck')? 'block':'none';
+  document.querySelector('.deck.fg').style.display = (m==='deck')? 'block':'none';
+  byId('atlas').classList.toggle('active', m==='atlas');
+  byId('sideways').classList.toggle('active', m==='sideways');
+  byId('topo').classList.toggle('active', m==='topo');
+  byId('preview').style.display = (m==='preview')? 'block':'none'; // NEW
+  rerenderMode();
+}
+function rerenderMode(){
+  // Clean up Three.js scene if not in topo mode
+  if (mode !== 'topo' && renderer) {
+    renderer.dispose();
+    if (topoContainer.firstChild) {
+      topoContainer.removeChild(topoContainer.firstChild);
+    }
+    // Clear the animation frame
+    if (window.animationFrameId) {
+        cancelAnimationFrame(window.animationFrameId);
+    }
+  }
+
+  if(mode==='deck') renderDecks();
+  if(mode==='atlas') renderAtlas();
+  if(mode==='sideways') renderSideways();
+  if(mode==='topo') renderTopo();
+  if(mode==='preview') renderPreview(); // NEW
+}
+
+/*********** DECK MODE (focus + parent rear-projection) ***********/
+function jump(id){
+  current = id;
+  breadcrumb(id);
+  renderExplorer();
+  rerenderMode();
+}
+
+const MAX_GRAINS_FG = 180; // cutoff to keep legible
+const MAX_GRAINS_BG = 60;
+
+function renderDecks(){
+  const fg = byId('gridFG');
+  const bg = byId('gridBG');
+  fg.innerHTML = '';
+  bg.innerHTML = '';
+
+  const cur = getCham(current);
+  const parent = parentOf(current) ? getCham(parentOf(current)) : null;
+
+  renderPanel(fg, cur, /*faint*/false);
+  if(parent) renderPanel(bg, parent, /*faint*/true); else bg.innerHTML = placeholder();
+  byId('status').textContent = `Chamber: ${cur?cur.name:current}`;
+  drawLinks();
+  drawMini();
+}
+
+function placeholder(){
+  return `<div style="height:100%;display:flex;align-items:center;justify-content:center;color:var(--muted)">No parent deck</div>`;
+}
+
+function sortedSpeciesEntries(chamber){
+  const arts = {...(chamber.artifacts||{})};
+  if(chamberAsSpecies && childrenOf(chamber.id).length) arts['chamber'] = childrenOf(chamber.id).length;
+  // turn into array with name, count, pseudo mtime (use chamber mtime)
+  const arr = Object.entries(arts).map(([spec,count])=>({spec,count,mtime:chamber.mtime||0,name:spec.toUpperCase()}));
+  // sort by key/dir
+  arr.sort((A,B)=>{
+    if(sortKey==='name') return (sortAsc?1:-1) * A.name.localeCompare(B.name);
+    if(sortKey==='modified') return (sortAsc?1:-1) * ((A.mtime||0)-(B.mtime||0));
+    if(sortKey==='count') return (sortAsc?1:-1) * ((A.count||0)-(B.count||0));
+    return 0;
+  });
+  return arr;
+}
+
+function renderPanel(container, chamber, faint){
+  if(!chamber){ container.innerHTML = placeholder(); return; }
+  const wrap = document.createElement('div');
+  wrap.style.position='relative';
+  wrap.style.width='100%';
+  wrap.style.height='100%';
+
+  let x=84,y=84,rowH=0, rightLimit = container.clientWidth?container.clientWidth-320:900;
+  const entries = sortedSpeciesEntries(chamber);
+
+  entries.forEach(({spec,count})=>{
+    if(filters.size && !filters.has(spec) && spec!=='chamber') return;
+    const cap = faint? MAX_GRAINS_BG : MAX_GRAINS_FG;
+    const visible = Math.min(count, cap);
+
+    // manual position support
+    const mp = (manualPositions[chamber.id] && manualPositions[chamber.id][spec]) || null;
+    const cluster = document.createElement('div');
+    cluster.className='cluster'+(layoutMode==='manual'&&!faint?' draggable':'');
+    cluster.dataset.spec = spec; cluster.dataset.ch = chamber.id;
+
+    if(mp){ cluster.style.left = mp.x+'px'; cluster.style.top = mp.y+'px'; }
+    else { cluster.style.left = x+'px'; cluster.style.top = y+'px'; }
+
+    const label = document.createElement('div'); label.className='label'; label.textContent = `${spec.toUpperCase()} (${count})`;
+    cluster.appendChild(label);
+
+    for(let i=0;i<visible;i++){
+      const d = document.createElement('div'); d.className = 'grain '+(spec==='chamber'?'html':spec); d.title = `${spec} #${i}`;
+      const id = `${chamber.id}.sample${i}.${spec}`; d.dataset.id = id;
+      if(!faint){ d.onclick = ()=> selectArtifact(id); }
+      cluster.appendChild(d);
+    }
+    if(count>cap){
+      const more = document.createElement('div'); more.className='item'; more.style.marginTop='6px'; more.innerHTML = `<small>more</small>+${count-cap} not shown`;
+      cluster.appendChild(more);
+    }
+
+    // subchamber glyph bar
+    const subs = childrenOf(chamber.id).filter(sid=>{
+      const sc = getCham(sid); return sc && (spec==='chamber' ? true : (sc.artifacts && sc.artifacts[spec]>0));
+    });
+    if(subs.length){
+      const bar = document.createElement('div'); bar.className='glyphs';
+      subs.forEach(sid=>{
+        const sc = getCham(sid); const g = document.createElement('div'); g.className='glyph';
+        const hot = spec==='chamber' || (sc.artifacts && sc.artifacts[spec]>0);
+        g.dataset.hot = hot;
+        const cnt = spec==='chamber' ? sumArtifacts(sc) : (sc.artifacts[spec]||0);
+        const r = 6 + Math.min(10, Math.round(Math.sqrt(cnt)));
+        g.style.width = r+'px'; g.style.height = r+'px';
+        g.title = `${sid} • ${spec.toUpperCase()} × ${cnt}`;
+        g.onclick = (e)=>{ e.stopPropagation(); jump(sid); };
+        bar.appendChild(g);
+      });
+      cluster.appendChild(bar);
+    }
+
+    // manual dragging within deck
+    if(layoutMode==='manual' && !faint){ enableClusterDrag(cluster, container); }
+
+    wrap.appendChild(cluster);
+
+    if(!mp){
+      const rectW = Math.max(240, Math.ceil(Math.sqrt(visible))*12);
+      const rectH = Math.ceil(visible/Math.ceil(Math.sqrt(visible)))*12 + 36 + (count>cap?22:0) + (subs.length?18:0);
+      rowH = Math.max(rowH, rectH);
+      x += rectW + 40;
+      if(x>rightLimit){x=84; y+=rowH+84; rowH=0;}
+    }
+  });
+
+  // Portals
+  const kids = childrenOf(chamber.id);
+  // sort portals according to sortKey
+  const kidObjs = kids.map(id=>getCham(id)).filter(Boolean);
+  kidObjs.sort((a,b)=>cmp(a,b));
+  kidObjs.forEach((kid, idx)=>{
+    const p = document.createElement('div'); p.className='portal';
+    // layout portals at the bottom area
+    const top = y + 120 + Math.floor(idx/3)*80; const left = 84 + (idx%3)*260;
+    p.style.left = left+'px'; p.style.top = top+'px'; p.id = `portal-${kid.id}`;
+    const l = document.createElement('div'); l.className='label'; l.textContent = kid.id.split('.').pop()+` [L${kid.depth}]`;
+    const body = document.createElement('div'); body.style.fontSize='12px'; body.style.color='var(--muted)'; body.textContent='Tap to enter subchamber';
+    p.appendChild(l); p.appendChild(body);
+    p.onclick = ()=> jump(kid.id);
+    wrap.appendChild(p);
+  });
+
+  container.appendChild(wrap);
+}
+
+function enableClusterDrag(cluster, container){
+  let startX=0,startY=0, oX=0,oY=0, dragging=false;
+  cluster.addEventListener('mousedown', e=>{ dragging=true; cluster.classList.add('draggable'); startX=e.clientX; startY=e.clientY; const r=cluster.getBoundingClientRect(); const pr=container.getBoundingClientRect(); oX=r.left-pr.left; oY=r.top-pr.top; e.preventDefault(); });
+  window.addEventListener('mousemove', e=>{ if(!dragging) return; const dx=e.clientX-startX, dy=e.clientY-startY; let nx=oX+dx, ny=oY+dy; if(snap){ nx = Math.round(nx/10)*10; ny = Math.round(ny/10)*10; } cluster.style.left = nx+'px'; cluster.style.top = ny+'px'; });
+  window.addEventListener('mouseup', e=>{ if(!dragging) return; dragging=false; cluster.classList.remove('draggable'); const spec=cluster.dataset.spec, ch=cluster.dataset.ch; const r=cluster.getBoundingClientRect(); const pr=container.getBoundingClientRect(); const nx = Math.round((r.left-pr.left)); const ny = Math.round((r.top-pr.top)); manualPositions[ch] = manualPositions[ch] || {}; manualPositions[ch][spec] = {x:nx,y:ny}; drawLinks(); });
+}
+
+/*********** ATLAS MODE ***********/
+function renderAtlas(){
+  const g = byId('atlasGrid'); g.innerHTML='';
+  const wrap = document.createElement('div'); wrap.style.position='relative'; wrap.style.width='100%'; wrap.style.height='100%';
+
+  const entries = [];
+  DATA.chambers.forEach(ch=>{
+    Object.entries(ch.artifacts||{}).forEach(([spec,count])=>{ if(filters.size && !filters.has(spec)) return; entries.push({ch:ch.id, spec, count, mtime:ch.mtime||0}); });
+    if(chamberAsSpecies){ const kids = childrenOf(ch.id); if(kids.length) entries.push({ch:ch.id, spec:'chamber', count:kids.length, mtime:ch.mtime||0}); }
+  });
+  // sort balls by current sort
+  entries.sort((a,b)=>{
+    if(sortKey==='name') return (sortAsc?1:-1) * (a.spec.localeCompare(b.spec));
+    if(sortKey==='modified') return (sortAsc?1:-1) * (a.mtime - b.mtime);
+    if(sortKey==='count') return (sortAsc?1:-1) * (a.count - b.count);
+    return 0;
+  });
+
+  const cols = 6; const gap=40; const pad=80; const cell=140;
+  entries.forEach((e,i)=>{
+    const x = pad + (i%cols)* (cell+gap);
+    const y = pad + Math.floor(i/cols) * (cell+gap);
+    const r = 8 + Math.sqrt(e.count);
+    const ball = document.createElement('div');
+    ball.className = 'ball '+(e.spec==='chamber'?'html':e.spec); ball.style.width = (r*2)+'px'; ball.style.height=(r*2)+'px';
+    ball.style.left = (x - r)+'px'; ball.style.top = (y - r)+'px';
+    ball.title = `${e.ch} • ${e.spec.toUpperCase()} • ${e.count}`;
+    ball.onclick = ()=> { jump(e.ch); setMode('deck'); };
+    wrap.appendChild(ball);
+
+    const lab = document.createElement('div'); lab.style.position='absolute'; lab.style.left=(x+ r + 8)+'px'; lab.style.top=(y-10)+'px'; lab.style.fontSize='11px'; lab.style.color='var(--muted)'; lab.textContent = `${e.spec.toUpperCase()} × ${e.count}`;
+    wrap.appendChild(lab);
+  });
+  g.appendChild(wrap);
+  byId('status').textContent = 'Atlas: all species across decks';
+  drawMini();
+}
+
+/*********** SIDEWAYS MODE ***********/
+function renderSideways(){
+  const g = byId('sideGrid'); g.innerHTML='';
+  const wrap = document.createElement('div'); wrap.style.position='relative'; wrap.style.width='100%'; wrap.style.height='100%';
+
+  const lineage = []; const anc = []; let p = parentOf(current); while(p){ anc.unshift(p); p = parentOf(p); }
+  lineage.push(...anc, current, ...childrenOf(current));
+
+  const colW=300, gap=80, pad=80;
+  lineage.forEach((id,idx)=>{
+    const ch = getCham(id); if(!ch) return;
+    const box = document.createElement('div'); box.className='cluster'; box.style.left=(pad+idx*(colW+gap))+'px'; box.style.top=pad+'px'; box.style.width=colW+'px';
+    const label = document.createElement('div'); label.className='label'; label.textContent = `${id} [L${ch.depth}] (${sumArtifacts(ch)}) • ${fmtDate(ch.mtime)}`; box.appendChild(label);
+    Object.entries(ch.artifacts||{}).slice(0,4).forEach(([spec,count])=>{
+      const visible = Math.min(count, 60); for(let i=0;i<visible;i++){ const d=document.createElement('div'); d.className='grain '+spec; d.title=`${id}.${spec} #${i}`; const aid=`${id}.sample${i}.${spec}`; d.dataset.id=aid; d.onclick=()=>{ selectArtifact(aid); }; box.appendChild(d);} });
+    wrap.appendChild(box);
+  });
+  g.appendChild(wrap);
+  byId('status').textContent = 'Sideways: lineage corridor';
+  drawLinks(true);
+  drawMini();
+}
+
+/*********** TOPOGRAPHY MODE ***********/
+function renderTopo() {
+    byId('status').textContent = 'Topography: 3D data landscape';
+    // Clear existing scene if present
+    if (renderer) {
+        renderer.dispose();
+        if (topoContainer.firstChild) {
+            topoContainer.removeChild(topoContainer.firstChild);
+        }
+    }
+    chamberMap.clear(); // Clear map for chamber interaction
+
+    const width = topoContainer.clientWidth;
+    const height = topoContainer.clientHeight;
+
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue('--bg-main').trim());
+
+    camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
+    camera.position.set(0, 150, 200);
+
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(width, height);
+    topoContainer.appendChild(renderer.domElement);
+
+    // Controls
+    controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.screenSpacePanning = false;
+    controls.minDistance = 50;
+    controls.maxDistance = 500;
+    controls.maxPolarAngle = Math.PI / 2; // Prevent camera from going below the ground
+
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0x404040, 0.8);
+    scene.add(ambientLight);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6);
+    directionalLight.position.set(100, 200, 150);
+    scene.add(directionalLight);
+
+    // --- Generate Chambers as Mountains ---
+    const chambersToRender = [];
+    const currentCham = getCham(current);
+    if (currentCham) {
+        chambersToRender.push({ id: currentCham.id, type: 'current' });
+        const parentCham = getCham(parentOf(currentCham.id));
+        if (parentCham) chambersToRender.push({ id: parentCham.id, type: 'parent' });
+        const siblingChams = siblingsOf(currentCham.id).filter(c => c.id !== currentCham.id);
+        siblingChams.forEach(s => chambersToRender.push({ id: s.id, type: 'sibling' }));
+        const childChams = childrenOf(currentCham.id).map(id => getCham(id)).filter(Boolean);
+        childChams.forEach(c => chambersToRender.push({ id: c.id, type: 'child' }));
+    }
+
+    const mountainPositions = {}; // To store positions for linking
+    const BASE_HEIGHT_UNIT = 5; // Height unit per artifact count scale
+    const BASE_RADIUS_UNIT = 0.5; // Radius unit per artifact count scale
+    const MAX_BASE_RADIUS = 60;
+    const MAX_TOTAL_HEIGHT = 100;
+    const SPACING = 150; // Distance between mountains
+
+    // Function to create 3D text labels
+    function createTextSprite(message, color = '#FFFFFF', size = 12) {
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        const font = `${size}px Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,Ubuntu,Arial,sans-serif`;
+        context.font = font;
+        const metrics = context.measureText(message);
+        const textWidth = metrics.width;
+        canvas.width = textWidth + 10;
+        canvas.height = size + 10;
+        context.font = font;
+        context.fillStyle = color;
+        context.textAlign = 'center';
+        context.textBaseline = 'middle';
+        context.fillText(message, canvas.width / 2, canvas.height / 2);
+
+        const texture = new THREE.CanvasTexture(canvas);
+        const material = new THREE.SpriteMaterial({ map: texture });
+        const sprite = new THREE.Sprite(material);
+        sprite.scale.set(canvas.width / 4, canvas.height / 4, 1); // Scale sprite to make it readable
+        return sprite;
+    }
+
+    chambersToRender.forEach((entry, idx) => {
+        const ch = getCham(entry.id);
+        if (!ch) return;
+
+        const totalArtifacts = sumArtifacts(ch);
+        const baseRadius = Math.min(MAX_BASE_RADIUS, Math.max(10, totalArtifacts * BASE_RADIUS_UNIT));
+
+        let currentY = 0;
+        const chamberGroup = new THREE.Group();
+        chamberGroup.userData = { id: ch.id, type: entry.type }; // Store chamber ID for interaction
+
+        const artifactsSorted = Object.entries(ch.artifacts || {}).map(([spec, count]) => ({ spec, count }))
+                                     .sort((a, b) => a.spec.localeCompare(b.spec)); // Consistent sorting for layers
+
+        artifactsSorted.forEach(({ spec, count }) => {
+            if (filters.size && !filters.has(spec)) return;
+            const layerHeight = Math.min(MAX_TOTAL_HEIGHT / 10, Math.max(1, count * BASE_HEIGHT_UNIT / 10)); // Scale height more gently
+            
+            const geometry = new THREE.CylinderGeometry(
+                baseRadius * (1 - currentY / MAX_TOTAL_HEIGHT * 0.5), // Taper the cylinder slightly
+                baseRadius,
+                layerHeight,
+                32
+            );
+            const material = new THREE.MeshPhongMaterial({ color: speciesColors[spec] || new THREE.Color(0x888888) });
+            const cylinder = new THREE.Mesh(geometry, material);
+            cylinder.position.y = currentY + layerHeight / 2; // Position above previous layer
+            chamberGroup.add(cylinder);
+            currentY += layerHeight;
+        });
+
+        if (entry.type === 'current') {
+            chamberGroup.position.set(0, 0, 0);
+        } else if (entry.type === 'parent') {
+            chamberGroup.position.set(0, 0, -SPACING * 1.5);
+        } else if (entry.type === 'child') {
+            const angle = (idx / childChams.length) * Math.PI * 0.8 - Math.PI * 0.4;
+            chamberGroup.position.set(Math.sin(angle) * SPACING * 1.2, 0, Math.cos(angle) * SPACING * 1.2);
+        } else if (entry.type === 'sibling') {
+            const angle = (idx / siblingChams.length) * Math.PI * 2;
+            chamberGroup.position.set(Math.sin(angle) * SPACING, 0, Math.cos(angle) * SPACING);
+        }
+
+        // Add a ground plane circle for visual context
+        const groundGeometry = new THREE.CircleGeometry(baseRadius * 1.2, 32);
+        const groundMaterial = new THREE.MeshBasicMaterial({ color: 0x1A3A52, side: THREE.DoubleSide }); // Border color
+        const groundCircle = new THREE.Mesh(groundGeometry, groundMaterial);
+        groundCircle.rotation.x = -Math.PI / 2;
+        groundCircle.position.y = -0.5; // Slightly below the mountain base
+        chamberGroup.add(groundCircle);
+
+        // Add text label
+        const textSprite = createTextSprite(ch.name || ch.id, getComputedStyle(document.documentElement).getPropertyValue('--blue').trim());
+        textSprite.position.y = currentY + 10; // Position above the mountain
+        chamberGroup.add(textSprite);
+
+        scene.add(chamberGroup);
+        mountainPositions[ch.id] = chamberGroup.position;
+        chamberMap.set(ch.id, chamberGroup);
+
+        // Highlight current chamber
+        if (entry.type === 'current') {
+            const glowMaterial = new THREE.MeshBasicMaterial({
+                color: speciesColors['blue'],
+                transparent: true,
+                opacity: 0.3,
+                blending: THREE.AdditiveBlending
+            });
+            const glowGeometry = new THREE.CylinderGeometry(baseRadius * 1.2, baseRadius * 1.2, MAX_TOTAL_HEIGHT * 1.2, 32);
+            const glowMesh = new THREE.Mesh(glowGeometry, glowMaterial);
+            glowMesh.position.y = MAX_TOTAL_HEIGHT * 0.6;
+            chamberGroup.add(glowMesh);
+        }
+    });
+
+    // --- Draw 3D Links (Taxonomy and Morphism) ---
+    DATA.connections.forEach(conn => {
+        if (!linkVisibility[conn.type]) return;
+
+        const sourcePos = mountainPositions[conn.source];
+        const targetPos = mountainPositions[conn.target];
+
+        if (sourcePos && targetPos) {
+            const curve = new THREE.CatmullRomCurve3([
+                new THREE.Vector3(sourcePos.x, sourcePos.y + MAX_TOTAL_HEIGHT / 2, sourcePos.z),
+                new THREE.Vector3((sourcePos.x + targetPos.x) / 2, Math.max(sourcePos.y, targetPos.y) + 80, (sourcePos.z + targetPos.z) / 2),
+                new THREE.Vector3(targetPos.x, targetPos.y + MAX_TOTAL_HEIGHT / 2, targetPos.z)
+            ]);
+
+            const tubeGeometry = new THREE.TubeGeometry(curve, 20, 2, 8, false); // path, segments, radius, radialSegments, closed
+            const lineColor = conn.type === 'morphism' ? speciesColors['pink'] : speciesColors['cyan'];
+            const lineMaterial = new THREE.MeshBasicMaterial({
+                color: lineColor,
+                transparent: true,
+                opacity: 0.6,
+                blending: THREE.AdditiveBlending
+            });
+            const tube = new THREE.Mesh(tubeGeometry, lineMaterial);
+            scene.add(tube);
+        }
+    });
+
+    // Handle clicks on mountains
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    function onMouseClick(event) {
+        // Calculate mouse position in normalized device coordinates (-1 to +1)
+        // Adjust for padding of the .stage element
+        const stageRect = topoContainer.getBoundingClientRect();
+        mouse.x = ((event.clientX - stageRect.left) / stageRect.width) * 2 - 1;
+        mouse.y = -((event.clientY - stageRect.top) / stageRect.height) * 2 + 1;
+
+        raycaster.setFromCamera(mouse, camera);
+        const intersects = raycaster.intersectObjects(scene.children, true);
+
+        if (intersects.length > 0) {
+            let clickedObject = intersects[0].object;
+            // Traverse up to find the Group representing the chamber
+            while (clickedObject && !clickedObject.userData.id) {
+                clickedObject = clickedObject.parent;
+            }
+            if (clickedObject && clickedObject.userData.id) {
+                jump(clickedObject.userData.id);
+            }
+        }
+    }
+    renderer.domElement.addEventListener('click', onMouseClick, false);
+
+    // --- Animation Loop ---
+    const animate = () => {
+        window.animationFrameId = requestAnimationFrame(animate);
+        controls.update(); // only required if controls.enableDamping or controls.autoRotate are set to true
+        renderer.render(scene, camera);
+    };
+
+    // Handle window resize
+    const onWindowResize = () => {
+        camera.aspect = topoContainer.clientWidth / topoContainer.clientHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(topoContainer.clientWidth, topoContainer.clientHeight);
+    };
+    window.addEventListener('resize', onWindowResize, false);
+
+    animate();
+}
+
+/*********** PREVIEW MODE ***********/
+function renderPreview(){
+  byId('status').textContent = 'Preview: Text documents from current chamber';
+  
+  const cur = getCham(current);
+  if(!cur){
+    byId('previewTitle').textContent = 'No chamber selected';
+    byId('previewContent').textContent = '';
+    return;
+  }
+  
+  // Get all text-viewable files from current chamber
+  const textExtensions = ['json', 'py', 'txt', 'md', 'html', 'js', 'css', 'sh', 'yml', 'yaml', 'xml'];
+  const textFiles = DATA.artifacts.filter(a => {
+    return a.chamber === current && textExtensions.includes(a.species);
+  });
+  
+  byId('previewTitle').textContent = `${cur.name || cur.id} — ${textFiles.length} text files`;
+  byId('previewMeta').innerHTML = `
+    <span>Chamber: <b>${current}</b></span> • 
+    <span>Depth: <b>${cur.depth}</b></span> • 
+    <span>Total artifacts: <b>${sumArtifacts(cur)}</b></span>
+  `;
+  
+  if(textFiles.length === 0){
+    byId('previewContent').innerHTML = `<div style="color:var(--muted);padding:40px;text-align:center">
+      <div style="font-size:48px;margin-bottom:16px">📄</div>
+      <div>No text files in this chamber</div>
+      <div style="margin-top:12px;font-size:12px">Try a different chamber or look for .json, .py, .txt, .md, .html files</div>
+    </div>`;
+    return;
+  }
+  
+  // Build file list
+  const fileList = document.createElement('div');
+  fileList.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:30px';
+  
+  textFiles.forEach(file => {
+    const card = document.createElement('div');
+    card.style.cssText = `
+      background:var(--bg-panel);
+      border:1px solid var(--border);
+      border-radius:10px;
+      padding:12px;
+      cursor:pointer;
+      transition:all .2s;
+    `;
+    
+    const icon = {
+      'json': '📋',
+      'py': '🐍',
+      'txt': '📝',
+      'md': '📖',
+      'html': '🌐',
+      'js': '⚡',
+      'css': '🎨',
+      'sh': '💻',
+      'yml': '⚙️',
+      'yaml': '⚙️',
+      'xml': '📄'
+    }[file.species] || '📄';
+    
+    card.innerHTML = `
+      <div style="display:flex;gap:8px;align-items:start">
+        <div style="font-size:24px">${icon}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;color:var(--blue);font-size:13px;margin-bottom:4px;word-break:break-all">
+            ${file.id.split('/').pop()}
+          </div>
+          <div style="font-size:11px;color:var(--muted)">
+            ${file.species.toUpperCase()} • ${file.size} MB
+          </div>
+        </div>
+      </div>
+    `;
+    
+    card.onmouseenter = () => {
+      card.style.borderColor = 'var(--blue)';
+      card.style.background = 'rgba(77,217,204,.08)';
+      card.style.transform = 'translateY(-2px)';
+    };
+    card.onmouseleave = () => {
+      card.style.borderColor = 'var(--border)';
+      card.style.background = 'var(--bg-panel)';
+      card.style.transform = 'translateY(0)';
+    };
+    
+    card.onclick = () => loadFilePreview(file);
+    
+    fileList.appendChild(card);
+  });
+  
+  byId('previewContent').innerHTML = '';
+  byId('previewContent').appendChild(fileList);
+}
+
+let currentFileContent = '';
+let currentFileName = '';
+let currentFileType = '';
+let viewMode = 'rendered'; // 'rendered' or 'source'
+
+async function loadFilePreview(file){
+  byId('previewTitle').textContent = `Loading ${file.id.split('/').pop()}...`;
+  byId('previewContent').textContent = 'Fetching file content...';
+  byId('previewIframe').style.display = 'none';
+  byId('previewContent').style.display = 'block';
+  byId('previewControls').style.display = 'none';
+  
+  try{
+    // Construct file path - files are in parent directory
+    const filePath = '../' + file.id;
+    const response = await fetch(filePath);
+    
+    if(!response.ok) throw new Error(`HTTP ${response.status}`);
+    
+    const content = await response.text();
+    const fileName = file.id.split('/').pop();
+    
+    // Store for toggle/copy functionality
+    currentFileContent = content;
+    currentFileName = fileName;
+    currentFileType = file.species;
+    
+    byId('previewTitle').innerHTML = `
+      <span style="font-size:28px;margin-right:8px">${getFileIcon(file.species)}</span>
+      ${fileName}
+    `;
+    
+    byId('previewMeta').innerHTML = `
+      <span>Path: <code style="background:rgba(255,255,255,.05);padding:2px 6px;border-radius:4px">${file.id}</code></span><br>
+      <span>Type: <b>${file.species.toUpperCase()}</b></span> • 
+      <span>Size: <b>${file.size} MB</b></span> • 
+      <span>Lines: <b>${content.split('\n').length.toLocaleString()}</b></span> • 
+      <span>Characters: <b>${content.length.toLocaleString()}</b></span>
+    `;
+    
+    // Show controls
+    byId('previewControls').style.display = 'flex';
+    
+    // HTML files: render in iframe by default
+    if(file.species === 'html'){
+      viewMode = 'rendered';
+      byId('toggleViewMode').textContent = 'View Source';
+      byId('toggleViewMode').style.display = 'inline-block';
+      byId('previewIframe').srcdoc = content;
+      byId('previewIframe').style.display = 'block';
+      byId('previewContent').style.display = 'none';
+    } else {
+      // All other text files: show source
+      viewMode = 'source';
+      byId('toggleViewMode').style.display = 'none';
+      renderSourceCode(content, file.species);
+    }
+    
+  }catch(err){
+    console.error('Failed to load file:', err);
+    byId('previewTitle').textContent = `❌ Failed to load ${file.id.split('/').pop()}`;
+    byId('previewContent').style.display = 'block';
+    byId('previewIframe').style.display = 'none';
+    byId('previewContent').innerHTML = `
+      <div style="color:var(--coral);padding:20px">
+        <div style="font-weight:700;margin-bottom:8px">Error loading file:</div>
+        <div>${err.message}</div>
+        <div style="margin-top:16px;font-size:12px;color:var(--muted)">
+          File path: <code>${file.id}</code><br>
+          This file may not be accessible from the web server.
+        </div>
+      </div>
+    `;
+  }
+}
+
+function renderSourceCode(content, fileType){
+  byId('previewContent').style.display = 'block';
+  byId('previewIframe').style.display = 'none';
+  
+  // Add line numbers for code files
+  if(['py', 'js', 'html', 'css', 'sh', 'json', 'yml', 'yaml'].includes(fileType)){
+    const lines = content.split('\n');
+    const maxLineNum = lines.length.toString().length;
+    const numbered = lines.map((line, i) => 
+      `<span style="color:var(--muted);user-select:none;display:inline-block;width:${maxLineNum * 10 + 20}px;text-align:right;margin-right:16px">${i+1}</span>${escapeHtml(line)}`
+    ).join('\n');
+    byId('previewContent').innerHTML = numbered;
+  } else {
+    // Plain text, no line numbers
+    byId('previewContent').textContent = content;
+  }
+}
+
+function toggleViewMode(){
+  if(currentFileType !== 'html') return;
+  
+  if(viewMode === 'rendered'){
+    viewMode = 'source';
+    byId('toggleViewMode').textContent = 'View Rendered';
+    renderSourceCode(currentFileContent, currentFileType);
+  } else {
+    viewMode = 'rendered';
+    byId('toggleViewMode').textContent = 'View Source';
+    byId('previewIframe').srcdoc = currentFileContent;
+    byId('previewIframe').style.display = 'block';
+    byId('previewContent').style.display = 'none';
+  }
+}
+
+function copyToClipboard(){
+  if(!currentFileContent) return;
+  
+  navigator.clipboard.writeText(currentFileContent).then(()=>{
+    const btn = byId('copyContent');
+    const original = btn.textContent;
+    btn.textContent = '✓ Copied!';
+    btn.style.background = 'var(--green)';
+    setTimeout(()=>{
+      btn.textContent = original;
+      btn.style.background = '';
+    }, 2000);
+  }).catch(err=>{
+    console.error('Copy failed:', err);
+    alert('Failed to copy to clipboard');
+  });
+}
+
+function getFileIcon(ext){
+  const icons = {
+    'json': '📋', 'py': '🐍', 'txt': '📝', 'md': '📖', 'html': '🌐',
+    'js': '⚡', 'css': '🎨', 'sh': '💻', 'yml': '⚙️', 'yaml': '⚙️', 'xml': '📄'
+  };
+  return icons[ext] || '📄';
+}
+
+function escapeHtml(text){
+  const map = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'};
+  return text.replace(/[&<>"']/g, m => map[m]);
+}
+
+/*********** INSPECTOR & LINKS ***********/
+function findArtifact(id){
+  return DATA.artifacts.find(a=>a.id===id) || (()=>{ const parts=id.split('.'); const spec=parts.pop(); return {id, chamber:parts.slice(0,-1).join('.'), species:spec, size:(Math.random()*4).toFixed(2), references:[], referencedBy:[]}; })();
+}
+
+function selectArtifact(id){
+  sel = id; byId('sel').textContent = id; const a = findArtifact(id);
+  const depth = (getCham(a.chamber)||{}).depth ?? '?';
+  const ch = getCham(a.chamber)||{};
+  const insp = byId('insp');
+  insp.innerHTML = `
+    <div class="sect">
+      <div style="word-break:break-all;font-weight:700">${a.id}</div>
+      <div class="kv">Species: ${a.species} • Size: ${a.size} MB • Chamber: ${a.chamber} [L${depth}] • Modified: ${fmtDate(a.mtime||Date.now())}</div>
+    </div>
+    ${a.ekphrasis?`
+      <div class="sect">
+        <div class="title" style="margin:6px 0 4px">Operative Ekphrasis</div>
+        <div class="item"><small>Prompt</small>“${a.ekphrasis.prompt}”</div>
+        <div class="item"><small>Generator</small>${a.ekphrasis.generator}</div>
+      </div>`:''}
+    <div class="sect">
+      <div class="title" style="margin:6px 0 4px">References (${(a.references||[]).length})</div>
+      ${(a.references&&a.references.length)? a.references.map(r=>`<div class="item"><small>references</small>${r}</div>`).join('') : '<div class="kv">None</div>'}
+    </div>
+    <div class="sect">
+      <div class="title" style="margin:6px 0 4px">Referenced By (${(a.referencedBy||[]).length})</div>
+      ${(a.referencedBy&&a.referencedBy.length)? a.referencedBy.map(r=>`<div class="item"><small>referenced by</small>${r}</div>`).join('') : '<div class="kv">None</div>'}
+    </div>
+    ${a.generates?`<div class="sect"><div class="title" style="margin:6px 0 4px">Generates</div>${a.generates.map(g=>`<div class="item"><small>generates</small>${g}</div>`).join('')}</div>`:''}
+    <div class="sect"><div class="title" style="margin:6px 0 4px">Chamber Meta</div>
+      <div class="item"><small>modified</small>${fmtDate(ch.mtime||Date.now())}</div>
+      <div class="item"><small>path</small>${trail(a.chamber).join(' / ')}</div>
+    </div>
+  `;
+  drawLinks();
+}
+
+function getGrainCenter(id){
+  const svg = byId('svg'); const svgR = svg.getBoundingClientRect();
+  const el = document.querySelector(`.grid #gridFG .grain[data-id="${CSS.escape(id)}"]`) || document.querySelector(`.grid #gridBG .grain[data-id="${CSS.escape(id)}"]`) || document.querySelector(`.grain[data-id="${CSS.escape(id)}"]`);
+  if(!el) return null; const r = el.getBoundingClientRect();
+  return {x: r.left - svgR.left + r.width/2, y: r.top - svgR.top + r.height/2};
+}
+function getPortalCenter(sid){
+  const svg = byId('svg'); const svgR = svg.getBoundingClientRect();
+  const p = document.getElementById(`portal-${sid}`);
+  if(!p) return null; const r = p.getBoundingClientRect();
+  return {x: r.left - svgR.left + r.width/2, y: r.top - svgR.top + r.height/2};
+}
+
+function drawLinks(){
+  const svg = byId('svg'); svg.innerHTML = '';
+  if (mode === 'topo') return; // Links are drawn in 3D in topo mode
+
+  const add = [];
+  if(sel){
+    const a = findArtifact(sel);
+    if(linkVisibility.reads) (a.references||[]).forEach(t=>add.push({from:sel,to:t,type:'reads'}));
+    if(linkVisibility.reads) (a.referencedBy||[]).forEach(s=>add.push({from:s,to:sel,type:'reads'}));
+    if(linkVisibility.generates) (a.generates||[]).forEach(t=>add.push({from:sel,to:t,type:'generates'}));
+  }
+  DATA.connections.forEach(c=>{ if(linkVisibility[c.type]) add.push({from:c.source,to:c.target,type:c.type}); });
+  if(linkVisibility.taxonomy && mode==='deck'){
+    const kids = childrenOf(current);
+    kids.forEach(sid=> add.push({from:`${current}`, to:`portal:${sid}`, type:'taxonomy'}) );
+  }
+  const path = (A,B)=>`M ${A.x},${A.y} C ${A.x+(B.x-A.x)*.25},${A.y} ${B.x-(B.x-A.x)*.25},${B.y} ${B.x},${B.y}`;
+  add.forEach(L=>{
+    const A = L.from.startsWith('portal:') ? getPortalCenter(L.from.slice(7)) : (getGrainCenter(L.from) || anchorFor(L.from));
+    const B = L.to.startsWith('portal:') ? getPortalCenter(L.to.slice(7)) : (getGrainCenter(L.to) || anchorFor(L.to));
+    if(!A||!B) return;
+    const p = document.createElementNS('http://www.w3.org/2000/svg','path');
+    p.setAttribute('d',path(A,B)); p.setAttribute('class','link '+(L.type||'reads')); p.setAttribute('stroke-opacity','0.9'); svg.appendChild(p);
+  });
+}
+function anchorFor(id){
+  const svg = byId('svg'); const svgR = svg.getBoundingClientRect();
+  const labs = Array.from(document.querySelectorAll('.label'));
+  const lab = labs.find(n=> n.textContent.startsWith(id));
+  if(!lab) return null; const r = lab.getBoundingClientRect();
+  return {x: r.left - svgR.left, y: r.top - svgR.top};
+}
+
+/*********** MINIMAP ***********/
+function drawMini(){
+  const c = byId('mini'); const ctx = c.getContext('2d');
+  ctx.clearRect(0,0,c.width,c.height);
+  const roots = DATA.chambers.filter(ch=>ch.depth===0);
+  const w = (c.width-20)/roots.length; const h = 24; let x=10, y=10;
+  const trailIds = new Set(trail(current));
+  roots.forEach(r=>{
+    ctx.fillStyle = trailIds.has(r.id)? '#4dd9cc' : '#284050';
+    ctx.fillRect(x,y,w,h);
+    ctx.fillStyle = '#9fb7c0'; ctx.font = '10px monospace'; ctx.fillText(r.name||r.id, x+4,y+16);
+    x+=w;
+  });
+}
+
+/*********** TRANSPORT & INPUT ***********/
+function firstChild(id){ const kids = childrenOf(id); return kids[0] || null; }
+function prevSibling(id){ const sibs = siblingsOf(id); const i = sibs.findIndex(s=>s.id===id); return i>0 ? sibs[i-1].id : null; }
+function nextSibling(id){ const sibs = siblingsOf(id); const i = sibs.findIndex(s=>s.id===id); return (i>=0 && i<sibs.length-1) ? sibs[i+1].id : null; }
+
+let snap = true;
+function bindGlobal(){
+  byId('btnParent').onclick = ()=>{ const p=parentOf(current); if(p) jump(p); };
+  byId('btnChild').onclick = ()=>{ const n=firstChild(current); if(n) jump(n); };
+  byId('btnPrevSib').onclick = ()=>{ const p=prevSibling(current); if(p) jump(p); };
+  byId('btnNextSib').onclick = ()=>{ const n=nextSibling(current); if(n) jump(n); };
+
+  byId('btnHideUI').onclick = ()=>{ uiHidden=!uiHidden; document.querySelectorAll('.drawer').forEach(d=> d.style.display = uiHidden? 'none':'flex'); };
+  byId('toggleLeft').onclick = ()=> document.getElementById('left').style.display='none';
+  byId('toggleRight').onclick = ()=> document.getElementById('right').style.display='none';
+
+  document.querySelectorAll('#modeSeg button').forEach(b=> b.onclick = ()=> setMode(b.dataset.mode));
+
+  document.querySelectorAll('#linkToggles input[type="checkbox"]').forEach(cb=>{
+    cb.onchange = ()=>{ linkVisibility[cb.dataset.link] = cb.checked; drawLinks(); rerenderMode(); };
+  });
+  byId('chAsSpec').onchange = (e)=>{ chamberAsSpecies = e.target.checked; rerenderMode(); };
+
+  byId('sortKey').onchange = (e)=>{ sortKey = e.target.value; renderExplorer(); rerenderMode(); };
+  byId('sortDir').onclick = ()=>{ sortAsc = !sortAsc; byId('sortDir').textContent = sortAsc? '↑':'↓'; renderExplorer(); rerenderMode(); };
+  byId('layoutMode').onchange = (e)=>{ layoutMode = e.target.value; rerenderMode(); };
+  byId('snapGrid').onclick = ()=>{ snap = !snap; byId('snapGrid').textContent = snap? 'Snap' : 'Free'; };
+  byId('resetLayout').onclick = ()=>{ manualPositions[current] = {}; rerenderMode(); };
+  
+  // Preview mode controls
+  byId('toggleViewMode').onclick = toggleViewMode;
+  byId('copyContent').onclick = copyToClipboard;
+
+  window.addEventListener('keydown',e=>{
+    if(e.key==='1') setMode('deck');
+    if(e.key==='2') setMode('atlas');
+    if(e.key==='3') setMode('sideways');
+    if(e.key==='4') setMode('topo');
+    if(e.key==='5') setMode('preview'); // NEW
+    if(e.key==='ArrowLeft' || e.key==='['){ const p=parentOf(current); if(p) jump(p); }
+    if(e.key==='ArrowRight' || e.key===']'){ const n=firstChild(current); if(n) jump(n); }
+    if(e.key==='ArrowUp'){ const p=prevSibling(current); if(p) jump(p); }
+    if(e.key==='ArrowDown'){ const n=nextSibling(current); if(n) jump(n); }
+    if(e.key==='h'){ uiHidden=!uiHidden; document.querySelectorAll('.drawer').forEach(d=> d.style.display = uiHidden? 'none':'flex'); }
+  });
+
+  window.addEventListener('resize',()=>{ drawLinks(); drawMini(); rerenderMode(); }); // Re-render topo on resize
+}
+
+// Boot
+init();
+setMode('deck');
+</script>
+</body>
+</html>

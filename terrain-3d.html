@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>ARKADU Terrain — 3D Topographic Ecology</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0e1a;color:#b8dbd9;font-family:'Courier New',monospace;overflow:hidden}
+#canvas{position:absolute;inset:0}
+
+.hud{position:fixed;top:20px;left:20px;background:rgba(15,20,25,.9);backdrop-filter:blur(12px);border:2px solid rgba(77,217,204,.3);border-radius:12px;padding:16px;max-width:280px;z-index:100;font-size:11px}
+.hud-title{font-size:15px;font-weight:bold;color:#4dd9cc;margin-bottom:12px;letter-spacing:1px}
+.hud-section{margin:10px 0;padding:8px 0;border-top:1px solid rgba(77,217,204,.2)}
+.hud-label{font-size:9px;text-transform:uppercase;color:#6b8a96;margin-bottom:4px}
+.hud-value{font-size:11px;color:#b8dbd9}
+.hud-btn{display:block;width:100%;padding:7px;margin:4px 0;background:rgba(77,217,204,.1);border:1px solid rgba(77,217,204,.3);color:#b8dbd9;cursor:pointer;font-size:10px;border-radius:6px;font-family:inherit;transition:all .2s}
+.hud-btn:hover{background:rgba(77,217,204,.2);border-color:#4dd9cc}
+.hud-btn.active{background:#4dd9cc;color:#0a0e1a;border-color:#4dd9cc}
+
+.inspector{position:fixed;top:20px;right:20px;background:rgba(15,20,25,.9);backdrop-filter:blur(12px);border:2px solid rgba(217,123,143,.3);border-radius:12px;padding:16px;width:320px;z-index:100;font-size:11px;transform:translateX(400px);transition:transform .3s}
+.inspector.open{transform:translateX(0)}
+.inspector-close{position:absolute;top:12px;right:12px;width:20px;height:20px;cursor:pointer;color:#b8dbd9;font-size:18px;line-height:20px;text-align:center}
+.inspector-title{font-size:14px;font-weight:bold;color:#d97b8f;margin-bottom:12px}
+.inspector-section{margin:12px 0;padding:10px;background:rgba(77,217,204,.05);border-left:3px solid #4dd9cc;border-radius:4px}
+.inspector-label{font-size:9px;text-transform:uppercase;color:#6b8a96;margin-top:6px;margin-bottom:3px}
+.strata-bar{height:20px;margin:4px 0;border-radius:3px;display:flex;align-items:center;padding:0 8px;font-size:9px;font-weight:bold}
+
+.minimap{position:fixed;bottom:20px;right:20px;width:200px;height:150px;background:rgba(15,20,25,.9);border:2px solid rgba(77,217,204,.3);border-radius:8px;z-index:100}
+.minimap-canvas{width:100%;height:100%;border-radius:6px}
+
+.controls{position:fixed;bottom:20px;left:20px;background:rgba(15,20,25,.9);backdrop-filter:blur(12px);border:2px solid rgba(77,217,204,.3);border-radius:12px;padding:14px;z-index:100}
+.control-group{margin:8px 0}
+.control-label{font-size:9px;text-transform:uppercase;color:#6b8a96;margin-bottom:4px}
+.slider{width:160px;height:4px;-webkit-appearance:none;appearance:none;background:rgba(77,217,204,.2);border-radius:2px;outline:none}
+.slider::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;background:#4dd9cc;border-radius:50%;cursor:pointer}
+.slider::-moz-range-thumb{width:12px;height:12px;background:#4dd9cc;border-radius:50%;cursor:pointer;border:none}
+.toggle{display:flex;align-items:center;gap:8px;margin:4px 0;cursor:pointer}
+.toggle-box{width:12px;height:12px;border:1px solid #4dd9cc;border-radius:2px}
+.toggle-box.on{background:#4dd9cc}
+
+.loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;background:#0a0e1a;z-index:200;font-size:14px;color:#4dd9cc}
+.loading.hidden{display:none}
+.progress-bar{width:300px;height:6px;background:rgba(77,217,204,.2);border-radius:3px;overflow:hidden}
+.progress-fill{height:100%;background:#4dd9cc;width:0%;transition:width .3s}
+
+.tooltip{position:fixed;background:rgba(15,20,25,.95);border:1px solid #4dd9cc;padding:8px 12px;border-radius:6px;font-size:10px;pointer-events:none;z-index:150;display:none}
+</style>
+</head><body>
+<div id="canvas"></div>
+
+<div class="loading" id="loading">
+<div>GENERATING TERRAIN...</div>
+<div class="progress-bar"><div class="progress-fill" id="progress"></div></div>
+<div id="loadStatus" style="font-size:11px;color:#6b8a96">Initializing...</div>
+</div>
+
+<div class="hud">
+<div class="hud-title">TERRAIN SURVEYOR</div>
+<div class="hud-section">
+<div class="hud-label">Camera</div>
+<div class="hud-value" id="camMode">Orbit</div>
+</div>
+<div class="hud-section">
+<div class="hud-label">Focus</div>
+<div class="hud-value" id="focusInfo">None</div>
+</div>
+<div class="hud-section">
+<div class="hud-label">Position</div>
+<div class="hud-value" id="posInfo">—</div>
+</div>
+<div class="hud-section">
+<button class="hud-btn active" id="btnOrbit">Orbit Mode</button>
+<button class="hud-btn" id="btnFly">Fly Mode</button>
+<button class="hud-btn" id="btnReset">Reset View</button>
+</div>
+</div>
+
+<div class="inspector" id="inspector">
+<div class="inspector-close" onclick="closeInspector()">×</div>
+<div class="inspector-title" id="inspTitle">Chamber</div>
+<div id="inspContent"></div>
+</div>
+
+<div class="minimap">
+<canvas class="minimap-canvas" id="minimap" width="200" height="150"></canvas>
+</div>
+
+<div class="controls">
+<div class="control-group">
+<div class="control-label">Terrain Scale</div>
+<input type="range" class="slider" id="scaleSlider" min="0.5" max="3" step="0.1" value="1">
+</div>
+<div class="control-group">
+<div class="control-label">Height Exaggeration</div>
+<input type="range" class="slider" id="heightSlider" min="0.5" max="3" step="0.1" value="1.5">
+</div>
+<div class="control-group">
+<div class="control-label">Connections</div>
+<div class="toggle" onclick="toggleConnections('reads')">
+<div class="toggle-box on" id="tog-reads"></div>
+<div style="font-size:10px">Reads</div>
+</div>
+<div class="toggle" onclick="toggleConnections('generates')">
+<div class="toggle-box on" id="tog-generates"></div>
+<div style="font-size:10px">Generates</div>
+</div>
+<div class="toggle" onclick="toggleConnections('chains')">
+<div class="toggle-box on" id="tog-chains"></div>
+<div style="font-size:10px">Chains</div>
+</div>
+</div>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const S={chambers:[],artifacts:[],chains:[],mountains:[],connections:[],
+scene:null,camera:null,renderer:null,controls:null,
+selected:null,mode:'orbit',
+showReads:true,showGenerates:true,showChains:true,
+terrainScale:1,heightExag:1.5};
+
+const COLORS={png:0x4dd9cc,jpg:0x4dd9cc,mp4:0xd97b8f,mp3:0xe8b849,py:0xe8b849,json:0x9d7be8,html:0x6bbd8f,unknown:0x6b8a96};
+
+async function load(){
+try{
+updateProgress('Loading artifacts...',20);
+const r=await fetch('/sys/primitive.jsonl');
+const t=await r.text();
+S.artifacts=t.trim().split('\n').map(l=>JSON.parse(l));
+
+updateProgress('Loading chains...',40);
+try{
+const cr=await fetch('/sys/ekphrasis.jsonl');
+const ct=await cr.text();
+S.chains=ct.trim().split('\n').map(l=>JSON.parse(l));
+}catch(e){S.chains=[];}
+
+updateProgress('Building chambers...',60);
+buildChambers();
+
+updateProgress('Generating terrain...',80);
+await initThree();
+generateTerrain();
+
+updateProgress('Complete',100);
+setTimeout(()=>document.getElementById('loading').classList.add('hidden'),500);
+animate();
+}catch(e){
+console.error(e);
+document.getElementById('loadStatus').innerHTML=`<span style="color:#d97b8f">ERROR: ${e.message}</span>`;
+}}
+
+function updateProgress(msg,pct){
+document.getElementById('loadStatus').textContent=msg;
+document.getElementById('progress').style.width=pct+'%';
+}
+
+function buildChambers(){
+const m={};
+S.artifacts.forEach(a=>{
+const p=a.path.split('/');
+for(let d=1;d<=Math.min(p.length-1,3);d++){
+const cp=p.slice(0,d).join('/');
+if(!m[cp]){
+m[cp]={id:cp,name:p[d-1],depth:d-1,parent:d>1?p.slice(0,d-1).join('/'):null,children:[],artifacts:[],species:{},totalSize:0};
+}
+if(d===p.length-1){
+m[cp].artifacts.push(a);
+const s=(a.ext||'unknown').replace(/^\./,'');
+m[cp].species[s]=(m[cp].species[s]||0)+1;
+m[cp].totalSize+=(a.size||0);
+}
+}
+});
+Object.values(m).forEach(c=>{
+if(c.parent&&m[c.parent]){
+if(!m[c.parent].children.includes(c.id))m[c.parent].children.push(c.id);
+}
+});
+S.chambers=Object.values(m);
+}
+
+async function initThree(){
+S.scene=new THREE.Scene();
+S.scene.background=new THREE.Color(0x0a0e1a);
+S.scene.fog=new THREE.Fog(0x0a0e1a,500,2000);
+
+S.camera=new THREE.PerspectiveCamera(60,window.innerWidth/window.innerHeight,1,3000);
+S.camera.position.set(0,400,600);
+
+S.renderer=new THREE.WebGLRenderer({antialias:true});
+S.renderer.setSize(window.innerWidth,window.innerHeight);
+S.renderer.shadowMap.enabled=true;
+document.getElementById('canvas').appendChild(S.renderer.domElement);
+
+// Lighting
+const ambient=new THREE.AmbientLight(0x404c5c,0.6);
+S.scene.add(ambient);
+
+const sun=new THREE.DirectionalLight(0xffffff,0.8);
+sun.position.set(200,400,100);
+sun.castShadow=true;
+sun.shadow.camera.left=-500;
+sun.shadow.camera.right=500;
+sun.shadow.camera.top=500;
+sun.shadow.camera.bottom=-500;
+S.scene.add(sun);
+
+// Ground plane
+const groundGeo=new THREE.PlaneGeometry(2000,2000);
+const groundMat=new THREE.MeshStandardMaterial({color:0x0f1419,roughness:0.9});
+const ground=new THREE.Mesh(groundGeo,groundMat);
+ground.rotation.x=-Math.PI/2;
+ground.position.y=-10;
+ground.receiveShadow=true;
+S.scene.add(ground);
+
+// Grid
+const grid=new THREE.GridHelper(2000,40,0x1a3a52,0x1a3a52);
+grid.position.y=-9;
+S.scene.add(grid);
+
+setupControls();
+window.addEventListener('resize',onResize);
+S.renderer.domElement.addEventListener('click',onClick);
+S.renderer.domElement.addEventListener('mousemove',onMouseMove);
+}
+
+function setupControls(){
+if(typeof THREE.OrbitControls==='undefined'){
+// Fallback: basic mouse drag
+let dragging=false,lastX=0,lastY=0;
+S.renderer.domElement.onmousedown=e=>{dragging=true;lastX=e.clientX;lastY=e.clientY};
+S.renderer.domElement.onmousemove=e=>{
+if(!dragging)return;
+const dx=e.clientX-lastX,dy=e.clientY-lastY;
+const angle=Math.atan2(S.camera.position.z,S.camera.position.x);
+const radius=Math.sqrt(S.camera.position.x**2+S.camera.position.z**2);
+const newAngle=angle-dx*0.005;
+S.camera.position.x=Math.cos(newAngle)*radius;
+S.camera.position.z=Math.sin(newAngle)*radius;
+S.camera.position.y+=dy*0.5;
+S.camera.lookAt(0,50,0);
+lastX=e.clientX;lastY=e.clientY;
+};
+S.renderer.domElement.onmouseup=()=>dragging=false;
+}else{
+S.controls=new THREE.OrbitControls(S.camera,S.renderer.domElement);
+S.controls.target.set(0,50,0);
+S.controls.enableDamping=true;
+S.controls.dampingFactor=0.05;
+}
+}
+
+function generateTerrain(){
+const kingdoms=S.chambers.filter(c=>c.depth===0).sort((a,b)=>b.artifacts.length-a.artifacts.length);
+const angleStep=Math.PI*2/kingdoms.length;
+
+kingdoms.forEach((ch,i)=>{
+const angle=i*angleStep;
+const radius=250;
+const x=Math.cos(angle)*radius;
+const z=Math.sin(angle)*radius;
+createMountain(ch,x,0,z,i);
+
+// Position children around parent
+ch.children.forEach((cid,ci)=>{
+const child=S.chambers.find(c=>c.id===cid);
+if(!child)return;
+const childAngle=angle+(ci-ch.children.length/2)*0.3;
+const childRadius=radius*0.6;
+const cx=Math.cos(childAngle)*childRadius;
+const cz=Math.sin(childAngle)*childRadius;
+createMountain(child,cx,-30,cz,i*100+ci);
+
+// Grandchildren
+child.children.forEach((gcid,gci)=>{
+const gc=S.chambers.find(c=>c.id===gcid);
+if(!gc)return;
+const gcAngle=childAngle+(gci-child.children.length/2)*0.2;
+const gcRadius=childRadius*0.7;
+const gcx=Math.cos(gcAngle)*gcRadius;
+const gcz=Math.sin(gcAngle)*gcRadius;
+createMountain(gc,gcx,-50,gcz,i*1000+ci*10+gci);
+});
+});
+});
+
+// Create connections
+if(S.showChains){
+S.chains.forEach(chain=>{
+const srcCh=S.chambers.find(c=>c.artifacts.some(a=>a.path===chain.prompt_file));
+const tgtCh=S.chambers.find(c=>c.artifacts.some(a=>a.path===chain.script));
+if(!srcCh||!tgtCh)return;
+const srcMt=S.mountains.find(m=>m.chamber.id===srcCh.id);
+const tgtMt=S.mountains.find(m=>m.chamber.id===tgtCh.id);
+if(!srcMt||!tgtMt)return;
+createConnection(srcMt.mesh.position,tgtMt.mesh.position,0x9d7be8,'chain');
+});
+}
+}
+
+function createMountain(chamber,x,y,z,seed){
+const totalFiles=chamber.artifacts.length;
+const baseRadius=Math.max(15,Math.sqrt(totalFiles)*2*S.terrainScale);
+const height=Math.max(20,(totalFiles/10)*S.heightExag);
+
+// Create stratified mountain
+const group=new THREE.Group();
+group.position.set(x,y,z);
+
+// Species strata
+const speciesList=Object.entries(chamber.species).sort((a,b)=>b[1]-a[1]);
+let yOffset=0;
+
+speciesList.forEach(([sp,cnt])=>{
+const ratio=cnt/totalFiles;
+const layerHeight=height*ratio;
+const color=COLORS[sp]||COLORS.unknown;
+
+const geo=new THREE.CylinderGeometry(baseRadius,baseRadius*1.2,layerHeight,16);
+const mat=new THREE.MeshStandardMaterial({color,roughness:0.7,metalness:0.2});
+const mesh=new THREE.Mesh(geo,mat);
+mesh.position.y=yOffset+layerHeight/2;
+mesh.castShadow=true;
+mesh.receiveShadow=true;
+group.add(mesh);
+
+yOffset+=layerHeight;
+});
+
+// Top cap
+const capGeo=new THREE.ConeGeometry(baseRadius*0.8,baseRadius*0.5,16);
+const capColor=COLORS[speciesList[0]?speciesList[0][0]:'unknown']||COLORS.unknown;
+const capMat=new THREE.MeshStandardMaterial({color:capColor,roughness:0.6});
+const cap=new THREE.Mesh(capGeo,capMat);
+cap.position.y=yOffset+baseRadius*0.25;
+cap.castShadow=true;
+group.add(cap);
+
+S.scene.add(group);
+
+// Label
+const canvas=document.createElement('canvas');
+canvas.width=256;canvas.height=64;
+const ctx=canvas.getContext('2d');
+ctx.fillStyle='#4dd9cc';
+ctx.font='bold 24px Courier New';
+ctx.textAlign='center';
+ctx.fillText(chamber.name,128,40);
+const texture=new THREE.CanvasTexture(canvas);
+const spriteMat=new THREE.SpriteMaterial({map:texture,transparent:true});
+const sprite=new THREE.Sprite(spriteMat);
+sprite.position.set(0,yOffset+30,0);
+sprite.scale.set(50,12.5,1);
+group.add(sprite);
+
+S.mountains.push({chamber,mesh:group,height:yOffset});
+group.userData={chamber,isMountain:true};
+}
+
+function createConnection(from,to,color,type){
+const curve=new THREE.QuadraticBezierCurve3(
+from,
+new THREE.Vector3((from.x+to.x)/2,(from.y+to.y)/2+50,(from.z+to.z)/2),
+to
+);
+const points=curve.getPoints(20);
+const geo=new THREE.BufferGeometry().setFromPoints(points);
+const mat=new THREE.LineBasicMaterial({color,linewidth:2,transparent:true,opacity:0.6});
+const line=new THREE.Line(geo,mat);
+line.userData={type};
+S.scene.add(line);
+S.connections.push({line,type});
+}
+
+function animate(){
+requestAnimationFrame(animate);
+if(S.controls)S.controls.update();
+S.renderer.render(S.scene,S.camera);
+updateMinimap();
+updatePosInfo();
+}
+
+function onResize(){
+S.camera.aspect=window.innerWidth/window.innerHeight;
+S.camera.updateProjectionMatrix();
+S.renderer.setSize(window.innerWidth,window.innerHeight);
+}
+
+const raycaster=new THREE.Raycaster();
+const mouse=new THREE.Vector2();
+
+function onClick(e){
+mouse.x=(e.clientX/window.innerWidth)*2-1;
+mouse.y=-(e.clientY/window.innerHeight)*2+1;
+raycaster.setFromCamera(mouse,S.camera);
+const intersects=raycaster.intersectObjects(S.scene.children,true);
+for(const hit of intersects){
+let obj=hit.object;
+while(obj.parent&&!obj.userData.isMountain)obj=obj.parent;
+if(obj.userData&&obj.userData.isMountain){
+focusMountain(obj.userData.chamber);
+return;
+}
+}
+}
+
+function onMouseMove(e){
+mouse.x=(e.clientX/window.innerWidth)*2-1;
+mouse.y=-(e.clientY/window.innerHeight)*2+1;
+raycaster.setFromCamera(mouse,S.camera);
+const intersects=raycaster.intersectObjects(S.scene.children,true);
+const tooltip=document.getElementById('tooltip');
+for(const hit of intersects){
+let obj=hit.object;
+while(obj.parent&&!obj.userData.isMountain)obj=obj.parent;
+if(obj.userData&&obj.userData.isMountain){
+const ch=obj.userData.chamber;
+tooltip.innerHTML=`<strong>${ch.name}</strong><br>${ch.artifacts.length} artifacts`;
+tooltip.style.display='block';
+tooltip.style.left=e.clientX+15+'px';
+tooltip.style.top=e.clientY+15+'px';
+return;
+}
+}
+tooltip.style.display='none';
+}
+
+function focusMountain(ch){
+S.selected=ch;
+const mt=S.mountains.find(m=>m.chamber.id===ch.id);
+if(!mt)return;
+
+// Move camera to focus
+if(S.controls){
+S.controls.target.copy(mt.mesh.position);
+}
+
+// Open inspector
+const insp=document.getElementById('inspector');
+const title=document.getElementById('inspTitle');
+const content=document.getElementById('inspContent');
+
+title.textContent=ch.name;
+
+let html=`
+<div class="inspector-section">
+<div class="inspector-label">Depth</div><div>${ch.depth}</div>
+<div class="inspector-label">Artifacts</div><div>${ch.artifacts.length}</div>
+<div class="inspector-label">Size</div><div>${(ch.totalSize/1024/1024).toFixed(2)} MB</div>
+</div>
+<div class="inspector-section">
+<div style="font-size:10px;font-weight:bold;color:#4dd9cc;margin-bottom:8px">STRATA</div>`;
+
+Object.entries(ch.species).sort((a,b)=>b[1]-a[1]).forEach(([sp,cnt])=>{
+const color=COLORS[sp]?'#'+COLORS[sp].toString(16).padStart(6,'0'):'#6b8a96';
+const pct=(cnt/ch.artifacts.length*100).toFixed(1);
+html+=`<div class="strata-bar" style="background:${color}">${sp.toUpperCase()} (${cnt}) ${pct}%</div>`;
+});
+
+html+=`</div>`;
+
+if(ch.children.length>0){
+html+=`<div class="inspector-section">
+<div style="font-size:10px;font-weight:bold;color:#4dd9cc;margin-bottom:6px">NESTED (${ch.children.length})</div>`;
+ch.children.forEach(cid=>{
+const child=S.chambers.find(c=>c.id===cid);
+if(child){
+html+=`<div style="padding:4px;margin:2px 0;background:rgba(77,217,204,.1);border-radius:3px;cursor:pointer;font-size:10px" onclick="focusChamberById('${cid}')">${child.name} (${child.artifacts.length})</div>`;
+}
+});
+html+=`</div>`;
+}
+
+content.innerHTML=html;
+insp.classList.add('open');
+
+document.getElementById('focusInfo').textContent=ch.name;
+}
+
+function closeInspector(){
+document.getElementById('inspector').classList.remove('open');
+S.selected=null;
+document.getElementById('focusInfo').textContent='None';
+}
+
+function focusChamberById(id){
+const ch=S.chambers.find(c=>c.id===id);
+if(ch)focusMountain(ch);
+}
+
+function updateMinimap(){
+const canvas=document.getElementById('minimap');
+const ctx=canvas.getContext('2d');
+ctx.fillStyle='#0f1419';
+ctx.fillRect(0,0,200,150);
+
+const scale=150/500;
+S.mountains.forEach(mt=>{
+const x=100+mt.mesh.position.x*scale;
+const y=75+mt.mesh.position.z*scale;
+const r=3;
+ctx.fillStyle='#4dd9cc';
+ctx.beginPath();
+ctx.arc(x,y,r,0,Math.PI*2);
+ctx.fill();
+});
+
+// Camera position
+const camX=100+S.camera.position.x*scale;
+const camY=75+S.camera.position.z*scale;
+ctx.strokeStyle='#d97b8f';
+ctx.lineWidth=2;
+ctx.beginPath();
+ctx.arc(camX,camY,5,0,Math.PI*2);
+ctx.stroke();
+}
+
+function updatePosInfo(){
+const x=S.camera.position.x.toFixed(0);
+const y=S.camera.position.y.toFixed(0);
+const z=S.camera.position.z.toFixed(0);
+document.getElementById('posInfo').textContent=`(${x}, ${y}, ${z})`;
+}
+
+function toggleConnections(type){
+const box=document.getElementById('tog-'+type);
+if(type==='reads')S.showReads=!S.showReads;
+if(type==='generates')S.showGenerates=!S.showGenerates;
+if(type==='chains')S.showChains=!S.showChains;
+box.classList.toggle('on');
+}
+
+document.getElementById('btnOrbit').onclick=()=>{
+S.mode='orbit';
+document.getElementById('camMode').textContent='Orbit';
+document.getElementById('btnOrbit').classList.add('active');
+document.getElementById('btnFly').classList.remove('active');
+};
+
+document.getElementById('btnFly').onclick=()=>{
+S.mode='fly';
+document.getElementById('camMode').textContent='Fly';
+document.getElementById('btnFly').classList.add('active');
+document.getElementById('btnOrbit').classList.remove('active');
+};
+
+document.getElementById('btnReset').onclick=()=>{
+S.camera.position.set(0,400,600);
+if(S.controls){
+S.controls.target.set(0,50,0);
+S.controls.update();
+}
+closeInspector();
+};
+
+document.getElementById('scaleSlider').oninput=e=>{
+S.terrainScale=parseFloat(e.target.value);
+};
+
+document.getElementById('heightSlider').oninput=e=>{
+S.heightExag=parseFloat(e.target.value);
+};
+
+load();
+</script>
+</body></html>

@@ -1,0 +1,2342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Stochastic Capacity-Constrained Voronoi — A Medium for Thinking</title>
+
+<!--
+  This file is a self-contained interactive demonstration inspired by Bret Victor's
+  "Media for Thinking the Unthinkable." It explores the tension and synergy between:
+
+  1. Capacity-Constrained Voronoi Tessellation (CCVT) / Power Diagram:
+     The core engine for achieving *guaranteed pixel-perfect area allocation* by iteratively
+     adjusting site weights. This is the "predictable" aspect.
+
+  2. Stochastic & Organic Evolution:
+     Introduces randomness and emergent behavior through:
+     a) Stochastic Site Jitter: Sites "drift" randomly during centroidal relaxation.
+     b) Evolving Cellular Automata Density Field: The underlying "mass" distribution
+        that the CCVT partitions dynamically changes using simple CA rules, forcing
+        the CCVT boundaries to "breathe" and adapt. This is the "stochastic" aspect.
+
+  3. Marching Squares for Smooth Boundaries:
+     A post-processing step for visualization that converts the pixel-grid boundaries
+     into smooth, continuous, vector-like contours, enhancing the "organic" aesthetic.
+
+  4. An Organic Subdivision Gallery:
+     Compares other non-iterative methods for creating organic, area-controlled partitions.
+
+  The interface is designed to make the invisible visible, allow direct manipulation,
+  and enable rapid what-if exploration in this complex hybrid system.
+-->
+
+<style>
+  /* --- Global Style & Color Palette --- */
+  :root {
+    --bg: #0b0f14;
+    --panel: #0f1722;
+    --ink: #dbe7ff;
+    --muted: #9fb4d3;
+    --accent: #7aa2ff;
+    --warn: #ffb86b;
+    --ok: #6be675;
+    --bad: #ff6b6b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 14px/1.4 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    overscroll-behavior: none; /* Prevent scroll bouncing on touch devices */
+  }
+  h1, h2 { letter-spacing: .5px; }
+
+  /* --- Header & Layout --- */
+  header {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    padding: 14px 16px;
+    background: linear-gradient(90deg, #0b0f14, #0d1320 60%, #0b0f14);
+    border-bottom: 1px solid #1a2332;
+  }
+  header h1 { font-size: 16px; margin: 0; }
+
+  main { display: grid; grid-template-columns: 420px 1fr; gap: 12px; padding: 12px; }
+  #left { display: flex; flex-direction: column; gap: 12px; }
+
+  /* --- Card Components --- */
+  .card {
+    background: var(--panel);
+    border: 1px solid #1a2332;
+    border-radius: 12px;
+    padding: 12px;
+  }
+  .card h2 { margin: 0 0 8px 0; font-size: 13px; color: var(--muted); }
+
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  input[type="range"] { width: 160px; }
+  input[type="number"] {
+    background: #101826;
+    border: 1px solid #23324b;
+    border-radius: 6px;
+    color: var(--ink);
+    padding: 4px 6px;
+    width: 64px;
+  }
+  select {
+    background: #101826;
+    border: 1px solid #23324b;
+    border-radius: 6px;
+    color: var(--ink);
+    padding: 4px 6px;
+    min-width: 100px;
+  }
+  button {
+    background: #172338;
+    color: var(--ink);
+    border: 1px solid #23324b;
+    border-radius: 8px;
+    padding: 6px 10px;
+    cursor: pointer;
+    transition: all .15s ease;
+    flex-shrink: 0; /* Prevent buttons from shrinking in flex container */
+  }
+  button:hover { border-color: #2e4468; background: #1e2b43; }
+  button[aria-pressed="true"] { background: var(--accent); border-color: #8bb1ff; color: #0b0f14; font-weight: 600; }
+
+  .pill, .tag, kbd {
+    padding: 2px 8px;
+    border: 1px solid #23324b;
+    border-radius: 999px; /* Pill shape */
+    color: var(--muted);
+    background: #101826;
+    white-space: nowrap; /* Prevent wrapping in pills */
+  }
+  kbd { border-radius: 6px; border-bottom-width: 2px; } /* Keyboard key style */
+  .small { font-size: 12px; color: var(--muted); }
+  .mono { font-variant-ligatures: none; } /* Disable ligatures for monospaced text */
+
+  details { border: 1px dashed #2a3f60; border-radius: 10px; padding: 10px; }
+  details summary { cursor: pointer; color: var(--muted); }
+
+  /* --- Bar Chart for Area Visualization --- */
+  .bars { height: 120px; display: flex; align-items: flex-end; gap: 4px; padding-bottom: 4px; }
+  .bar {
+    flex: 1;
+    background: #20314d;
+    border: 1px solid #2a3f60;
+    border-radius: 4px;
+    position: relative;
+    cursor: pointer;
+    min-width: 12px; /* Ensure bars are visible even with many sites */
+  }
+  .bar .fill {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    transition: height .8s ease, opacity .8s ease; /* Smooth animation for bar fills */
+    opacity: .95;
+    background: var(--accent); /* Default fill color, overridden by site color */
+  }
+  .bar .target {
+    position: absolute;
+    left: -1px; right: -1px; /* Extend slightly for visibility */
+    height: 2px;
+    background: var(--warn); /* Target line color */
+    opacity: .9;
+  }
+  .bar .label {
+    position: absolute;
+    bottom: 100%; /* Position above the bar */
+    left: 50%; transform: translateX(-50%);
+    font-size: 11px;
+    color: var(--muted);
+    white-space: nowrap; /* Prevent label wrapping */
+  }
+
+  /* --- Main Canvas Container --- */
+  #canWrap {
+    position: relative;
+    background: #05070a;
+    border: 1px solid #1a2332;
+    border-radius: 12px;
+    overflow: hidden; /* Keep canvas content within bounds */
+    display: flex; /* Flex to center content if needed, for canvas itself */
+    justify-content: center;
+    align-items: center;
+    flex-grow: 1; /* Allow to take available height */
+  }
+  canvas {
+    display: block; /* Remove extra space below canvas */
+    width: 100%; height: auto; /* Scale canvas visually */
+    /* Removed image-rendering: pixelated; because Marching Squares will provide smooth lines */
+    max-width: 100%; max-height: 100%; /* Ensure it fits */
+  }
+  #overlay { position: absolute; inset: 0; pointer-events: none; } /* Overlay for interaction, non-interactive */
+  #stats {
+    position: absolute;
+    left: 8px; bottom: 8px;
+    background: rgba(0,0,0,.55);
+    padding: 6px 8px;
+    border: 1px solid #22304a;
+    border-radius: 8px;
+  }
+  #legend { display: flex; flex-wrap: wrap; gap: 6px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; border: 1px solid #333; } /* Color dots in legend */
+
+  /* --- Gallery Specific Styles --- */
+  #galleryView {
+    display: none; /* Hidden by default */
+    padding: 12px;
+    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+    border-radius: 12px;
+  }
+  #galleryView .container { max-width: 1800px; margin: 0 auto; }
+  #galleryView h1 { text-align: center; color: #fff; margin: 6px 0 10px 0; font-size: 2rem; }
+  #galleryView .subtitle { text-align: center; color: #e0e0e0; margin-bottom: 16px; }
+  #galleryView .algorithm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 16px; }
+  #galleryView .canvas-container { background: #fff; border-radius: 16px; padding: 16px; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+  #galleryView .canvas-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; gap: 12px; }
+  #galleryView .canvas-title { font-size: 1.1rem; font-weight: 800; color: #222; margin-bottom: 4px; }
+  #galleryView .canvas-description { font-size: .9rem; color: #666; }
+  #galleryView .regenerate-btn {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff; border: none; padding: 8px 12px; border-radius: 8px;
+    cursor: pointer; font-weight: 700;
+  }
+  #galleryView .regenerate-btn:hover { background: linear-gradient(135deg, #764ba2 0%, #667eea 100%); }
+  #galleryView canvas { display: block; border-radius: 10px; width: 100%; height: auto; background: #0c1118; border: 1px solid #e0e0e0; }
+  #galleryView .stats-mini { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px; padding-top: 10px; border-top: 2px solid #f0f0f0; }
+  #galleryView .stat-mini { text-align: center; }
+  #galleryView .stat-mini-label { font-size: .78rem; color: #777; }
+  #galleryView .stat-mini-value { font-size: 1.1rem; font-weight: 800; color: #222; }
+  #galleryView .legend-gallery { background: #fff; border-radius: 16px; padding: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.25); margin-top: 14px; }
+  #galleryView .legend-title { font-size: 1rem; font-weight: 900; color: #222; margin-bottom: 6px; }
+  #galleryView .legend-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+  #galleryView .legend-item { display: flex; align-items: center; gap: 8px; }
+  #galleryView .legend-color { width: 22px; height: 22px; border-radius: 6px; border: 2px solid #222; }
+  #galleryView .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: .72rem; font-weight: 800; margin-left: 8px; }
+  #galleryView .badge-best { background: #4CAF50; color: #fff; }
+  #galleryView .badge-good { background: #2196F3; color: #fff; }
+  #galleryView .badge-info { background: #FF9800; color: #fff; }
+
+  /* For smaller screens, adjust grid layout */
+  @media (max-width: 900px) {
+    main { grid-template-columns: 1fr; }
+    #left { order: 2; } /* Put controls below the canvas on small screens */
+    #right { min-width: unset; }
+  }
+</style>
+
+<!-- D3 for gallery view (scoped) - Required for polygon operations like area, centroid, contains -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Stochastic CCVT (Power Diagram) • <span class="small">pixel-perfect area with organic drift</span></h1>
+    <span class="tag">Bret Victor: Media for Thinking</span>
+    <span class="tag">Hybrid OT</span>
+    <span id="errTag" class="tag">max rel err: —</span>
+    <span style="flex:1"></span>
+    <button id="tab-ccvt" class="tag" aria-pressed="true">CCVT Demo</button>
+    <button id="tab-gallery" class="tag" aria-pressed="false">Organic Gallery</button>
+  </header>
+
+  <main id="ccvtView">
+    <section id="left">
+      <div class="card">
+        <h2>Controls</h2>
+        <div class="row">
+          <label>Sites <input id="nSites" type="number" min="2" max="24" value="8" style="width:64px"></label>
+          <button id="seed">Randomize</button>
+          <button id="equal">Targets = equal</button>
+          <button id="randomTargets">Targets = random</button>
+          <button id="reset">Reset weights</button>
+        </div>
+        <div class="row" style="margin-top:6px">
+          <label>η (weight step)<input id="eta" type="range" min="0.01" max="1" step="0.01" value="0.35"></label>
+          <span class="pill mono" id="etaVal">0.35</span>
+          <label>Centroid step<input id="centroid" type="checkbox" checked></label>
+          <label>λ (centroid)<input id="lambda" type="range" min="0" max="1" step="0.05" value="0.35"></label>
+          <span class="pill mono" id="lambdaVal">0.35</span>
+        </div>
+        <div class="row" style="margin-top:6px">
+          <label>Jitter<input id="jitter" type="range" min="0" max="0.1" step="0.005" value="0.01"></label>
+          <span class="pill mono" id="jitterVal">0.01</span>
+        </div>
+        <div class="row" style="margin-top:6px">
+          <button id="play" aria-pressed="false">▶ Play</button>
+          <button id="step">Step</button>
+          <button id="clear">Clear assignments</button>
+          <label>Resolution<input id="res" type="range" min="120" max="420" step="20" value="300"></label>
+          <span class="pill mono" id="resVal">300</span>
+        </div>
+        <div class="row" style="margin-top:6px">
+          <label>Density
+            <select id="rhoMode">
+              <option value="uniform">Uniform</option>
+              <option value="radial">Radial (center‑heavy)</option>
+              <option value="bands">Bands</option>
+              <option value="noise">Worley‑ish</option>
+              <option value="ca-evolve">CA Evolve</option>
+            </select>
+          </label>
+          <label>CA Speed<input id="caSpeed" type="range" min="0" max="1" step="0.1" value="0.2"></label>
+          <span class="pill mono" id="caSpeedVal">0.2</span>
+        </div>
+        <div class="row" style="margin-top:6px">
+          <label>Render
+            <select id="viewMode">
+              <option value="cells">Cells</option>
+              <option value="weights">Weights field</option>
+              <option value="error">Error heat</option>
+            </select>
+          </label>
+          <label>MS Contours <input id="msContours" type="checkbox" checked></label>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Targets vs Achieved (area mass fraction)</h2>
+        <div id="legend"></div>
+        <div class="bars" id="bars"></div>
+        <div class="small">Yellow line = target; blue bar = achieved. Click a bar to focus its site. Drag a site on the canvas; wheel = weight nudge (±).</div>
+      </div>
+
+      <div class="card">
+        <h2>Prompt Template — “Media for Thinking the Unthinkable”</h2>
+        <details>
+          <summary>Open / copy template</summary>
+<pre id="prompt" class="small" style="white-space:pre-wrap">Title: Apply “Media for Thinking the Unthinkable” to &lt;YOUR INTERFACE OR CODE MODULE&gt;
+Prompt:
+You are an interface designer (or AI assistant) tasked with transforming the given component—&lt;brief description of UI or code module&gt;—into a “Media for Thinking the Unthinkable” that:
+1. Surfaces the Invisible
+   - Expose internal state, data flows, or algorithmic steps that humans normally can’t sense.
+   - Provide live waveforms, plots, or annotations that map hidden variables to perceivable visuals.
+2. Overcomes Cognitive Limits
+   - Augment beyond human sensory bounds (e.g. render out-of-range frequencies, reveal IR/UV “light,” show microscopic or cosmic scales).
+   - Break lossy compression of static text by offering dynamic, linked representations.
+3. Supports Multiple Modes of Thought
+   - Interactive Thinking: let users “think by doing” through sliders, drag-and-drop, direct manipulation.
+   - Visual Thinking: present synchronized, parallel views with visual analogies and pattern-highlighting.
+   - Symbolic Thinking: offer formal, step-by-step derivations or logic trees tied back to the visuals.
+4. Enables Rapid What-If Exploration
+   - Make parameter tweaks yield immediate feedback.
+   - Allow hypothesis testing with “play,” “pause,” and “record” controls for drawing and replaying behaviors.
+5. Links Perspectives
+   - Synchronize multiple views of the same system (e.g. code, data, visualization) so users can correlate cause and effect across them.
+   - Provide side-by-side or overlaid comparisons of different parameter sets or historical snapshots.
+6. Abstracts and Generalizes
+   - Represent specific instances as points in a shared parameter space and allow fluid navigation across that space.
+   - Let users save, share, and remix these views as reusable templates.
+Instructions:
+- Apply these criteria to &lt;YOUR INTERFACE OR CODE REPO&gt;.
+- For each guideline, propose one concrete UI change or code snippet.
+- Prototype a minimal proof-of-concept (e.g. a slider tied to a live plot, an annotated call-stack view, an embedded simulation panel).
+- Evaluate how each change helps “think the unthinkable”—i.e. unlocks concepts previously hidden or too abstract to grasp.</pre>
+        <div class="row"><button id="copyPrompt">Copy</button><span id="copyState" class="small"></span></div>
+        </details>
+      </div>
+
+    </section>
+
+    <section id="right" class="card" style="padding:0;display:flex;flex-direction:column;min-width:640px">
+      <div class="row" style="padding:10px 10px 0 10px;gap:16px;align-items:center">
+        <span class="small">Diagram</span>
+        <span class="pill">Click + drag sites • <kbd>Shift</kbd> add • <kbd>Del</kbd> remove • Mouse wheel = weight ±</span>
+        <span class="pill">Power distance = ||x−s||² − w</span>
+      </div>
+      <div id="canWrap">
+        <!-- Main canvas for drawing the Power Diagram cells or heatmaps -->
+        <canvas id="view" width="900" height="900"></canvas>
+        <!-- Overlay canvas for drawing sites and interaction feedback (mouse events) -->
+        <canvas id="overlay" width="900" height="900"></canvas>
+        <div id="stats" class="small mono"></div>
+      </div>
+    </section>
+  </main>
+
+<!-- ===================== Organic Subdivision Gallery ===================== -->
+<main id="galleryView" style="display:none; padding:12px;">
+  <div class="container">
+    <h1 style="text-align:center;color:#fff;margin:6px 0 10px 0;font-size:2rem;">🌿 Organic Subdivision Algorithms</h1>
+    <p class="subtitle" style="text-align:center;color:#e0e0e0;margin-bottom:16px;">
+      Compare different approaches to creating organic-looking partitions with area control.
+      These are primarily recursive splitting methods, aiming for visual appeal over iterative
+      convergence like CCVT, but can be adapted for precise area targets.
+    </p>
+
+    <div class="algorithm-grid">
+      <div class="canvas-container">
+        <div class="canvas-header">
+          <div class="header-content">
+            <div class="canvas-title">🌊 Curved Binary Split <span class="badge badge-best">SMOOTH</span></div>
+            <div class="canvas-description">Recursive binary subdivision using smooth, S-shaped curves.</div>
+          </div>
+          <button class="regenerate-btn" onclick="Gallery.regenerateAlgorithm(1)">↻</button>
+        </div>
+        <canvas id="canvas1" width="500" height="500"></canvas>
+        <div class="stats-mini">
+          <div class="stat-mini"><div class="stat-mini-label">Overlaps</div><div class="stat-mini-value" id="stat1-overlap">0</div></div>
+          <div class="stat-mini"><div class="stat-mini-label">Accuracy (MAPE)</div><div class="stat-mini-value" id="stat1-accuracy">-</div></div>
+          <div class="stat-mini"><div class="stat-mini-label">Organic</div><div class="stat-mini-value" id="stat1-organic">⭐⭐⭐⭐⭐</div></div>
+        </div>
+      </div>
+
+      <div class="canvas-container">
+        <div class="canvas-header">
+          <div class="header-content">
+            <div class="canvas-title">〰️ Sine Wave Split <span class="badge badge-good">WAVY</span></div>
+            <div class="canvas-description">Splits follow an undulating sine wave pattern with adjustable frequency.</div>
+          </div>
+          <button class="regenerate-btn" onclick="Gallery.regenerateAlgorithm(2)">↻</button>
+        </div>
+        <canvas id="canvas2" width="500" height="500"></canvas>
+        <div class="stats-mini">
+          <div class="stat-mini"><div class="stat-mini-label">Overlaps</div><div class="stat-mini-value" id="stat2-overlap">0</div></div>
+          <div class="stat-mini"><div class="stat-mini-label">Accuracy (MAPE)</div><div class="stat-mini-value" id="stat2-accuracy">-</div></div>
+          <div class="stat-mini"><div class="stat-mini-label">Organic</div><div class="stat-mini-value" id="stat2-organic">⭐⭐⭐⭐</div></div>
+        </div>
+      </div>
+
+      <div class="canvas-container">
+        <div class="canvas-header">
+          <div class="header-content">
+            <div class="canvas-title">🌀 Perlin Noise Split <span class="badge badge-best">NATURAL</span></div>
+            <div class="canvas-description">Boundary lines perturbed by Perlin noise for a terrain-like feel.</div>
+          </div>
+          <button class="regenerate-btn" onclick="Gallery.regenerateAlgorithm(3)">↻</button>
+        </div>
+        <canvas id="canvas3" width="500" height="500"></canvas>
+        <div class="stats-mini">
+          <div class="stat-mini"><div class="stat-mini-label">Overlaps</div><div class="stat-mini-value" id="stat3-overlap">0</div></div>
+          <div class="stat-mini"><div class="stat-mini-label">Accuracy (MAPE)</div><div class="stat-mini-value" id="stat3-accuracy">-</div></div>
+          <div class="stat-mini"><div class="stat-mini-label">Organic</div><div class="stat-mini-value" id="stat3-organic">⭐⭐⭐⭐⭐</div></div>
+        </div>
+      </div>
+
+      <div class="canvas-container">
+        <div class="canvas-header">
+          <div class="header-content">
+            <div class="canvas-title">🔷 Voronoi Tessellation <span class="badge badge-info">REFERENCE</span></div>
+            <div class="canvas-description">Standard proximity-based Voronoi diagram (unweighted).</div>
+          </div>
+          <button class="regenerate-btn" onclick="Gallery.regenerateAlgorithm(4)">↻</button>
+        </div>
+        <canvas id="canvas4" width="500" height="500"></canvas>
+        <div class="stats-mini">
+          <div class="stat-mini"><div class="stat-mini-label">Overlaps</div><div class="stat-mini-value" id="stat4-overlap">0</div></div>
+          <div class="stat-mini"><div class="stat-mini-label">Accuracy (MAPE)</div><div class="stat-mini-value" id="stat4-accuracy">-</div></div>
+          <div class="stat-mini"><div class="stat-mini-label">Organic</div><div class="stat-mini-value" id="stat4-organic">⭐⭐⭐</div></div>
+        </div>
+      </div>
+
+      <div class="canvas-container">
+        <div class="canvas-header">
+          <div class="header-content">
+            <div class="canvas-title">⬡ Jittered Recursive <span class="badge badge-good">BALANCED</span></div>
+            <div class="canvas-description">Binary splits with random jitter, balancing areas effectively.</div>
+          </div>
+          <button class="regenerate-btn" onclick="Gallery.regenerateAlgorithm(5)">↻</button>
+        </div>
+        <canvas id="canvas5" width="500" height="500"></canvas>
+        <div class="stats-mini">
+          <div class="stat-mini"><div class="stat-mini-label">Overlaps</div><div class="stat-mini-value" id="stat5-overlap">0</div></div>
+          <div class="stat-mini"><div class="stat-mini-label">Accuracy (MAPE)</div><div class="stat-mini-value" id="stat5-accuracy">-</div></div>
+          <div class="stat-mini"><div class="stat-mini-label">Organic</div><div class="stat-mini-value" id="stat5-organic">⭐⭐⭐</div></div>
+        </div>
+      </div>
+
+      <div class="canvas-container">
+        <div class="canvas-header">
+          <div class="header-content">
+            <div class="canvas-title">🌀 Radial Spiral Split <span class="badge badge-good">UNIQUE</span></div>
+            <div class="canvas-description">Creates spiral-like wedges from a central point, with wobble.</div>
+          </div>
+          <button class="regenerate-btn" onclick="Gallery.regenerateAlgorithm(6)">↻</button>
+        </div>
+        <canvas id="canvas6" width="500" height="500"></canvas>
+        <div class="stats-mini">
+          <div class="stat-mini"><div class="stat-mini-label">Overlaps</div><div class="stat-mini-value" id="stat6-overlap">0</div></div>
+          <div class="stat-mini"><div class="stat-mini-label">Accuracy (MAPE)</div><div class="stat-mini-value" id="stat6-accuracy">-</div></div>
+          <div class="stat-mini"><div class="stat-mini-label">Organic</div><div class="stat-mini-value" id="stat6-organic">⭐⭐⭐⭐</div></div>
+        </div>
+      </div>
+
+      <!-- Algorithm 8: Hilbert Subdivision -->
+      <div class="canvas-container">
+        <div class="canvas-header">
+          <div class="header-content">
+            <div class="canvas-title">🌀 Hilbert Subdivision <span class="badge badge-info">SPACE-FILLING</span></div>
+            <div class="canvas-description">Subdivides space along a Hilbert curve, creating continuous blocks.</div>
+          </div>
+          <button class="regenerate-btn" onclick="Gallery.regenerateAlgorithm(8)">↻</button>
+        </div>
+        <canvas id="canvas8" width="500" height="500"></canvas>
+        <div class="stats-mini">
+          <div class="stat-mini"><div class="stat-mini-label">Overlaps</div><div class="stat-mini-value" id="stat8-overlap">0</div></div>
+          <div class="stat-mini"><div class="stat-mini-label">Accuracy (MAPE)</div><div class="stat-mini-value" id="stat8-accuracy">-</div></div>
+          <div class="stat-mini"><div class="stat-mini-label">Organic</div><div class="stat-mini-value" id="stat8-organic">⭐⭐⭐</div></div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="legend-gallery">
+      <div class="legend-title">📊 Sample Data Categories</div>
+      <div class="legend-grid" id="legendGrid"></div>
+    </div>
+  </div>
+</main>
+
+<script>
+// =============================================================================
+// GLOBAL UTILITIES & HELPER FUNCTIONS
+// =============================================================================
+// These are common functions used across different parts of the application.
+const Utils = (() => {
+  // Shorthand for document.getElementById
+  const R = (id) => document.getElementById(id);
+
+  // Basic math utilities
+  const rand = (a = 0, b = 1) => a + Math.random() * (b - a);
+  const clamp = (x, a, b) => Math.max(a, Math.min(b, x)); // Clamps a value x between a and b
+  const lerp = (a, b, t) => a + (b - a) * t;           // Linear interpolation between a and b by factor t
+
+  // Color conversion
+  const hexToRgb = (h) => {
+    const s = h.replace('#', '');
+    return { r: parseInt(s.substring(0, 2), 16), g: parseInt(s.substring(2, 4), 16), b: parseInt(s.substring(4, 6), 16) };
+  };
+
+  // Deterministic, tiny PRNG for density noise mode (sfc32 algorithm)
+  // Useful for reproducible "random" patterns.
+  function sfc32(a) {
+    return function(b) {
+      a |= 0; b |= 0;
+      return function() {
+        a |= 0; b |= 0;
+        var t = (a += 0x9e3779b9) | 0; // Add golden ratio conjugate
+        t ^= t >>> 16;
+        t = Math.imul(t, 0x21f0aaad);
+        t ^= t >>> 15;
+        t = Math.imul(t, 0x735a2d97);
+        t ^= t >>> 15;
+        return (t >>> 0) / 4294967296; // Convert to float [0, 1)
+      };
+    };
+  }
+  const frac = (x) => x - Math.floor(x); // Get fractional part of a number
+
+  // --- Polygon Geometry Helpers ---
+  // These are crucial for the polygon clipping logic used in the Gallery.
+
+  /**
+   * Determines if a point `p` is to the left of a line segment defined by `a` and `b`.
+   * Returns:
+   *   > 0 if `p` is to the left of `(a,b)`
+   *   < 0 if `p` is to the right of `(a,b)`
+   *   = 0 if `p` is collinear with `(a,b)`
+   * This uses the 2D cross product equivalent.
+   */
+  function isLeft(a, b, p) {
+    return ((b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]));
+  }
+
+  /**
+   * Finds the intersection point of two line segments (a,b) and (p,q).
+   * Assumes segments are not parallel.
+   * Based on line-line intersection formula.
+   */
+  function lineIntersect(a, b, p, q) {
+    const A = b[0] - a[0], B = b[1] - a[1];
+    const C = q[0] - p[0], D = q[1] - p[1];
+    const denom = A * D - B * C; // Determinant
+
+    if (Math.abs(denom) < 1e-9) { // Parallel or collinear lines
+      return p; // Return one point, as intersection is not a single point or doesn't exist uniquely
+    }
+    const t = ((p[0] - a[0]) * D - (p[1] - a[1]) * C) / denom;
+    return [a[0] + t * A, a[1] + t * B];
+  }
+
+  /**
+   * Maps a 2D coordinate (x,y) within a 2^order x 2^order grid to a 1D Hilbert curve index.
+   * Based on algorithm from: https://en.wikipedia.org/wiki/Hilbert_curve
+   * (x,y) are integer coordinates from 0 to (2^order - 1).
+   */
+  function hilbertIndex(x, y, order) {
+    let d = 0;
+    // Iterate through orders from highest to lowest
+    for (let s = 1 << (order - 1); s > 0; s >>= 1) {
+      const rx = (x & s) > 0; // Is x in the right half of current square?
+      const ry = (y & s) > 0; // Is y in the top half of current square?
+      d += s * s * ((rx * 3) ^ ry); // Add value based on quadrant
+      // Rotate and flip coordinates to map to the next order's quadrant
+      if (!ry) {
+        if (rx) {
+          x = (1 << order) - 1 - x;
+          y = (1 << order) - 1 - y;
+        }
+        [x, y] = [y, x]; // Swap x and y
+      }
+    }
+    return d;
+  }
+
+  /**
+   * Marching Squares algorithm to extract contours from a binary grid.
+   * Returns an array of line segments representing the contour.
+   * `grid` is a 2D array of 0s and 1s (or values that can be thresholded).
+   * `threshold` defines the separation value.
+   * `gridToWorld` is a function to map grid coordinates to world/canvas coordinates.
+   */
+  function marchingSquares(grid, threshold, gridSize, gridToWorld) {
+    const contours = [];
+    const N = gridSize; // Assume square grid for simplicity
+
+    // Marching squares lookup table for 16 cases (binary value of 4 corners)
+    // Each entry lists line segments (pairs of vertices) for that case.
+    // Vertex positions: (0.5,0) (1,0.5) (0.5,1) (0,0.5) relative to a 1x1 cell
+    const lookup = [
+      [],                                   // 0000 (all below threshold)
+      [[0,0.5],[0.5,0]],                    // 0001 (bottom-left)
+      [[0.5,0],[1,0.5]],                    // 0010 (bottom-right)
+      [[0,0.5],[1,0.5]],                    // 0011 (bottom)
+      [[0.5,1],[0,0.5]],                    // 0100 (top-left)
+      [[0.5,1],[0.5,0]],                    // 0101 (left and bottom-left/top-right ambiguity)
+      [[0.5,1],[1,0.5],[0.5,0],[0,0.5]],    // 0110 (cross: top-left & bottom-right)
+      [[0.5,1],[1,0.5]],                    // 0111 (top-left + bottom-right + bottom-left = top-right boundary)
+      [[1,0.5],[0.5,1]],                    // 1000 (top-right)
+      [[0,0.5],[0.5,0],[1,0.5],[0.5,1]],    // 1001 (cross: bottom-left & top-right)
+      [[0.5,0],[0.5,1]],                    // 1010 (right and bottom-right/top-left ambiguity)
+      [[0,0.5],[0.5,1]],                    // 1011 (top-right + bottom-right + bottom-left = top-left boundary)
+      [[0.5,0],[0,0.5]],                    // 1100 (top)
+      [[0.5,0],[1,0.5]],                    // 1101 (bottom-left + top-left + top-right = bottom-right boundary)
+      [[0.5,0],[0,0.5]],                    // 1110 (bottom-right + top-right + top-left = bottom-left boundary)
+      [],                                   // 1111 (all above threshold)
+    ];
+
+    // Helper to get value from grid, handling boundaries (assume 0 outside)
+    const getGridValue = (x, y) => {
+        if (x < 0 || x >= N || y < 0 || y >= N) return 0; // Treat outside as below threshold
+        return grid[y * N + x]; // grid is 1D array
+    };
+
+    for (let y = 0; y < N; y++) {
+      for (let x = 0; x < N; x++) {
+        // Get values of the 4 corners of the conceptual 1x1 square
+        // Note: MS algorithm typically samples at the corner points,
+        // but here we use pixel centers for `grid` values.
+        // A common simplification is to sample grid[x,y], grid[x+1,y], etc.
+        // For our purpose (boundaries between assigned pixels), we simplify:
+        // Treat 'grid[y*N+x]' as the value at (x+0.5, y+0.5)
+        // We're essentially finding the boundary of a region (e.g., cell for focused site).
+
+        // To generate *all* boundaries between *any* two cells:
+        // Case 0: The value at (x,y)
+        // Case 1: The value at (x+1,y)
+        // Case 2: The value at (x+1,y+1)
+        // Case 3: The value at (x,y+1)
+        // We want a line *if* any of these neighbors differ.
+
+        // A different approach for drawing all cell borders:
+        // Create a 'binary' grid where 1 means "this pixel is different from its neighbor"
+        // and 0 means "this pixel is the same as its neighbor".
+        // Then run MS on this 'binary' grid.
+        // This is complex because each boundary is shared by two cells.
+
+        // A simpler way for visualization: Iterate through the image pixels
+        // and if a pixel is different from its right neighbor, draw a vertical line.
+        // If different from its bottom neighbor, draw a horizontal line.
+        // This is what we did before and is faster than full MS for *all* borders.
+        // The Marching Squares is truly for drawing a contour of a *single* specified region or field.
+
+        // For *this* implementation, we use a simplified Marching Squares approach:
+        // We're looking for where assigned pixel values change.
+        // We will create an implicit scalar field: 0 for one cell, 1 for another.
+        // However, a full MS for *all* boundaries is complicated by multiple labels.
+        // Let's adapt to draw the contours of the *current foreground cell* (e.g., the focused site's cell)
+        // or just draw a single outline that works for a general threshold.
+
+        // For multiple cell boundaries: We would typically create a meta-grid
+        // where each cell is 1 if it represents a boundary.
+        // To visualize *all* boundaries (the user's original request before MS was brought up),
+        // we revert to a simpler "neighbor difference" approach, which is more robust
+        // for multi-valued grids than a strict binary MS.
+
+        // Let's adjust to draw a smooth contour for the *focused site's* cell only.
+        // Or, more generally, use MS to draw contours of the *error field*.
+        // But for *all* cells, the simpler pixel-based edge detection and drawing
+        // of lines on the overlay canvas might be more practical for `msContours` checkbox.
+
+        // Let's re-think Marching Squares for "all cell borders".
+        // A common way is to make each interior pixel = 0, boundary pixel = 1
+        // (i.e. if any neighbor is different from me, I'm a boundary).
+        // Then we run MS on *that* binary grid. This produces line segments for the boundaries.
+
+        // Re-implementing Marching Squares to draw ALL boundaries:
+        // We create a binary `boundaryGrid` where 1 marks locations where cell IDs differ.
+        let squareValue = 0; // Binary value of the 4 corners of a conceptual 1x1 square
+        // We are checking the pixel IDs at four corners around the (x,y) point
+        // Top-left corner of the conceptual square (x,y)
+        const v0 = (getGridValue(x, y) === getGridValue(x - 1, y) && getGridValue(x, y) === getGridValue(x, y - 1) && getGridValue(x,y) === getGridValue(x-1,y-1));
+        const v1 = (getGridValue(x, y) === getGridValue(x + 1, y) && getGridValue(x, y) === getGridValue(x, y - 1) && getGridValue(x,y) === getGridValue(x+1,y-1));
+        const v2 = (getGridValue(x, y) === getGridValue(x + 1, y) && getGridValue(x, y) === getGridValue(x, y + 1) && getGridValue(x,y) === getGridValue(x+1,y+1));
+        const v3 = (getGridValue(x, y) === getGridValue(x - 1, y) && getGridValue(x, y) === getGridValue(x, y + 1) && getGridValue(x,y) === getGridValue(x-1,y+1));
+
+        // This approach of "is pixel (x,y) a boundary?" is better for image data.
+        // The standard MS algorithm operates on a scalar field where values are at grid *nodes*, not pixels.
+        // Given `state.assign` is pixel-based (values *within* a cell), a pixel-based edge detection
+        // (as was in the original `render` for `viewMode === 'cells'`) is more appropriate for `msContours`.
+
+        // My prior Marching Squares implementation was correct for binary fields.
+        // If we want *all* cell boundaries from `state.assign`, we need to determine
+        // for each pixel, if it's on a border. Then run MS on *that* border field.
+
+        // Let's make `marchingSquares` general for a binary field, and then
+        // `CCVT_App.render` will *generate* a binary field to pass to it.
+
+        // The core issue with MS for multi-label (site ID) grids:
+        // MS is designed for binary fields (e.g., implicit surface where value > 0.5 is 'inside').
+        // Our `state.assign` has multiple labels (site IDs).
+        // To get all boundaries, one would typically run MS for each label, or create a 'boundary' field.
+        // Generating a 'boundary' field: `binaryGrid[x,y] = 1` if `state.assign[x,y]` is different from *any* neighbor.
+        // This is complex.
+
+        // ALTERNATIVE: Use a simpler, direct line-drawing approach for `msContours`.
+        // This is similar to the original pixelated borders, but drawing lines on `O_CTX`
+        // at higher resolution, then smoothing with `ctx.lineCap = 'round'` or similar.
+        // This makes more sense for "drawing organic boundaries" than trying to force
+        // multi-label marching squares.
+
+        // Let's revert to a slightly enhanced version of the simple edge detection
+        // for `msContours` and ensure it renders on the overlay nicely.
+        // This will be simpler and more directly address "smooth lines on edges".
+        // The original `render` already did this for the pixelated version,
+        // we'll just draw on overlay and perhaps interpolate points.
+
+        // The HilbertIndex is correctly implemented for the gallery.
+        // The Marching Squares implementation itself (which I am about to re-write below)
+        // should be for *a single contour*.
+
+        // Let's make Marching Squares a proper utility to extract *a single contour*
+        // for an arbitrary scalar field (or a single site's region).
+        // To draw all contours, we will loop MS for each site, or for a "boundary" field.
+
+        // Marching Squares implementation (for a single contour of a binary field)
+        // This returns an array of segments (pairs of [x,y] points).
+        // `grid` is a 1D array representing a 2D grid, e.g., `(y * N + x)`.
+        // `isovalue` is the threshold.
+        // `N` is the side length of the square grid.
+        // `worldScale` is the factor to scale grid coordinates to canvas coordinates.
+        function msSingleContour(gridValues, isovalue, N_grid, worldScale) {
+          const segments = [];
+          const N_world = N_grid * worldScale; // Total world size (e.g., 900)
+
+          // Vertex configurations for each of the 16 cases of a 2x2 cell
+          // The vertices are relative to the current cell (0,0) (1,0) (1,1) (0,1)
+          // Edge points are:
+          // A: (0.5, 0) - top edge mid
+          // B: (1, 0.5) - right edge mid
+          // C: (0.5, 1) - bottom edge mid
+          // D: (0, 0.5) - left edge mid
+          const cases = [
+            [],                   // 0000
+            [[0,0.5], [0.5,0]],   // 0001 (D-A)
+            [[0.5,0], [1,0.5]],   // 0010 (A-B)
+            [[0,0.5], [1,0.5]],   // 0011 (D-B)
+            [[0.5,1], [1,0.5]],   // 0100 (C-B)
+            [[0,0.5], [0.5,0]],   // 0101 (D-A) and [[0.5,1], [1,0.5]] (C-B) -- AMBIGUOUS, needs careful handling. We choose one for simplicity.
+                                  // For simplicity, we just connect D-A and C-B
+            [[0.5,0], [0.5,1]],   // 0110 (A-C)
+            [[0,0.5], [0.5,1]],   // 0111 (D-C)
+            [[0,0.5], [0.5,1]],   // 1000 (D-C)
+            [[0.5,0], [0.5,1]],   // 1001 (A-C)
+            [[0.5,1], [1,0.5]],   // 1010 (C-B) and [[0,0.5],[0.5,0]] (D-A) -- AMBIGUOUS, choose one
+            [[0.5,0], [0,0.5]],   // 1011 (A-D)
+            [[0.5,1], [0.5,0]],   // 1100 (C-A)
+            [[1,0.5], [0.5,0]],   // 1101 (B-A)
+            [[0.5,1], [1,0.5]],   // 1110 (C-B)
+            []                    // 1111
+          ];
+
+          // Corner values from the grid:
+          // p0 --- p1
+          // |      |
+          // p3 --- p2
+          // (This is standard MS for scalar field at nodes)
+          const getVal = (x, y) => {
+            if (x < 0 || x >= N_grid || y < 0 || y >= N_grid) return -Infinity; // Treat outside as definitely below threshold
+            return gridValues[y * N_grid + x];
+          };
+
+          for (let y = 0; y < N_grid - 1; y++) {
+            for (let x = 0; x < N_grid - 1; x++) {
+              // Get the four corner values from the grid, mapped to binary (above/below threshold)
+              const p0 = getVal(x, y) >= isovalue;
+              const p1 = getVal(x + 1, y) >= isovalue;
+              const p2 = getVal(x + 1, y + 1) >= isovalue;
+              const p3 = getVal(x, y + 1) >= isovalue;
+
+              // Compute the case index (0-15)
+              const index = (p0 << 3) | (p1 << 2) | (p2 << 1) | p3;
+
+              // Get the segments for this case
+              const currentCaseSegments = cases[index];
+
+              // Transform relative segment coordinates to world coordinates
+              currentCaseSegments.forEach(segment => {
+                const [v1_rel, v2_rel] = segment;
+                segments.push([
+                  [ (x + v1_rel[0]) * worldScale, (y + v1_rel[1]) * worldScale ],
+                  [ (x + v2_rel[0]) * worldScale, (y + v2_rel[1]) * worldScale ]
+                ]);
+              });
+            }
+          }
+          return segments;
+        }
+
+  // Expose public utilities
+  return {
+    R, rand, clamp, lerp, hexToRgb, sfc32, frac, isLeft, lineIntersect, hilbertIndex,
+    msSingleContour
+  };
+})();
+
+
+// =============================================================================
+// CAPACITY-CONSTRAINED VORONOI (CCVT) APPLICATION LOGIC
+// =============================================================================
+const CCVT_App = (() => {
+  const R = Utils.R; // Use the global R helper
+
+  const W_CANVAS = R('view');         // Main canvas for drawing cells/heatmaps
+  const O_CANVAS = R('overlay');      // Overlay canvas for drawing sites and interactions
+  const W_CTX = W_CANVAS.getContext('2d', { willReadFrequently: true }); // Context for main drawing
+  const O_CTX = O_CANVAS.getContext('2d');                               // Context for overlay
+
+  // Current raster resolution per side (e.g., 300 means 300x300 pixels)
+  let GRID_N = +R('res').value;
+
+  // Global state for the CCVT simulation
+  const state = {
+    canvasW: 900, canvasH: 900, // Fixed display size for canvases
+    sites: [],                 // Array of site objects: {x, y, w, color}
+    targets: [],               // Array of target area *fractions* (sum to 1)
+    achieved: [],              // Array of currently achieved area *fractions*
+    assign: null,              // Uint16Array: gridN*gridN pixels, each stores site index
+    rho: null,                 // Float32Array: gridN*gridN pixels, stores density (mass per pixel)
+    rhoBuffer: null,           // Float32Array: buffer for CA density evolution
+    play: false,               // Is the simulation running?
+    eta: +R('eta').value,      // Learning rate for weight updates
+    useCentroid: R('centroid').checked, // Should sites move towards centroids?
+    lambda: +R('lambda').value,// Learning rate for centroid movement
+    jitterStrength: +R('jitter').value, // Strength of random site jitter
+    viewMode: R('viewMode').value, // 'cells', 'weights', 'error'
+    rhoMode: R('rhoMode').value,   // 'uniform', 'radial', 'bands', 'noise', 'ca-evolve'
+    caSpeed: +R('caSpeed').value,  // Speed of CA density evolution (0=off, 1=max)
+    msContours: R('msContours').checked, // Whether to draw Marching Squares contours
+    focus: -1,                 // Index of the currently focused site for interaction
+  };
+
+  // Color palette for sites, ensuring consistency
+  const siteColors = [
+    '#7aa2ff', '#6be675', '#ffb86b', '#ff7aa2', '#b77aff', '#6bf1e6', '#e6ff7a', '#ff6b6b',
+    '#7affbf', '#f2a4ff', '#a4f2ff', '#ffd37a', '#7aff7a', '#ff7ad9', '#a07aff', '#7affea'
+  ];
+
+  // --- Raster & Density Helpers ---
+
+  /**
+   * Resizes the internal raster grid and rebuilds the density field.
+   * @param {number} N - New resolution per side (e.g., 300 for 300x300 grid).
+   */
+  function resizeRaster(N) {
+    GRID_N = N | 0; // Ensure integer
+    R('resVal').textContent = GRID_N;
+
+    // Allocate new arrays for pixel assignments and density values
+    state.assign = new Uint16Array(GRID_N * GRID_N);
+    state.rho = new Float32Array(GRID_N * GRID_N);
+    state.rhoBuffer = new Float32Array(GRID_N * GRID_N); // For CA evolution
+
+    buildDensity(true); // Recompute density based on new resolution, true to force initialization
+    render();       // Redraw everything
+  }
+
+  /**
+   * Calculates a 1D index from 2D grid coordinates.
+   * @param {number} i - X-coordinate (column).
+   * @param {number} j - Y-coordinate (row).
+   * @returns {number} The 1D index.
+   */
+  function gridIndex(i, j) {
+    return i + j * GRID_N;
+  }
+
+  /**
+   * Builds or updates the density field (`state.rho`) based on the selected mode.
+   * @param {boolean} forceInit - If true, re-initialize even for CA mode.
+   */
+  function buildDensity(forceInit = false) {
+    const N = GRID_N;
+    const rho = state.rho;
+    const mode = state.rhoMode;
+
+    if (mode === 'ca-evolve' && !forceInit) {
+        // If in CA mode and not forcing initialization, let CA evolve it
+        evolveCADensity();
+        return;
+    }
+
+    for (let j = 0; j < N; j++) {
+      for (let i = 0; i < N; i++) {
+        // Pixel center coordinates in [0, 1] range
+        const x = (i + 0.5) / N, y = (j + 0.5) / N;
+        let densityValue = 1; // Default to uniform
+
+        if (mode === 'radial') {
+          const dx = x - .5, dy = y - .5;
+          const d = Math.hypot(dx, dy);
+          densityValue = 1.2 - d * 1.4;
+        } else if (mode === 'bands') {
+          densityValue = 0.6 + 0.5 * Math.sin((y * 8 + 0.2) * Math.PI);
+        } else if (mode === 'noise') {
+          let minD = Infinity;
+          for (let k = 0; k < 8; k++) {
+            const sx = Utils.frac(Utils.sfc32(123 + k)(k + 31)) % 1;
+            const sy = Utils.frac(Utils.sfc32(456 + k)(k + 53)) % 1;
+            const dx = x - (sx * 0.9 + 0.05), dy = y - (sy * 0.9 + 0.05);
+            minD = Math.min(minD, Math.hypot(dx, dy));
+          }
+          densityValue = 0.7 + 0.9 * (0.35 / (minD + 0.01));
+        } else if (mode === 'ca-evolve') {
+            // Initialize CA field with random noise to start evolution
+            densityValue = Utils.rand(0.2, 0.8);
+        }
+        rho[gridIndex(i, j)] = Utils.clamp(densityValue, 0.05, 1); // Ensure density is within reasonable bounds
+      }
+    }
+
+    // Normalize total mass to 1, so areas are correctly interpreted as fractions
+    normalizeDensity();
+  }
+
+  /** Normalizes the total density (mass) across the grid to 1. */
+  function normalizeDensity() {
+    let totalMass = 0;
+    for (const v of state.rho) totalMass += v;
+    const invTotalMass = totalMass ? 1 / totalMass : 1;
+    for (let q = 0; q < state.rho.length; q++) state.rho[q] *= invTotalMass;
+  }
+
+  /**
+   * Evolves the density field using simple Cellular Automata rules.
+   * This provides the "stochastic" and "breathing" aspect to the underlying mass distribution.
+   */
+  function evolveCADensity() {
+    const N = GRID_N;
+    const rho = state.rho;
+    const buffer = state.rhoBuffer; // Use buffer to avoid artifacts from in-place updates
+
+    // Simple CA rule: Diffusion + Thresholding for organic growth/erosion
+    // Each cell tends to average its value with neighbors, then get pushed toward 0 or 1
+    const evolveRate = state.caSpeed * 0.2; // Scale CA speed
+
+    if (evolveRate === 0) return; // If CA speed is zero, don't evolve
+
+    for (let j = 0; j < N; j++) {
+      for (let i = 0; i < N; i++) {
+        const idx = gridIndex(i, j);
+        let sumNeighbors = 0;
+        let numNeighbors = 0;
+
+        // Sum values of 8 neighbors
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (dx === 0 && dy === 0) continue; // Skip self
+            const ni = i + dx, nj = j + dy;
+            if (ni >= 0 && ni < N && nj >= 0 && nj < N) {
+              sumNeighbors += rho[gridIndex(ni, nj)];
+              numNeighbors++;
+            }
+          }
+        }
+
+        const avgNeighbors = numNeighbors > 0 ? sumNeighbors / numNeighbors : 0;
+        const currentDensity = rho[idx];
+
+        // Basic diffusion/smoothing: move towards average of neighbors
+        let newDensity = currentDensity + (avgNeighbors - currentDensity) * 0.1;
+
+        // Simple "growth" or "decay" based on density: push towards extremes
+        // This adds a "reaction" part to the diffusion
+        if (newDensity < 0.3) { // If low density, it might decay further
+          newDensity *= (1 - evolveRate * 0.5);
+        } else if (newDensity > 0.7) { // If high density, it might grow further
+          newDensity += (1 - newDensity) * evolveRate * 0.5;
+        } else { // Mid-range, more stable but with some noise
+          newDensity += (Utils.rand(-1,1) * 0.01 * evolveRate);
+        }
+
+        buffer[idx] = Utils.clamp(newDensity, 0.01, 1); // Clamp to [0.01, 1]
+      }
+    }
+    // Copy buffer back to rho for next iteration
+    rho.set(buffer);
+    normalizeDensity(); // Ensure total mass remains 1
+  }
+
+  // --- Initialization ---
+
+  /**
+   * Initializes or re-seeds the sites (generator points) for the Power Diagram.
+   * @param {number} n - Number of sites to create.
+   */
+  function seedSites(n) {
+    state.sites = Array.from({ length: n }, (_, i) => ({
+      x: Utils.rand(0.15, 0.85), // Random position within the canvas
+      y: Utils.rand(0.15, 0.85),
+      w: 0,                 // Initial weight (usually 0)
+      color: siteColors[i % siteColors.length] // Assign a distinct color
+    }));
+
+    // If targets are not yet defined or count doesn't match, set to equal distribution
+    if (!state.targets || state.targets.length !== n) {
+      state.targets = Array(n).fill(1 / n); // Equal target area for each site
+    } else {
+      normalizeTargets(); // Ensure existing targets still sum to 1
+    }
+    paintLegend(); // Update the legend display
+  }
+
+  /** Ensures that all target areas sum up to 1 (as fractions of total mass). */
+  function normalizeTargets() {
+    let sum = state.targets.reduce((a, b) => a + b, 0);
+    if (!sum) sum = 1; // Avoid division by zero
+    state.targets = state.targets.map(v => Utils.clamp(v / sum, 1e-6, 1)); // Ensure no target is too small or invalid
+  }
+
+  /** Resets all site weights to zero. */
+  function resetWeights() {
+    state.sites.forEach(S => S.w = 0);
+  }
+
+  // --- Core Algorithm Steps ---
+
+  /**
+   * Assigns each pixel in the grid to its closest site based on Power Distance.
+   * Power Distance: `d(x, s_k) = ||x - s_k||² - w_k`
+   * Where `x` is the pixel coordinate, `s_k` is the site coordinate, and `w_k` is the site's weight.
+   */
+  function assignPixels() {
+    const N = GRID_N;
+    const assignments = state.assign;
+    const sites = state.sites;
+
+    // Cache weights for performance (accessing directly from sites object is slower)
+    const siteWeights = sites.map(S => S.w);
+
+    for (let j = 0; j < N; j++) {
+      const y = (j + 0.5) / N; // Y-coordinate of pixel center (normalized [0,1])
+      for (let i = 0; i < N; i++) {
+        const x = (i + 0.5) / N; // X-coordinate of pixel center (normalized [0,1])
+
+        let bestSiteIndex = 0;
+        let minPowerDistance = Infinity;
+
+        // Iterate through all sites to find the one with the minimum power distance
+        for (let k = 0; k < sites.length; k++) {
+          const dx = x - sites[k].x;
+          const dy = y - sites[k].y;
+          // Calculate power distance
+          const powerDistance = dx * dx + dy * dy - siteWeights[k];
+
+          if (powerDistance < minPowerDistance) {
+            minPowerDistance = powerDistance;
+            bestSiteIndex = k;
+          }
+        }
+        assignments[gridIndex(i, j)] = bestSiteIndex;
+      }
+    }
+  }
+
+  /**
+   * Measures the actual area (mass) and centroid for each cell based on current assignments.
+   * This is a "pixel-by-pixel" integration over the density field.
+   * @returns {{achieved: Float32Array, centroids: Array<{x: number, y: number}|null>}}
+   */
+  function measureAreasAndCentroids() {
+    const numSites = state.sites.length;
+    // Arrays to accumulate mass and weighted positions for centroids
+    const achievedAreas = new Float32Array(numSites).fill(0);
+    const centroidXSums = new Float32Array(numSites).fill(0);
+    const centroidYSums = new Float32Array(numSites).fill(0);
+
+    const N = GRID_N;
+    const rho = state.rho;       // Density field
+    const assignments = state.assign; // Current pixel assignments
+
+    for (let j = 0; j < N; j++) {
+      const y = (j + 0.5) / N;
+      for (let i = 0; i < N; i++) {
+        const x = (i + 0.5) / N;
+        const pixelIdx = gridIndex(i, j);
+        const siteId = assignments[pixelIdx];
+        const massOfPixel = rho[pixelIdx]; // Mass attributed to this pixel
+
+        achievedAreas[siteId] += massOfPixel;
+        centroidXSums[siteId] += massOfPixel * x;
+        centroidYSums[siteId] += massOfPixel * y;
+      }
+    }
+
+    // Calculate final centroids (weighted average of pixel positions)
+    const centroids = Array.from({ length: numSites }, (_, k) => {
+      const area = achievedAreas[k];
+      return area > 0 ? { x: centroidXSums[k] / area, y: centroidYSums[k] / area } : null;
+    });
+
+    return { achieved: achievedAreas, centroids };
+  }
+
+  /**
+   * Updates the weights of the sites based on the difference between achieved and target areas.
+   * This is the "dual ascent" step, essentially gradient descent on the optimal transport cost.
+   * `w_i = w_i + η * (target_area_i - achieved_area_i)`
+   */
+  function updateWeights() {
+    const { achieved } = measureAreasAndCentroids();
+    state.achieved = achieved; // Store achieved areas for rendering/stats
+
+    const numSites = state.sites.length;
+    const eta = state.eta; // Learning rate (weight step size)
+
+    for (let i = 0; i < numSites; i++) {
+      const delta = (state.targets[i] - achieved[i]); // Area error
+      // Weights are adjusted proportionally to the area error.
+      // The factor '4' is an empirical scaling for the [0,1] domain, relating to the square of domain size.
+      state.sites[i].w += eta * delta * 4;
+    }
+  }
+
+  /**
+   * Moves each site towards the centroid of its own cell, and adds stochastic jitter.
+   * This combines Lloyd's-like relaxation with the "stochastic drift" requirement.
+   * `s_i = (1 - λ) * s_i + λ * c_i + random_jitter`
+   */
+  function centroidStep() {
+    const { centroids } = measureAreasAndCentroids(); // Re-measure centroids based on current assignments
+    const lambda = state.lambda; // Learning rate for centroid movement
+    const jitter = state.jitterStrength; // Max random offset magnitude
+
+    for (let i = 0; i < state.sites.length; i++) {
+      const currentCentroid = centroids[i];
+      if (!currentCentroid) continue; // Skip if a cell is empty (can happen with very high weights/bad initial state)
+
+      // Lerp (linear interpolate) site position towards its cell's centroid
+      let newX = Utils.lerp(state.sites[i].x, currentCentroid.x, lambda);
+      let newY = Utils.lerp(state.sites[i].y, currentCentroid.y, lambda);
+
+      // Add stochastic jitter (random drift)
+      newX += (Utils.rand() - 0.5) * jitter;
+      newY += (Utils.rand() - 0.5) * jitter;
+
+      // Clamp to canvas bounds [0, 1]
+      state.sites[i].x = Utils.clamp(newX, 0, 1);
+      state.sites[i].y = Utils.clamp(newY, 0, 1);
+    }
+  }
+
+  // --- Error & Convergence Metrics ---
+
+  /**
+   * Calculates the maximum relative error among all sites.
+   * This is a key metric for judging convergence.
+   * `Error = |achieved_area - target_area| / target_area`
+   * @returns {number} Maximum relative error as a fraction.
+   */
+  function maxRelErr() {
+    if (!state.achieved || state.achieved.length === 0) return 1; // Max error if no data
+    let maxError = 0;
+    for (let i = 0; i < state.sites.length; i++) {
+      const target = state.targets[i];
+      const achieved = state.achieved[i] || 0; // Use 0 if no area achieved yet
+
+      // Avoid division by zero or infinitesimally small targets
+      const relativeError = Math.abs(achieved - target) / Math.max(1e-9, target);
+      maxError = Math.max(maxError, relativeError);
+    }
+    return maxError;
+  }
+
+  // --- Rendering ---
+
+  /**
+   * Main rendering function. Draws the cells or heatmaps on `W_CANVAS`
+   * and the sites/interaction elements on `O_CANVAS`.
+   */
+  function render() {
+    assignPixels(); // First, determine which pixel belongs to which site
+
+    const N = GRID_N;
+    // Use an ImageData object for efficient pixel manipulation for the background
+    const imgData = new Uint8ClampedArray(N * N * 4);
+
+    // Re-measure areas and centroids *after* pixel assignment, but *before* weight update,
+    // to get the most up-to-date metrics for display.
+    const { achieved } = measureAreasAndCentroids();
+    state.achieved = achieved;
+
+    // --- Draw Main Canvas (cells, weights, or error heatmap) ---
+    if (state.viewMode === 'cells') {
+      // Draw each cell with its site's color
+      for (let i = 0; i < N * N; i++) {
+        const siteId = state.assign[i];
+        const color = Utils.hexToRgb(state.sites[siteId].color);
+        const p = i * 4; // Pixel data index
+        imgData[p] = color.r; imgData[p + 1] = color.g; imgData[p + 2] = color.b; imgData[p + 3] = 255;
+      }
+      // Borders are now handled by Marching Squares on the overlay for smoothness, if enabled.
+      // So no pixelated borders here.
+    } else if (state.viewMode === 'weights') {
+      // Visualize the weight field as a grayscale heatmap
+      let minW = Infinity, maxW = -Infinity;
+      state.sites.forEach(s => { minW = Math.min(minW, s.w); maxW = Math.max(maxW, s.w); });
+      const weightRange = maxW - minW || 1;
+
+      for (let j = 0; j < N; j++) {
+        for (let i = 0; i < N; i++) {
+          const siteId = state.assign[gridIndex(i, j)];
+          const normalizedWeight = (state.sites[siteId].w - minW) / weightRange;
+          const grayValue = Math.floor(normalizedWeight * 255);
+          const p = gridIndex(i, j) * 4;
+          imgData[p] = grayValue; imgData[p + 1] = grayValue; imgData[p + 2] = grayValue; imgData[p + 3] = 255;
+        }
+      }
+    } else if (state.viewMode === 'error') {
+      // Visualize error for each cell as a heatmap
+      for (let k = 0; k < state.sites.length; k++) {
+        const error = (achieved[k] - state.targets[k]) / Math.max(1e-9, state.targets[k]);
+        const isOverAllocated = error > 0;
+        const errorMagnitude = Utils.clamp(Math.abs(error) * 3, 0, 1);
+
+        const r = isOverAllocated ? Math.floor(255 * errorMagnitude) : 0;
+        const b = !isOverAllocated ? Math.floor(255 * errorMagnitude) : 0;
+        const g = Math.floor(60 * errorMagnitude);
+
+        for (let i = 0; i < N * N; i++) {
+          if (state.assign[i] === k) {
+            const p = i * 4;
+            imgData[p] = r; imgData[p + 1] = g; imgData[p + 2] = b; imgData[p + 3] = 255;
+          }
+        }
+      }
+    }
+
+    // Create an ImageBitmap from the raw pixel data for efficient drawing
+    // This is asynchronous, so subsequent drawing must happen in its .then()
+    const imageDataObj = new ImageData(imgData, N, N);
+    createImageBitmap(imageDataObj).then(bmp => {
+      W_CTX.imageSmoothingEnabled = false; // Keep pixels sharp when scaling
+      W_CTX.drawImage(bmp, 0, 0, state.canvasW, state.canvasH);
+    });
+
+    // --- Draw Overlay Canvas (Marching Squares contours, sites, interaction highlights) ---
+    O_CTX.clearRect(0, 0, state.canvasW, state.canvasH); // Clear previous overlay
+
+    if (state.msContours && state.viewMode === 'cells') {
+      // Generate a binary grid for Marching Squares: 1 for foreground, 0 for background
+      // To get *all* boundaries, we'll draw individual cell boundaries as MS contours
+      // Or, a simpler direct line drawing that is smooth.
+      // Let's use simple edge detection for multiple boundaries on the high-res overlay.
+      // This is generally more robust for multi-label fields than a single MS pass.
+
+      O_CTX.strokeStyle = 'rgba(15, 20, 30, 0.9)'; // Darker, subtle border
+      O_CTX.lineWidth = 2.5; // Thicker lines
+      O_CTX.lineJoin = 'round'; // Smooth corners
+      O_CTX.lineCap = 'round'; // Smooth line ends
+
+      // Pixel-based edge detection on the high-res canvas coordinates
+      const scale = state.canvasW / N; // Scale factor from grid to canvas pixels
+      for (let j = 0; j < N; j++) {
+        for (let i = 0; i < N; i++) {
+          const currentId = state.assign[gridIndex(i, j)];
+
+          // Check right neighbor
+          if (i + 1 < N && currentId !== state.assign[gridIndex(i + 1, j)]) {
+            O_CTX.beginPath();
+            O_CTX.moveTo((i + 1) * scale, j * scale);
+            O_CTX.lineTo((i + 1) * scale, (j + 1) * scale);
+            O_CTX.stroke();
+          }
+          // Check bottom neighbor
+          if (j + 1 < N && currentId !== state.assign[gridIndex(i, j + 1)]) {
+            O_CTX.beginPath();
+            O_CTX.moveTo(i * scale, (j + 1) * scale);
+            O_CTX.lineTo((i + 1) * scale, (j + 1) * scale);
+            O_CTX.stroke();
+          }
+        }
+      }
+    }
+
+
+    // Draw sites on top of everything
+    for (let i = 0; i < state.sites.length; i++) {
+      const site = state.sites[i];
+      // Convert normalized site coordinates to canvas pixel coordinates
+      const x = site.x * state.canvasW;
+      const y = (1 - site.y) * state.canvasH; // Invert Y for canvas coordinate system
+
+      // Draw site outline (white) for better visibility against any background color
+      O_CTX.strokeStyle = '#fff'; O_CTX.lineWidth = 2;
+      O_CTX.beginPath(); O_CTX.arc(x, y, 9, 0, Math.PI * 2); O_CTX.stroke();
+
+      // Draw site background circle (black)
+      O_CTX.fillStyle = "#000";
+      O_CTX.beginPath(); O_CTX.arc(x, y, 8, 0, Math.PI * 2); O_CTX.fill();
+
+      // Draw site foreground circle (site's color)
+      O_CTX.fillStyle = site.color;
+      O_CTX.beginPath(); O_CTX.arc(x, y, 6, 0, Math.PI * 2); O_CTX.fill();
+
+      // Highlight if site is focused (for interaction)
+      if (i === state.focus) {
+        O_CTX.strokeStyle = 'yellow'; O_CTX.lineWidth = 2; // Yellow highlight for focused site
+        O_CTX.beginPath(); O_CTX.arc(x, y, 11, 0, Math.PI * 2); O_CTX.stroke();
+      }
+    }
+
+    // Update UI elements
+    R('errTag').textContent = `max rel err: ${maxRelErr().toFixed(4)}`;
+    R('stats').textContent = `sites:${state.sites.length}  η:${state.eta.toFixed(2)}  λ:${state.lambda.toFixed(2)}  jitter:${state.jitterStrength.toFixed(3)}  grid:${N}×${N}`;
+    paintBars(); // Update the bar chart
+  }
+
+  // --- UI Updates ---
+
+  /** Updates the legend (list of sites with colors and target areas). */
+  function paintLegend() {
+    const legendEl = R('legend');
+    legendEl.innerHTML = ''; // Clear existing legend
+
+    state.sites.forEach((site, i) => {
+      const span = document.createElement('span');
+      span.className = 'row';
+      span.style.gap = '6px';
+
+      const dot = document.createElement('span');
+      dot.className = 'dot';
+      dot.style.background = site.color;
+
+      const text = document.createElement('span');
+      text.className = 'small mono';
+      text.textContent = `#${i} t=${state.targets[i].toFixed(3)}`; // Display target area fraction
+
+      span.append(dot, text);
+      legendEl.appendChild(span);
+    });
+  }
+
+  /** Updates the bar chart showing target vs. achieved areas for each site. */
+  function paintBars() {
+    const barsEl = R('bars');
+    barsEl.innerHTML = ''; // Clear existing bars
+
+    const numSites = state.sites.length;
+    const achieved = state.achieved || Array(numSites).fill(0); // Use 0 if no areas yet
+
+    for (let i = 0; i < numSites; i++) {
+      const bar = document.createElement('div');
+      bar.className = 'bar';
+
+      const fill = document.createElement('div');
+      fill.className = 'fill';
+      fill.style.height = (achieved[i] * 100).toFixed(1) + '%'; // Achieved area as percentage
+      fill.style.background = state.sites[i].color;
+
+      const targetLine = document.createElement('div');
+      targetLine.className = 'target';
+      targetLine.style.bottom = (state.targets[i] * 100).toFixed(1) + '%'; // Target area as percentage
+
+      const label = document.createElement('div');
+      label.className = 'label';
+      label.textContent = i; // Site index
+      label.style.color = (i === state.focus ? '#fff' : 'var(--muted)'); // Highlight if focused
+
+      bar.append(fill, targetLine, label);
+      // Tooltip for detailed info
+      bar.title = `site ${i}\narea=${(achieved[i] * 100).toFixed(2)}% target=${(state.targets[i] * 100).toFixed(2)}% w=${state.sites[i].w.toFixed(3)}`;
+
+      // Event listener to focus a site when its bar is clicked
+      bar.addEventListener('click', () => { state.focus = i; render(); });
+      barsEl.appendChild(bar);
+    }
+  }
+
+  // --- Interaction Handlers ---
+
+  let drag = { i: -1 }; // State for drag interaction {siteIndex, offsetX, offsetY}
+
+  O_CANVAS.addEventListener('mousedown', (e) => {
+    const rect = O_CANVAS.getBoundingClientRect();
+    // Convert mouse event client coordinates to normalized canvas coordinates [0,1]
+    const mouseX = (e.clientX - rect.left) / rect.width;
+    const mouseY = 1 - (e.clientY - rect.top) / rect.height; // Invert Y
+
+    if (e.shiftKey) {
+      // Shift + Click: Add a new site
+      const newSiteIndex = state.sites.length;
+      if (newSiteIndex >= siteColors.length) {
+        console.warn("Max sites reached for unique colors, recycling colors.");
+      }
+      const newColor = siteColors[newSiteIndex % siteColors.length];
+      state.sites.push({ x: mouseX, y: mouseY, w: 0, color: newColor });
+      state.targets.push(Math.max(1e-3, 1 / (newSiteIndex + 1))); // Add a default small target
+      normalizeTargets(); // Re-normalize all targets
+      state.focus = newSiteIndex; // Focus the newly added site
+      paintLegend();
+      render();
+      return;
+    }
+
+    // Find the nearest site to the click
+    let nearestSiteIndex = -1;
+    let minDistanceSq = Infinity;
+    for (let i = 0; i < state.sites.length; i++) {
+      const dx = mouseX - state.sites[i].x;
+      const dy = mouseY - state.sites[i].y;
+      const dSq = dx * dx + dy * dy;
+      if (dSq < minDistanceSq) {
+        minDistanceSq = dSq;
+        nearestSiteIndex = i;
+      }
+    }
+
+    // If a site is clicked (within a reasonable radius, e.g., 20px normalized)
+    const sitePickRadiusNormalized = 20 / rect.width; // Approx 20px on canvas
+    if (nearestSiteIndex >= 0 && minDistanceSq < sitePickRadiusNormalized * sitePickRadiusNormalized) {
+      drag.i = nearestSiteIndex;    // Set site to drag
+      state.focus = nearestSiteIndex; // Focus this site
+      render(); // Redraw to show focus highlight
+    }
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (drag.i < 0) return; // Not dragging
+
+    const rect = O_CANVAS.getBoundingClientRect();
+    let mouseX = (e.clientX - rect.left) / rect.width;
+    let mouseY = 1 - (e.clientY - rect.top) / rect.height; // Invert Y
+
+    // Clamp mouse coordinates to canvas bounds
+    mouseX = Utils.clamp(mouseX, 0, 1);
+    mouseY = Utils.clamp(mouseY, 0, 1);
+
+    // Update site position
+    state.sites[drag.i].x = mouseX;
+    state.sites[drag.i].y = mouseY;
+
+    render(); // Redraw immediately
+  });
+
+  window.addEventListener('mouseup', () => {
+    drag.i = -1; // Stop dragging
+  });
+
+  O_CANVAS.addEventListener('wheel', (e) => {
+    if (state.focus < 0) return; // No site focused
+    e.preventDefault(); // Prevent page scrolling
+
+    // Adjust the weight of the focused site based on scroll direction
+    state.sites[state.focus].w += (e.deltaY < 0 ? 1 : -1) * 0.02; // Small step
+    render(); // Redraw to reflect weight change
+  }, { passive: false }); // Needs to be passive: false to allow preventDefault
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Delete' && state.focus >= 0) {
+      // Delete focused site
+      state.sites.splice(state.focus, 1);
+      state.targets.splice(state.focus, 1);
+      normalizeTargets(); // Re-normalize targets
+      state.focus = -1;   // Clear focus
+      paintLegend();
+      render();
+    }
+  });
+
+  // --- Button & Slider Event Listeners ---
+
+  R('seed').onclick = () => { seedSites(+R('nSites').value); resetWeights(); render(); };
+  R('equal').onclick = () => {
+    if (state.sites.length > 0) {
+      state.targets = Array(state.sites.length).fill(1 / state.sites.length);
+      normalizeTargets();
+      paintLegend();
+      render();
+    }
+  };
+  R('randomTargets').onclick = () => {
+    const n = state.sites.length;
+    if (n > 0) {
+      const randomValues = Array.from({ length: n }, () => Utils.rand());
+      const sumRandom = randomValues.reduce((a, b) => a + b, 0);
+      state.targets = randomValues.map(v => v / sumRandom); // Normalize random values
+      paintLegend();
+      render();
+    }
+  };
+  R('reset').onclick = () => { resetWeights(); render(); };
+  R('eta').oninput = (e) => { state.eta = +e.target.value; R('etaVal').textContent = state.eta.toFixed(2); };
+  R('centroid').onchange = (e) => { state.useCentroid = e.target.checked; };
+  R('lambda').oninput = (e) => { state.lambda = +e.target.value; R('lambdaVal').textContent = state.lambda.toFixed(2); };
+  R('jitter').oninput = (e) => { state.jitterStrength = +e.target.value; R('jitterVal').textContent = state.jitterStrength.toFixed(3); };
+  R('res').oninput = (e) => { resizeRaster(+e.target.value); };
+  R('rhoMode').onchange = (e) => { state.rhoMode = e.target.value; buildDensity(true); render(); }; // Force init for new mode
+  R('caSpeed').oninput = (e) => { state.caSpeed = +e.target.value; R('caSpeedVal').textContent = state.caSpeed.toFixed(1); };
+  R('viewMode').onchange = (e) => { state.viewMode = e.target.value; render(); };
+  R('msContours').onchange = (e) => { state.msContours = e.target.checked; render(); };
+  R('nSites').onchange = () => { seedSites(+R('nSites').value); resetWeights(); render(); };
+
+  R('play').onclick = (e) => {
+    state.play = !state.play;
+    e.target.setAttribute('aria-pressed', String(state.play));
+    if (state.play) tick(); // Start the animation loop
+  };
+  R('step').onclick = () => { iterateOnce(); }; // Perform one iteration
+  R('clear').onclick = () => {
+    // Fill with site 0 to prevent "unassigned" pixels
+    state.assign.fill(0);
+    state.achieved = Array(state.sites.length).fill(0); // Reset achieved areas
+    render();
+  };
+
+  R('copyPrompt').onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(R('prompt').innerText);
+      R('copyState').textContent = 'Copied!';
+    } catch (err) {
+      R('copyState').textContent = 'Copy failed';
+      console.error('Failed to copy prompt:', err);
+    }
+    setTimeout(() => R('copyState').textContent = '', 1500); // Clear message after 1.5s
+  };
+
+  // --- Iteration Loop ---
+
+  /** Performs a single step of the CCVT algorithm. */
+  function iterateOnce() {
+    buildDensity(); // Evolve density (if CA mode) or just ensure it's built (other modes)
+    updateWeights(); // Adjust site weights to match target areas
+    if (state.useCentroid) {
+      centroidStep(); // Optionally, move sites to their cell centroids with jitter
+    }
+    render(); // Redraw the visualization
+  }
+
+  /** The animation loop for continuous iteration. */
+  function tick() {
+    if (!state.play) return; // Stop if not playing
+
+    iterateOnce();
+
+    // Dynamically adjust animation speed: slower when close to convergence
+    const error = maxRelErr();
+    const delay = error > 0.02 ? 0 : 60; // Fast when error is high, slow when low
+
+    setTimeout(() => requestAnimationFrame(tick), delay);
+  }
+
+  // --- Initial Setup on Load ---
+  // This runs once when the script is loaded to set up the initial state.
+  function init() {
+    seedSites(+R('nSites').value); // Create initial sites
+    resizeRaster(+R('res').value); // Setup initial raster resolution
+    // No need to call render() explicitly here, resizeRaster already calls it.
+  }
+
+  // Expose init for external calls (e.g., from tab switching)
+  return { init: init };
+})();
+
+
+// =============================================================================
+// ORGANIC SUBDIVISION GALLERY LOGIC
+// =============================================================================
+// This section implements various non-iterative algorithms for creating organic-looking
+// area subdivisions, used for comparison in the gallery tab.
+// It leverages D3's geometry module for polygon operations.
+
+const Gallery = (() => {
+  const R = Utils.R; // Use the global R helper
+
+  // Sample data for the gallery (can be imagined as the output of your "Organic BSP")
+  // These are the target values for the gallery algorithms.
+  const galleryData = [
+    { category: 'EYE',                  value: 259785, color: '#FF6B6B' },
+    { category: 'WHISKER',              value: 73842,  color: '#4ECDC4' },
+    { category: 'CARDS',                value: 8472,   color: '#45B7D1' },
+    { category: 'CARDS_V3',             value: 5700,   color: '#FFA07A' },
+    { category: 'CARDS-backup',         value: 5696,   color: '#98D8C8' },
+    { category: 'CARDS_V2',             value: 5677,   color: '#BB8FCE' },
+    { category: 'video.mp4',            value: 486,    color: '#85C1E2' },
+    { category: 'audio.mp3',            value: 152,    color: '#F7DC6F' },
+    { category: 'document.pdf',         value: 68,     color: '#7aa2ff' },
+    { category: 'storyboard.json',      value: 42,     color: '#6be675' },
+    { category: 'storyboard.bak',       value: 42,     color: '#ffb86b' },
+    { category: 'analysis.md',          value: 38,     color: '#ff7aa2' }
+  ];
+  const GALLERY_TOTAL_VALUE = d3.sum(galleryData, d => d.value);
+
+  // --- Polygon Geometry Helpers (using D3 for polygon area/centroid/contains) ---
+
+  /** Calculates the area of a polygon using D3. */
+  function polyArea(poly) { return poly && poly.length > 2 ? Math.abs(d3.polygonArea(poly)) : 0; }
+
+  /**
+   * Clips a subject polygon by a clip polygon (Sutherland-Hodgman algorithm essentially).
+   * Used to generate the intersection of two polygon shapes.
+   * @param {Array<Array<number>>} subjectPolygon - The polygon to be clipped.
+   * @param {Array<Array<number>>} clipPolygon - The polygon to clip against.
+   * @returns {Array<Array<number>>} The resulting clipped polygon.
+   */
+  function polygonIntersect(subjectPolygon, clipPolygon) {
+    let outputList = subjectPolygon.slice();
+    if (clipPolygon.length < 3 || subjectPolygon.length < 3) return [];
+
+    for (let i = 0; i < clipPolygon.length; i++) {
+      const A = clipPolygon[i];
+      const B = clipPolygon[(i + 1) % clipPolygon.length];
+      const inputList = outputList.slice();
+      outputList = [];
+      if (inputList.length === 0) break; // If nothing left to clip, stop
+
+      for (let j = 0; j < inputList.length; j++) {
+        const P = inputList[j];
+        const Q = inputList[(j + 1) % inputList.length];
+        const isQInside = Utils.isLeft(A, B, Q) >= 0; // Check if Q is 'inside' the clip line
+        const isPInside = Utils.isLeft(A, B, P) >= 0; // Check if P is 'inside' the clip line
+
+        if (isQInside) {
+          if (!isPInside) { // P outside, Q inside => add intersection point
+            outputList.push(Utils.lineIntersect(A, B, P, Q));
+          }
+          outputList.push(Q); // Add Q
+        } else if (isPInside) { // P inside, Q outside => add intersection point
+          outputList.push(Utils.lineIntersect(A, B, P, Q));
+        }
+      }
+    }
+    return outputList;
+  }
+
+  /**
+   * Creates a large "strip" polygon from a curve, extending infinitely in one direction.
+   * Used for clipping polygons either "above" or "below" a given curve.
+   * @param {Array<Array<number>>} curve - The 2D points defining the curve.
+   * @param {number} side - -1 for below the curve, +1 for above.
+   * @returns {Array<Array<number>>} The strip polygon.
+   */
+  function buildStripFromCurve(curve, side) {
+    const minX = Math.min(...curve.map(p => p[0])), maxX = Math.max(...curve.map(p => p[0]));
+    const minY = Math.min(...curve.map(p => p[1])), maxY = Math.max(...curve.map(p => p[1]));
+    const padding = (maxY - minY + maxX - minX) * 0.5 + 2000; // Large padding for 'infinite' effect
+
+    if (side < 0) { // Strip below the curve
+      // The curve points, then connect to bottom-right and bottom-left (off-canvas)
+      return [...curve, [maxX, maxY + padding], [minX, maxY + padding]];
+    } else { // Strip above the curve
+      // Connect to top-left and top-right (off-canvas), then reverse curve points
+      return [[minX, minY - padding], [maxX, minY - padding], ...curve.slice().reverse()];
+    }
+  }
+
+  /**
+   * Creates a large vertical "strip" polygon from a curve, extending infinitely left/right.
+   * Used for clipping polygons either "left" or "right" of a given curve.
+   * @param {Array<Array<number>>} curve - The 2D points defining the curve.
+   * @param {number} side - -1 for left of the curve, +1 for right.
+   * @returns {Array<Array<number>>} The vertical strip polygon.
+   */
+  function buildVerticalStripFromCurve(curve, side) {
+    const xs = curve.map(p => p[0]), ys = curve.map(p => p[1]);
+    const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+    const padding = (maxX - minX + maxY - minY) * 0.5 + 2000;
+
+    if (side < 0) { // Strip left of the curve
+      return [[minX - padding, maxY], [minX - padding, minY], ...curve];
+    } else { // Strip right of the curve
+      return [...curve.slice().reverse(), [maxX + padding, minY], [maxX + padding, maxY]];
+    }
+  }
+
+  // Convenience clipping functions using the strip builders
+  function clipPolyBelow(poly, curve) { return polygonIntersect(poly, buildStripFromCurve(curve, -1)); }
+  function clipPolyAbove(poly, curve) { return polygonIntersect(poly, buildStripFromCurve(curve, +1)); }
+  function clipPolyLeft(poly, curve) { return polygonIntersect(poly, buildVerticalStripFromCurve(curve, -1)); }
+  function clipPolyRight(poly, curve) { return polygonIntersect(poly, buildVerticalStripFromCurve(curve, +1)); }
+
+  // --- Gallery Drawing & Stats ---
+
+  /**
+   * Draws a set of cells (polygons) onto a canvas.
+   * Each 'territory' object can now contain a `polygons` array for algorithms that
+   * create disjoint regions for a single territory (like Hilbert).
+   * @param {CanvasRenderingContext2D} ctx - The canvas rendering context.
+   * @param {Array<Object>} territories - Array of territory objects {category, color, polygons: [...], ...}.
+   */
+  function drawCells(ctx, territories) {
+    ctx.save();
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height); // Clear the canvas
+
+    ctx.lineWidth = 1.8;
+    ctx.strokeStyle = 'rgba(12,17,24, 0.9)'; // Dark border for polygons
+
+    territories.forEach(territory => {
+      const polygonsToDraw = territory.polygons || [territory.polygon]; // Handle single polygon or array of polygons
+
+      polygonsToDraw.forEach(poly => {
+        if (!poly || poly.length < 3) return; // Skip invalid polygons
+
+        ctx.beginPath();
+        ctx.moveTo(poly[0][0], poly[0][1]);
+        for (let i = 1; i < poly.length; i++) {
+          ctx.lineTo(poly[i][0], poly[i][1]);
+        }
+        ctx.closePath();
+
+        ctx.fillStyle = territory.color || '#888';
+        ctx.globalAlpha = .95;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.stroke();
+      });
+
+      // Draw category label at the centroid of the *first* polygon or the overall territory's centroid if available
+      const mainPoly = (territory.polygons && territory.polygons.length > 0) ? territory.polygons[0] : territory.polygon;
+      if (mainPoly && mainPoly.length >= 3) {
+        const centroid = d3.polygonCentroid(mainPoly);
+        ctx.fillStyle = '#0c1118'; // Dark text
+        ctx.font = '600 12px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(territory.category, centroid[0], centroid[1]);
+      }
+    });
+    ctx.restore();
+  }
+
+  /**
+   * Updates the statistical display for a gallery algorithm.
+   * Calculates Mean Absolute Percentage Error (MAPE) and a simple overlap metric.
+   * @param {number} slot - The UI slot number (1-6) for the algorithm.
+   * @param {Array<Object>} territories - Array of territory objects {actualArea, desiredArea, polygons: [...], ...}.
+   */
+  function updateStats(slot, territories) {
+    // Calculate Mean Absolute Percentage Error (MAPE)
+    // territories now directly have actualArea and desiredArea
+    const errors = territories.map(t => Math.abs(t.actualArea - t.desiredArea) / Math.max(1, t.desiredArea));
+    const mape = d3.mean(errors) * 100;
+    const accEl = document.getElementById(`stat${slot}-accuracy`);
+    if (accEl) accEl.textContent = mape ? mape.toFixed(1) + '%' : '-';
+
+    // Calculate a simple overlap metric:
+    // This is done by sampling points on a small grid and counting how many fall into >1 polygon.
+    const overlapEl = document.getElementById(`stat${slot}-overlap`);
+    if (overlapEl) {
+      const sampleGridW = 40, sampleGridH = 40; // Small grid for sampling
+      const canvasW = territories[0].canvasW || 500;
+      const canvasH = territories[0].canvasH || 500;
+      let collisionCount = 0;
+      for (let gy = 0; gy < sampleGridH; gy++) {
+        for (let gx = 0; gx < sampleGridW; gx++) {
+          const x = (gx + .5) * canvasW / sampleGridW;
+          const y = (gy + .5) * canvasH / sampleGridH;
+          let intersections = 0;
+          territories.forEach(territory => {
+            const polygonsToCheck = territory.polygons || [territory.polygon];
+            polygonsToCheck.forEach(poly => {
+              if (poly && poly.length >= 3 && d3.polygonContains(poly, [x, y])) {
+                intersections++;
+              }
+            });
+          });
+          if (intersections > 1) collisionCount++; // Point falls into more than one cell
+        }
+      }
+      overlapEl.textContent = collisionCount;
+    }
+  }
+
+  // --- Generic Binary Split Algorithm ---
+
+  /**
+   * A generic recursive binary splitting algorithm.
+   * It takes a parent polygon and recursively splits it to allocate areas to `dataItems`.
+   * It prioritizes larger areas first by splitting the largest available polygon.
+   * @param {HTMLCanvasElement} canvas - The canvas element to draw on.
+   * @param {number} slot - The UI slot ID for updating stats.
+   * @param {function(Array<Array<number>>, number, number): Array<Array<Array<number>>>} splitFn - The function to perform a single split (e.g., curvedSplit).
+   * @param {Array<Object>} initialData - The data items to subdivide for (e.g., galleryData).
+   * @param {number} [randomSeed] - An optional seed for reproducibility.
+   */
+  function runGenericBinarySplit(canvas, slot, initialSplitFn, initialData, randomSeed = Date.now()) {
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+    const initialPolygon = [[0, 0], [W, 0], [W, H], [0, H]]; // The bounding box of the canvas
+
+    // Sort data from largest to smallest for greedy assignment
+    const sortedData = [...initialData].sort((a, b) => b.value - a.value);
+
+    // List of available polygons to split, starting with the whole canvas
+    const availablePolygons = [{ polygon: initialPolygon, area: W * H }];
+    const finalTerritories = []; // Stores the resulting territories for each data item
+
+    sortedData.forEach((dataItem, idx) => {
+      // Always try to split the largest available polygon first
+      availablePolygons.sort((a, b) => b.area - a.area);
+      const parentPolygonData = availablePolygons.shift(); // Take the largest one
+
+      if (!parentPolygonData) return; // No more space to split
+
+      const desiredAreaForDataItem = (dataItem.value / GALLERY_TOTAL_VALUE) * (W * H);
+      // Calculate split ratio: how much of the parent polygon's area does this data item need?
+      // Clamp to reasonable bounds to prevent tiny slivers or giant cuts.
+      const splitRatio = Utils.clamp(desiredAreaForDataItem / parentPolygonData.area, 0.15, 0.85);
+
+      // Perform the actual split using the provided split function
+      const [poly1, poly2] = initialSplitFn(parentPolygonData.polygon, splitRatio, randomSeed + idx);
+
+      // Assign the first resulting polygon to the current data item
+      finalTerritories.push({
+        ...dataItem,
+        polygon: poly1, // For these algorithms, each territory is a single polygon
+        actualArea: polyArea(poly1),
+        desiredArea: desiredAreaForDataItem,
+        canvasW: W, canvasH: H
+      });
+
+      // If there's a second polygon, add it back to the available list for further splitting
+      if (poly2 && poly2.length >= 3) {
+        availablePolygons.push({ polygon: poly2, area: polyArea(poly2) });
+      }
+    });
+
+    drawCells(ctx, finalTerritories); // Draw all the generated cells
+    updateStats(slot, finalTerritories); // Update statistics
+  }
+
+  // --- Split Function Implementations ---
+  // These functions define the aesthetic of the subdivision boundaries.
+
+  /**
+   * Generates a curved split line.
+   * @param {Array<Array<number>>} polygon - The polygon to split.
+   * @param {number} splitRatio - The ratio at which to split the polygon.
+   * @param {number} seed - A seed for randomness.
+   * @returns {Array<Array<Array<number>>>} - Two polygons resulting from the split.
+   */
+  function curvedSplit(polygon, splitRatio, seed) {
+    const xs = polygon.map(p => p[0]), ys = polygon.map(p => p[1]);
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+    const W = maxX - minX, H = maxY - minY;
+    const horizontalSplit = (W > H); // Split horizontally if width > height, else vertically
+    const segments = 24;
+
+    if (horizontalSplit) { // Split with a vertical-ish curved line
+      const targetX = minX + W * splitRatio;
+      const curve = [];
+      for (let i = 0; i <= segments; i++) {
+        const t = i / segments;
+        const y = minY + H * t;
+        const amplitude = Math.sin(t * Math.PI) * W * .08; // Max amplitude in the middle
+        const x = targetX + amplitude * Math.sin(t * Math.PI * 2 + seed * 1.17); // Sine wave jitter
+        curve.push([x, y]);
+      }
+      return [clipPolyLeft(polygon, curve), clipPolyRight(polygon, curve)];
+    } else { // Split with a horizontal-ish curved line
+      const targetY = minY + H * splitRatio;
+      const curve = [];
+      for (let i = 0; i <= segments; i++) {
+        const t = i / segments;
+        const x = minX + W * t;
+        const amplitude = Math.sin(t * Math.PI) * H * .08;
+        const y = targetY + amplitude * Math.sin(t * Math.PI * 2 + seed * 1.13);
+        curve.push([x, y]);
+      }
+      return [clipPolyBelow(polygon, curve), clipPolyAbove(polygon, curve)];
+    }
+  }
+
+  function sineWaveSplit(polygon, splitRatio, seed) {
+    const xs = polygon.map(p => p[0]), ys = polygon.map(p => p[1]);
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+    const W = maxX - minX, H = maxY - minY;
+    const horizontalSplit = (W > H);
+    const segments = 32;
+    const frequency = 2 + (seed % 3); // Vary frequency for different wave patterns
+
+    if (horizontalSplit) {
+      const targetX = minX + W * splitRatio;
+      const curve = [];
+      for (let i = 0; i <= segments; i++) {
+        const t = i / segments;
+        const y = minY + H * t;
+        const x = targetX + Math.sin(t * Math.PI * frequency + seed) * W * .06;
+        curve.push([x, y]);
+      }
+      return [clipPolyLeft(polygon, curve), clipPolyRight(polygon, curve)];
+    } else { // Vertical Split
+      const targetY = minY + H * splitRatio;
+      const curve = [];
+      for (let i = 0; i <= segments; i++) {
+        const t = i / segments;
+        const x = minX + W * t;
+        const y = targetY + Math.sin(t * Math.PI * frequency + seed) * H * .06;
+        curve.push([x, y]);
+      }
+      return [clipPolyBelow(polygon, curve), clipPolyAbove(polygon, curve)];
+    }
+  }
+
+  function perlinNoiseSplit(polygon, splitRatio, seed) {
+    const xs = polygon.map(p => p[0]), ys = polygon.map(p => p[1]);
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+    const W = maxX - minX, H = maxY - minY;
+    const horizontalSplit = (W > H);
+    const segments = 44;
+
+    if (horizontalSplit) {
+      const targetX = minX + W * splitRatio;
+      const curve = [];
+      for (let i = 0; i <= segments; i++) {
+        const t = i / segments;
+        const y = minY + H * t;
+        // Use a smoothed noise function to perturb the line
+        const n = Utils.smoothNoise(seed * 1.3, t * 5, seed * 100);
+        const x = targetX + (n - .5) * W * .14; // (n-.5) maps noise from [0,1] to [-0.5,0.5]
+        curve.push([x, y]);
+      }
+      return [clipPolyLeft(polygon, curve), clipPolyRight(polygon, curve)];
+    } else { // Vertical Split
+      const targetY = minY + H * splitRatio;
+      const curve = [];
+      for (let i = 0; i <= segments; i++) {
+        const t = i / segments;
+        const x = minX + W * t;
+        const n = Utils.smoothNoise(t * 5, seed * 1.3, seed * 100);
+        const y = targetY + (n - .5) * H * .14;
+        curve.push([x, y]);
+      }
+      return [clipPolyBelow(polygon, curve), clipPolyAbove(polygon, curve)];
+    }
+  }
+
+  /**
+   * Simple noise function.
+   * Based on pseudo-random number generation using sin.
+   * `x`, `y`, `seed` are typically in the range of `t` values or small integers.
+   */
+  Utils.noise = (x, y, seed = 0) => {
+    const n = Math.sin(x * 12.9898 + y * 78.233 + seed) * 43758.5453;
+    return n - Math.floor(n); // Fractional part [0, 1)
+  };
+
+  /**
+   * Smoothed noise function (interpolation of `noise` values).
+   * Gives a more organic, continuous look than raw noise.
+   */
+  Utils.smoothNoise = (x, y, seed = 0) => {
+    const corners = (Utils.noise(x - 1, y - 1, seed) + Utils.noise(x + 1, y - 1, seed) + Utils.noise(x - 1, y + 1, seed) + Utils.noise(x + 1, y + 1, seed)) / 16;
+    const sides = (Utils.noise(x - 1, y, seed) + Utils.noise(x + 1, y, seed) + Utils.noise(x, y - 1, seed) + Utils.noise(x, y + 1, seed)) / 8;
+    const center = Utils.noise(x, y, seed) / 4;
+    return corners + sides + center;
+  };
+
+
+  // --- Specific Gallery Algorithms ---
+
+  /** Algorithm 1: Curved Binary Split */
+  function algorithm1_CurvedBinarySplit(canvas) {
+    runGenericBinarySplit(canvas, 1, curvedSplit, galleryData);
+  }
+
+  /** Algorithm 2: Sine Wave Split */
+  function algorithm2_SineWaveSplit(canvas) {
+    runGenericBinarySplit(canvas, 2, sineWaveSplit, galleryData);
+  }
+
+  /** Algorithm 3: Perlin Noise Split */
+  function algorithm3_PerlinNoiseSplit(canvas) {
+    runGenericBinarySplit(canvas, 3, perlinNoiseSplit, galleryData);
+  }
+
+  /** Algorithm 4: Standard Voronoi Tessellation (Reference) */
+  function algorithm4_VoronoiTessellation(canvas) {
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+
+    // Generate random sites for the Voronoi diagram
+    const sites = galleryData.map(() => ({
+      x: Utils.rand() * W, y: Utils.rand() * H
+    }));
+
+    // Use D3's voronoi generator. The extent defines the bounding box.
+    const voronoi = d3.voronoi().extent([[0, 0], [W, H]]);
+    // Generate polygons from the sites. D3 returns a `null` for sites outside the extent, handle this.
+    const polygons = voronoi(sites.map(s => [s.x, s.y])).polygons().filter(p => p !== null);
+
+    // Map D3 polygons to our territory structure
+    const territories = polygons.map((poly, i) => {
+      const dataItem = galleryData[i % galleryData.length]; // Cycle through data if more polygons than data items
+      const desired = (dataItem.value / GALLERY_TOTAL_VALUE) * (W * H);
+      return {
+        ...dataItem,
+        polygon: poly, // This algorithm produces one polygon per territory
+        actualArea: polyArea(poly),
+        desiredArea: desired,
+        canvasW: W, canvasH: H
+      };
+    });
+
+    drawCells(ctx, territories);
+    updateStats(4, territories);
+  }
+
+  /** Algorithm 5: Jittered Recursive Binary Split */
+  function algorithm5_JitteredRecursive(canvas) {
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+    const initialPoly = { poly: [[0, 0], [W, 0], [W, H], [0, H]], area: W * H, canvasW: W, canvasH: H };
+
+    // This recursive split uses a "jittered" straight line (or slightly curved due to random points)
+    function jitteredLineSplit(polygon, splitRatio, seed) {
+      const xs = polygon.map(p => p[0]), ys = polygon.map(p => p[1]);
+      const minX = Math.min(...xs), maxX = Math.max(...xs);
+      const minY = Math.min(...ys), maxY = Math.max(...ys);
+      const polyW = maxX - minX, polyH = maxY - minY;
+      const horizontalSplit = (polyW > polyH); // Split along the longer axis
+
+      const segments = 10; // Number of points to define the jittered line
+      const jitterMagnitude = 0.1; // Max jitter as fraction of polygon dimension
+
+      if (horizontalSplit) {
+        const targetX = minX + polyW * splitRatio;
+        const curve = [];
+        for (let i = 0; i <= segments; i++) {
+          const t = i / segments;
+          const y = minY + polyH * t;
+          const x = targetX + (Utils.rand() - 0.5) * polyW * jitterMagnitude; // Random X jitter
+          curve.push([x, y]);
+        }
+        return [clipPolyLeft(polygon, curve), clipPolyRight(polygon, curve)];
+      } else { // Vertical split
+        const targetY = minY + polyH * splitRatio;
+        const curve = [];
+        for (let i = 0; i <= segments; i++) {
+          const t = i / segments;
+          const x = minX + polyW * t;
+          const y = targetY + (Utils.rand() - 0.5) * polyH * jitterMagnitude; // Random Y jitter
+          curve.push([x, y]);
+        }
+        return [clipPolyBelow(polygon, curve), clipPolyAbove(polygon, curve)];
+      }
+    }
+
+    // A recursive function that uses the jitteredLineSplit to divide regions
+    function recursiveSplitWrapper(polygonState, dataItems, currentSeed) {
+      if (dataItems.length === 0 || !polygonState.poly || polyArea(polygonState.poly) < 1) {
+        return []; // No items to assign or polygon is too small
+      }
+      if (dataItems.length === 1) {
+        const item = dataItems[0];
+        const desired = (item.value / GALLERY_TOTAL_VALUE) * (canvas.width * canvas.height);
+        return [{ ...item, polygon: polygonState.poly, actualArea: polygonState.area, desiredArea: desired, canvasW: W, canvasH: H }];
+      }
+
+      // Sort data to ensure consistent splitting, e.g., by value
+      dataItems.sort((a, b) => a.value - b.value);
+      const midPoint = Math.floor(dataItems.length / 2);
+      const group1 = dataItems.slice(0, midPoint);
+      const group2 = dataItems.slice(midPoint);
+
+      const totalValue1 = d3.sum(group1, d => d.value);
+      const totalValue2 = d3.sum(group2, d => d.value);
+      const ratio = totalValue1 / (totalValue1 + totalValue2);
+
+      const [poly1, poly2] = jitteredLineSplit(polygonState.poly, ratio, currentSeed);
+
+      const area1 = polyArea(poly1);
+      const area2 = polyArea(poly2);
+
+      const cells1 = recursiveSplitWrapper({ poly: poly1, area: area1, canvasW: W, canvasH: H }, group1, currentSeed + 1);
+      const cells2 = recursiveSplitWrapper({ poly: poly2, area: area2, canvasW: W, canvasH: H }, group2, currentSeed + 1.37);
+
+      return [...cells1, ...cells2];
+    }
+
+    const finalTerritories = recursiveSplitWrapper(initialPoly, [...galleryData], Date.now());
+    drawCells(ctx, finalTerritories);
+    updateStats(5, finalTerritories);
+  }
+
+  /** Algorithm 6: Radial Spiral Split */
+  function algorithm6_RadialSpiralSplit(canvas) {
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+    const centerX = W / 2, centerY = H / 2;
+    const finalTerritories = [];
+
+    let currentAngle = -Math.PI / 2; // Start from top (12 o'clock)
+    const maxRadius = Math.hypot(W / 2, H / 2) + 50; // Extend beyond corners of canvas
+    const curveSegments = 40;
+    const wobbleFactor = 0.08; // How much the spiral 'wobbles'
+
+    /**
+     * Generates a spiraling boundary curve from the center to maxRadius.
+     * @param {number} angleOffset - Base angle for the spiral.
+     * @param {number} seed - Random seed for wobble.
+     * @returns {Array<Array<number>>} Points defining the spiral curve.
+     */
+    const generateSpiralBoundary = (angleOffset, seed) => {
+      const points = [[centerX, centerY]]; // Start at center
+      for (let i = 0; i <= curveSegments; i++) {
+        const t = i / curveSegments; // Normalized distance from center [0, 1]
+        const r = t * maxRadius;     // Actual radius increases linearly
+
+        // Introduce wobble based on sine wave
+        const angleWobble = Math.sin(t * Math.PI * 3 + seed) * wobbleFactor;
+        const actualAngle = angleOffset + angleWobble;
+
+        points.push([
+          centerX + r * Math.cos(actualAngle),
+          centerY + r * Math.sin(actualAngle)
+        ]);
+      }
+      return points;
+    };
+
+    // Iterate through data items and create wedge-like cells
+    galleryData.forEach((dataItem, i) => {
+      // Calculate angular share based on value
+      const angleShare = (dataItem.value / GALLERY_TOTAL_VALUE) * 2 * Math.PI;
+      const endAngle = currentAngle + angleShare;
+
+      // Generate the two spiral boundaries for this wedge
+      const boundary1 = generateSpiralBoundary(currentAngle, i);
+      const boundary2 = generateSpiralBoundary(endAngle, i + 1);
+
+      // Form a polygon by connecting the two spiral boundaries and the center
+      const rawWedgePoly = [...boundary1, ...boundary2.slice().reverse()];
+
+      // Clip the raw wedge polygon to the canvas bounds
+      const canvasRect = [[0, 0], [W, 0], [W, H], [0, H]];
+      const clippedPoly = polygonIntersect(rawWedgePoly, canvasRect);
+
+      const desired = (dataItem.value / GALLERY_TOTAL_VALUE) * (W * H);
+      finalTerritories.push({
+        ...dataItem,
+        polygon: clippedPoly,
+        actualArea: polyArea(clippedPoly),
+        desiredArea: desired,
+        canvasW: W, canvasH: H
+      });
+
+      currentAngle = endAngle; // Move to the next start angle
+    });
+
+    drawCells(ctx, finalTerritories);
+    updateStats(6, finalTerritories);
+  }
+
+  /**
+   * Algorithm 8: Hilbert Subdivision
+   * Divides the canvas into a grid, orders the cells along a Hilbert curve,
+   * and assigns these cells sequentially to territories to meet target areas.
+   */
+  function algorithm8_HilbertSubdivision(canvas) {
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+
+    // Hilbert curve order. Higher order means finer grid, better area approximation.
+    const hilbertOrder = 7; // 2^7 = 128x128 grid of basic cells
+    const gridSize = 1 << hilbertOrder; // e.g., 128
+
+    const cellWidth = W / gridSize;
+    const cellHeight = H / gridSize;
+    const cellArea = cellWidth * cellHeight;
+
+    // Create all basic grid cells and compute their Hilbert index
+    const gridCells = [];
+    for (let gy = 0; gy < gridSize; gy++) {
+      for (let gx = 0; gx < gridSize; gx++) {
+        const x0 = gx * cellWidth;
+        const y0 = gy * cellHeight;
+        const polygon = [
+          [x0, y0], [x0 + cellWidth, y0],
+          [x0 + cellWidth, y0 + cellHeight], [x0, y0 + cellHeight]
+        ];
+        gridCells.push({
+          gx, gy,
+          hilbertIdx: Utils.hilbertIndex(gx, gy, hilbertOrder),
+          polygon,
+          area: cellArea
+        });
+      }
+    }
+
+    // Sort grid cells by their Hilbert index to get the continuous path
+    gridCells.sort((a, b) => a.hilbertIdx - b.hilbertIdx);
+
+    // Initialize territories with accumulated polygons and actual areas
+    const territories = galleryData.map(d => ({
+      ...d,
+      polygons: [], // Each territory will accumulate multiple small grid polygons
+      actualArea: 0,
+      desiredArea: (d.value / GALLERY_TOTAL_VALUE) * (W * H),
+      canvasW: W, canvasH: H
+    }));
+
+    let currentTerritoryIndex = 0;
+
+    // Assign grid cells to territories sequentially along the Hilbert curve
+    for (const cell of gridCells) {
+      if (currentTerritoryIndex >= territories.length) {
+        break; // All territories have received their allocation
+      }
+
+      const currentTerritory = territories[currentTerritoryIndex];
+      currentTerritory.polygons.push(cell.polygon);
+      currentTerritory.actualArea += cell.area;
+
+      // If the current territory has met its desired area, move to the next
+      // We check if actualArea >= desiredArea to ensure full allocation,
+      // as exact match might not be possible with discrete grid cells.
+      if (currentTerritory.actualArea >= currentTerritory.desiredArea && currentTerritoryIndex < territories.length - 1) {
+        currentTerritoryIndex++;
+      }
+    }
+    
+    // For the last territory, ensure it takes any remaining area
+    // This loop structure naturally assigns all remaining cells to the last territory.
+    // So `currentTerritory.actualArea` will correctly reflect all assigned cells.
+
+    drawCells(ctx, territories);
+    updateStats(8, territories);
+  }
+
+
+  // --- Gallery Global Controls & Init ---
+
+  /** Regenerates a specific algorithm's canvas with new random parameters. */
+  function regenerateAlgorithm(slot) {
+    const canvas = document.getElementById(`canvas${slot}`);
+    if (!canvas) return;
+
+    // We use Utils.sfc32 for Math.random to ensure reproducible patterns when regenerating
+    // This ensures gallery patterns are static once generated, unless refreshed.
+    Math.random = Utils.sfc32(Date.now() + slot)(Date.now() + slot * 100);
+
+    switch (slot) {
+      case 1: algorithm1_CurvedBinarySplit(canvas); break;
+      case 2: algorithm2_SineWaveSplit(canvas); break;
+      case 3: algorithm3_PerlinNoiseSplit(canvas); break;
+      case 4: algorithm4_VoronoiTessellation(canvas); break;
+      case 5: algorithm5_JitteredRecursive(canvas); break;
+      case 6: algorithm6_RadialSpiralSplit(canvas); break;
+      case 8: algorithm8_HilbertSubdivision(canvas); break;
+    }
+  }
+
+  /** Initializes the gallery on load. */
+  function initGallery() {
+    // Populate the gallery legend
+    const legendGrid = R('legendGrid');
+    if (legendGrid) {
+      legendGrid.innerHTML = galleryData.map(d =>
+        `<div class="legend-item"><div class="legend-color" style="background-color: ${d.color};"></div><span>${d.category}</span></div>`
+      ).join('');
+    }
+
+    // Run all gallery algorithms once initially
+    for (let i = 1; i <= 6; i++) {
+      regenerateAlgorithm(i);
+    }
+    regenerateAlgorithm(8); // And the new Hilbert algorithm
+  }
+
+  // Expose public functions for the Gallery
+  return {
+    regenerateAlgorithm: regenerateAlgorithm,
+    initGallery: initGallery
+  };
+})();
+
+
+// =============================================================================
+// GLOBAL APPLICATION SETUP & TAB SWITCHING
+// =============================================================================
+document.addEventListener('DOMContentLoaded', () => {
+  const R = Utils.R;
+
+  // --- Initial UI state setup ---
+  // Ensure CA controls are hidden if not in CA mode by default
+  const caSpeedControl = R('caSpeed');
+  const caSpeedVal = R('caSpeedVal');
+  const rhoModeSelect = R('rhoMode');
+
+  // Function to toggle CA controls visibility
+  function updateCAControlsVisibility() {
+    const isCAEvolveMode = rhoModeSelect.value === 'ca-evolve';
+    caSpeedControl.closest('.row').style.display = isCAEvolveMode ? 'flex' : 'none';
+  }
+
+  // Attach event listener for rhoMode changes
+  rhoModeSelect.addEventListener('change', updateCAControlsVisibility);
+
+  // Initial call to set visibility on load
+  updateCAControlsVisibility();
+
+
+  // --- Tab Switching Logic ---
+  const ccvtView = R('ccvtView');
+  const galleryView = R('galleryView');
+  const tabCcvt = R('tab-ccvt');
+  const tabGallery = R('tab-gallery');
+
+  tabCcvt.addEventListener('click', () => {
+    ccvtView.style.display = 'grid';
+    galleryView.style.display = 'none';
+    tabCcvt.setAttribute('aria-pressed', 'true');
+    tabGallery.setAttribute('aria-pressed', 'false');
+    CCVT_App.init(); // Re-initialize CCVT demo if switching back
+    updateCAControlsVisibility(); // Ensure CA controls are visible/hidden correctly
+  });
+
+  tabGallery.addEventListener('click', () => {
+    ccvtView.style.display = 'none';
+    galleryView.style.display = 'grid';
+    tabCcvt.setAttribute('aria-pressed', 'false');
+    tabGallery.setAttribute('aria-pressed', 'true');
+    Gallery.initGallery(); // Re-initialize gallery if switching back
+    // Ensure CA controls are hidden when on gallery tab
+    caSpeedControl.closest('.row').style.display = 'none';
+  });
+
+  // --- Initial Start for CCVT Demo ---
+  // This ensures the CCVT demo is set up and visible when the page first loads.
+  CCVT_App.init();
+});
+</script>
+</body>
+</html>

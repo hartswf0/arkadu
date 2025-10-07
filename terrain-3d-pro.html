@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<title>ARKADU 3D Terrain — Ecological Topography Engine</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000;color:#4dd9cc;font-family:monospace;overflow:hidden}
+#container{position:fixed;inset:0}
+
+.hud{position:fixed;top:20px;left:20px;background:rgba(0,0,0,.95);border:1px solid #4dd9cc;
+padding:16px;width:320px;z-index:100;font-size:11px;box-shadow:0 0 30px rgba(77,217,204,.4);
+border-radius:8px}
+.hud-title{font-size:14px;font-weight:bold;color:#4dd9cc;margin-bottom:12px;
+letter-spacing:2px;border-bottom:2px solid #4dd9cc;padding-bottom:8px}
+.hud-section{margin:10px 0;padding:8px;background:rgba(77,217,204,.05);border-radius:4px}
+.hud-label{color:#6b8a96;font-size:9px;text-transform:uppercase;margin-bottom:4px}
+.hud-value{color:#4dd9cc;font-size:12px;font-weight:bold}
+.hud-bar{height:4px;background:rgba(77,217,204,.2);border-radius:2px;margin:6px 0;position:relative}
+.hud-fill{height:100%;background:#4dd9cc;border-radius:2px;box-shadow:0 0 8px #4dd9cc}
+
+.controls{position:fixed;bottom:20px;left:20px;background:rgba(0,0,0,.95);
+border:1px solid #4dd9cc;padding:16px;z-index:100;width:320px;border-radius:8px;
+box-shadow:0 0 30px rgba(77,217,204,.4)}
+.control-group{margin:12px 0}
+.control-label{font-size:10px;color:#6b8a96;text-transform:uppercase;margin-bottom:6px}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap}
+.btn{flex:1;min-width:60px;padding:8px;background:rgba(77,217,204,.1);border:1px solid rgba(77,217,204,.3);
+color:#4dd9cc;cursor:pointer;font-size:10px;text-align:center;transition:all .2s;border-radius:4px}
+.btn:hover{background:rgba(77,217,204,.2);border-color:#4dd9cc}
+.btn.active{background:#4dd9cc;color:#000;border-color:#4dd9cc;box-shadow:0 0 12px rgba(77,217,204,.6)}
+.slider{width:100%;height:4px;-webkit-appearance:none;background:rgba(77,217,204,.3);
+outline:none;border-radius:2px;margin:8px 0}
+.slider::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;
+background:#4dd9cc;cursor:pointer;border-radius:50%;box-shadow:0 0 8px #4dd9cc}
+.slider::-moz-range-thumb{width:12px;height:12px;background:#4dd9cc;cursor:pointer;
+border:none;border-radius:50%;box-shadow:0 0 8px #4dd9cc}
+
+.inspector{position:fixed;top:20px;right:20px;background:rgba(0,0,0,.95);
+border:1px solid #d97b8f;padding:16px;width:350px;z-index:100;border-radius:8px;
+box-shadow:0 0 30px rgba(217,123,143,.4);max-height:80vh;overflow-y:auto;
+transform:translateX(400px);transition:transform .3s}
+.inspector.open{transform:translateX(0)}
+.inspector-title{font-size:13px;font-weight:bold;color:#d97b8f;margin-bottom:12px;
+letter-spacing:1px;border-bottom:2px solid #d97b8f;padding-bottom:8px}
+.inspector-close{position:absolute;top:16px;right:16px;width:20px;height:20px;
+cursor:pointer;color:#d97b8f;font-size:18px;line-height:20px;text-align:center}
+.species-item{padding:8px;margin:6px 0;background:rgba(217,123,143,.08);border-left:3px solid;border-radius:4px}
+.species-name{font-weight:bold;font-size:11px;margin-bottom:4px}
+.species-stats{font-size:9px;color:#6b8a96}
+
+.loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+flex-direction:column;gap:20px;background:#000;z-index:200;font-size:14px;color:#4dd9cc}
+.loading.hidden{display:none}
+.progress{width:400px;height:3px;background:rgba(77,217,204,.2);border-radius:2px;overflow:hidden}
+.progress-bar{height:100%;background:#4dd9cc;width:0%;box-shadow:0 0 15px #4dd9cc;transition:width .3s}
+.load-status{font-size:11px;color:#6b8a96;text-align:center}
+</style>
+</head>
+<body>
+<div id="container"></div>
+
+<div class="loading" id="loading">
+<div>⬢ LOADING ARKADU TERRAIN ⬢</div>
+<div class="progress"><div class="progress-bar" id="progress"></div></div>
+<div class="load-status" id="loadStatus">INITIALIZING TOPOLOGY ENGINE...</div>
+</div>
+
+<div class="hud">
+<div class="hud-title">⬡ TERRAIN EXPLORER</div>
+<div class="hud-section">
+<div class="hud-label">Camera Altitude</div>
+<div class="hud-value"><span id="altitude">0</span>m</div>
+<div class="hud-bar"><div class="hud-fill" id="altBar" style="width:50%"></div></div>
+</div>
+<div class="hud-section">
+<div class="hud-label">Terrain Stats</div>
+<div class="hud-value">
+<div><span id="chambers">0</span> chambers</div>
+<div><span id="artifacts">0</span> artifacts</div>
+<div><span id="species">0</span> species</div>
+</div>
+</div>
+<div class="hud-section">
+<div class="hud-label">Active Strata</div>
+<div class="hud-value" id="activeStrata">All Layers Visible</div>
+</div>
+</div>
+
+<div class="controls">
+<div class="control-group">
+<div class="control-label">View Mode</div>
+<div class="btn-row">
+<div class="btn active" id="btnOrbital">Orbital</div>
+<div class="btn" id="btnFly">Fly</div>
+<div class="btn" id="btnTop">Top Down</div>
+</div>
+</div>
+<div class="control-group">
+<div class="control-label">Depth Layer Isolation (Click to toggle)</div>
+<div class="btn-row">
+<div class="btn active" id="btnD0">D0</div>
+<div class="btn active" id="btnD1">D1</div>
+<div class="btn active" id="btnD2">D2</div>
+<div class="btn active" id="btnD3">D3</div>
+<div class="btn active" id="btnD4">D4+</div>
+</div>
+<div style="font-size:9px;color:#6b8a96;margin-top:6px">Active layers: <span id="activeLayers">All</span></div>
+</div>
+<div class="control-group">
+<div class="control-label">Terrain Height Exaggeration</div>
+<input type="range" class="slider" id="heightScale" min="0.5" max="5" step="0.1" value="2">
+</div>
+<div class="control-group">
+<div class="control-label">Transect Slice Depth</div>
+<input type="range" class="slider" id="transectDepth" min="0" max="100" step="5" value="50">
+</div>
+<div class="control-group">
+<div class="btn-row">
+<div class="btn" id="btnWireframe">Wireframe</div>
+<div class="btn" id="btnTexture">Texture</div>
+<div class="btn active" id="btnMixed">Mixed</div>
+</div>
+</div>
+</div>
+
+<div class="inspector" id="inspector">
+<div class="inspector-close" onclick="closeInspector()">×</div>
+<div class="inspector-title">AREA INSPECTOR</div>
+<div id="inspectorContent"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const S={
+chambers:[],artifacts:[],
+scene:null,camera:null,renderer:null,terrain:null,points:null,
+mode:'orbital',renderMode:'mixed',
+heightScale:2,transectDepth:50,
+camDist:800,camAngle:0,camHeight:400,
+rotating:false,lastX:0,lastY:0,
+selectedArea:null,
+activeLayers:new Set([0,1,2,3,4,5,6,7,8,9]) // All depths active by default
+};
+
+const COLORS={
+png:0x4dd9cc,jpg:0x4dd9cc,jpeg:0x4dd9cc,
+mp4:0xd97b8f,mov:0xd97b8f,
+mp3:0xe8b849,wav:0xe8b849,py:0xe8b849,
+json:0x9d7be8,txt:0x9d7be8,
+html:0x6bbd8f,css:0x6bbd8f,js:0x6bbd8f,
+unknown:0x6b8a96
+};
+
+async function load(){
+try{
+updateProgress('Loading artifacts...',20);
+const r=await fetch('sys/primitive.jsonl');
+if(!r.ok)throw new Error(`HTTP ${r.status}`);
+const t=await r.text();
+S.artifacts=t.trim().split('\n').filter(l=>l.trim()).map(l=>JSON.parse(l));
+
+updateProgress('Building chamber hierarchy...',40);
+buildChambers();
+
+updateProgress('Initializing 3D engine...',60);
+await initThree();
+
+updateProgress('Generating terrain...',80);
+await generateTerrain();
+
+updateProgress('Complete',100);
+setTimeout(()=>document.getElementById('loading').classList.add('hidden'),500);
+
+updateHUD();
+animate();
+}catch(e){
+console.error('Load error:',e);
+document.getElementById('loadStatus').innerHTML=`<span style="color:#d97b8f">ERROR: ${e.message}</span>`;
+}}
+
+function updateProgress(msg,pct){
+document.getElementById('loadStatus').textContent=msg.toUpperCase();
+document.getElementById('progress').style.width=pct+'%';
+}
+
+function buildChambers(){
+const m={};
+S.artifacts.forEach(a=>{
+const p=a.path.split('/');
+for(let d=1;d<p.length;d++){
+const cp=p.slice(0,d).join('/');
+if(!m[cp]){
+m[cp]={
+id:cp,name:p[d-1],depth:d-1,
+parent:d>1?p.slice(0,d-1).join('/'):null,
+artifacts:[],species:{},totalSize:0
+};
+}
+if(d===p.length-1){
+m[cp].artifacts.push(a);
+const s=(a.ext||'unknown').replace(/^\./,'');
+m[cp].species[s]=(m[cp].species[s]||0)+1;
+m[cp].totalSize+=(a.size||0);
+}
+}
+});
+S.chambers=Object.values(m);
+console.log(`Built ${S.chambers.length} chambers at ${Math.max(...S.chambers.map(c=>c.depth))+1} depths`);
+}
+
+async function initThree(){
+S.scene=new THREE.Scene();
+S.scene.background=new THREE.Color(0x000000);
+S.scene.fog=new THREE.Fog(0x000000,600,2000);
+
+S.camera=new THREE.PerspectiveCamera(65,window.innerWidth/window.innerHeight,1,3000);
+S.camera.position.set(0,400,800);
+S.camera.lookAt(0,0,0);
+
+S.renderer=new THREE.WebGLRenderer({antialias:true});
+S.renderer.setSize(window.innerWidth,window.innerHeight);
+S.renderer.setPixelRatio(window.devicePixelRatio);
+document.getElementById('container').appendChild(S.renderer.domElement);
+
+// Lighting
+const ambient=new THREE.AmbientLight(0x1a3a52,0.5);
+S.scene.add(ambient);
+
+const sun=new THREE.DirectionalLight(0xffffff,0.8);
+sun.position.set(500,800,300);
+S.scene.add(sun);
+
+const fill=new THREE.DirectionalLight(0x4dd9cc,0.3);
+fill.position.set(-300,200,-400);
+S.scene.add(fill);
+
+// Grid
+const grid=new THREE.GridHelper(4000,100,0x4dd9cc,0x1a3a52);
+grid.material.opacity=0.15;
+grid.material.transparent=true;
+grid.position.y=-50;
+S.scene.add(grid);
+
+// Event listeners
+window.addEventListener('resize',onResize);
+S.renderer.domElement.addEventListener('mousedown',onMouseDown);
+S.renderer.domElement.addEventListener('mousemove',onMouseMove);
+S.renderer.domElement.addEventListener('mouseup',onMouseUp);
+S.renderer.domElement.addEventListener('wheel',onWheel);
+S.renderer.domElement.addEventListener('click',onClick);
+}
+
+async function generateTerrain(){
+// Build density grid from all chambers
+const gridSize=200; // Higher resolution
+const gridExtent=2000;
+const gridStep=gridExtent/gridSize;
+
+const densityGrid=Array(gridSize).fill(0).map(()=>Array(gridSize).fill(0));
+const speciesGrid=Array(gridSize).fill(0).map(()=>Array(gridSize).fill(0).map(()=>({})));
+const chamberGrid=Array(gridSize).fill(0).map(()=>Array(gridSize).fill(0).map(()=>[]));
+const depthGrid=Array(gridSize).fill(0).map(()=>Array(gridSize).fill(0).map(()=>new Set()));
+
+// Position all chambers and accumulate density (only active layers)
+S.chambers.forEach(ch=>{
+if(!S.activeLayers.has(ch.depth))return; // FILTER BY ACTIVE LAYERS
+const hash=hashString(ch.id);
+const ringRadius=250;
+const baseRadius=200;
+const radius=baseRadius+(ch.depth*ringRadius)+(hash%150);
+const angle=(hash%360)*(Math.PI/180)+(ch.depth*0.5);
+
+const cx=Math.cos(angle)*radius;
+const cz=Math.sin(angle)*radius;
+
+// Spread artifacts into grid
+ch.artifacts.forEach(art=>{
+const spread=15+Math.sqrt(ch.artifacts.length)*2;
+const r=(Math.random()**0.6)*spread;
+const theta=Math.random()*Math.PI*2;
+const ax=cx+Math.cos(theta)*r;
+const az=cz+Math.sin(theta)*r;
+
+const gx=Math.floor((ax+gridExtent/2)/gridStep);
+const gz=Math.floor((az+gridExtent/2)/gridStep);
+
+if(gx>=0&&gx<gridSize&&gz>=0&&gz<gridSize){
+densityGrid[gz][gx]+=1;
+const sp=(art.ext||'unknown').replace(/^\./,'');
+speciesGrid[gz][gx][sp]=(speciesGrid[gz][gx][sp]||0)+1;
+if(!chamberGrid[gz][gx].includes(ch))chamberGrid[gz][gx].push(ch);depthGrid[gz][gx].add(ch.depth);
+
+// Smooth to neighbors
+[[0,1],[1,0],[0,-1],[-1,0]].forEach(([dx,dz])=>{
+const nx=gx+dx,nz=gz+dz;
+if(nx>=0&&nx<gridSize&&nz>=0&&nz<gridSize){
+densityGrid[nz][nx]+=0.3;
+speciesGrid[nz][nx][sp]=(speciesGrid[nz][nx][sp]||0)+0.3;
+}
+});
+}
+});
+});
+
+// Create terrain mesh
+const geometry=new THREE.PlaneGeometry(gridExtent,gridExtent,gridSize-1,gridSize-1);
+const vertices=geometry.attributes.position.array;
+const colors=[];
+
+for(let i=0;i<gridSize;i++){
+for(let j=0;j<gridSize;j++){
+const idx=(i*gridSize+j)*3;
+const density=densityGrid[i][j];
+const height=Math.sqrt(density)*S.heightScale*8;
+vertices[idx+2]=height;
+
+// Assign color based on dominant species
+const species=speciesGrid[i][j];
+const dominant=Object.entries(species).sort((a,b)=>b[1]-a[1])[0];
+if(dominant){
+const col=new THREE.Color(COLORS[dominant[0]]||COLORS.unknown);
+const brightness=0.3+Math.min(0.7,density/50);
+colors.push(col.r*brightness,col.g*brightness,col.b*brightness);
+}else{
+colors.push(0.1,0.15,0.2);
+}
+}
+}
+
+geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+geometry.computeVertexNormals();
+
+const material=new THREE.MeshStandardMaterial({
+vertexColors:true,
+wireframe:false,
+metalness:0.1,
+roughness:0.8,
+side:THREE.DoubleSide
+});
+
+S.terrain=new THREE.Mesh(geometry,material);
+S.terrain.rotation.x=-Math.PI/2;
+S.terrain.userData={densityGrid,speciesGrid,chamberGrid,depthGrid,gridSize,gridExtent,gridStep};
+S.scene.add(S.terrain);
+
+// Create point cloud overlay (only active layers)
+const positions=[],pcolors=[],sizes=[];
+S.chambers.forEach(ch=>{
+if(!S.activeLayers.has(ch.depth))return;
+const hash=hashString(ch.id);
+const ringRadius=250;
+const baseRadius=200;
+const radius=baseRadius+(ch.depth*ringRadius)+(hash%150);
+const angle=(hash%360)*(Math.PI/180)+(ch.depth*0.5);
+const cx=Math.cos(angle)*radius;
+const cz=Math.sin(angle)*radius;
+
+ch.artifacts.slice(0,5).forEach((art,i)=>{
+const spread=5;
+const r=Math.random()*spread;
+const theta=Math.random()*Math.PI*2;
+const px=cx+Math.cos(theta)*r;
+const pz=cz+Math.sin(theta)*r;
+
+const gx=Math.floor((px+gridExtent/2)/gridStep);
+const gz=Math.floor((pz+gridExtent/2)/gridStep);
+const py=gx>=0&&gx<gridSize&&gz>=0&&gz<gridSize?
+Math.sqrt(densityGrid[gz][gx])*S.heightScale*8+2:0;
+
+positions.push(px,py,pz);
+const sp=(art.ext||'unknown').replace(/^\./,'');
+const col=new THREE.Color(COLORS[sp]||COLORS.unknown);
+pcolors.push(col.r,col.g,col.b);
+sizes.push(3);
+});
+});
+
+const pgeom=new THREE.BufferGeometry();
+pgeom.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+pgeom.setAttribute('color',new THREE.Float32BufferAttribute(pcolors,3));
+pgeom.setAttribute('size',new THREE.Float32BufferAttribute(sizes,1));
+
+const pmat=new THREE.PointsMaterial({
+size:3,
+vertexColors:true,
+transparent:true,
+opacity:0.8,
+sizeAttenuation:true
+});
+
+S.points=new THREE.Points(pgeom,pmat);
+S.scene.add(S.points);
+
+console.log('Terrain generated: '+gridSize+'x'+gridSize+' grid');
+}
+
+function hashString(str){
+let hash=0;
+for(let i=0;i<str.length;i++){
+hash=((hash<<5)-hash)+str.charCodeAt(i);
+hash&=hash;
+}
+return Math.abs(hash);
+}
+
+function animate(){
+requestAnimationFrame(animate);
+
+if(S.mode==='orbital'){
+S.camera.position.x=Math.cos(S.camAngle)*S.camDist;
+S.camera.position.y=S.camHeight;
+S.camera.position.z=Math.sin(S.camAngle)*S.camDist;
+S.camera.lookAt(0,0,0);
+}
+
+S.renderer.render(S.scene,S.camera);
+updateHUD();
+}
+
+function updateHUD(){
+document.getElementById('altitude').textContent=Math.floor(S.camera.position.y);
+document.getElementById('altBar').style.width=Math.min(100,S.camera.position.y/10)+'%';
+document.getElementById('chambers').textContent=S.chambers.length.toLocaleString();
+document.getElementById('artifacts').textContent=S.artifacts.length.toLocaleString();
+const speciesSet=new Set();
+S.chambers.forEach(c=>Object.keys(c.species).forEach(s=>speciesSet.add(s)));
+document.getElementById('species').textContent=speciesSet.size;
+}
+
+function closeInspector(){
+document.getElementById('inspector').classList.remove('open');
+}
+
+function onClick(e){
+const raycaster=new THREE.Raycaster();
+const mouse=new THREE.Vector2(
+(e.clientX/window.innerWidth)*2-1,
+-(e.clientY/window.innerHeight)*2+1
+);
+raycaster.setFromCamera(mouse,S.camera);
+
+const intersects=raycaster.intersectObject(S.terrain);
+if(intersects.length>0){
+const point=intersects[0].point;
+inspectArea(point.x,point.z);
+}
+}
+
+function inspectArea(x,z){
+const data=S.terrain.userData;
+const gx=Math.floor((x+data.gridExtent/2)/data.gridStep);
+const gz=Math.floor((z+data.gridExtent/2)/data.gridStep);
+
+if(gx<0||gx>=data.gridSize||gz<0||gz>=data.gridSize)return;
+
+const density=data.densityGrid[gz][gx];
+const species=data.speciesGrid[gz][gx];
+const chambers=data.chamberGrid[gz][gx];
+const depths=data.depthGrid[gz][gx];
+
+let html=`
+<div style="padding:12px;background:rgba(217,123,143,.05);border-radius:6px;margin-bottom:12px">
+<div style="font-size:10px;color:#6b8a96;margin-bottom:6px">GRID POSITION</div>
+<div style="font-size:12px;color:#d97b8f">X: ${Math.floor(x)} · Z: ${Math.floor(z)}</div>
+<div style="font-size:12px;color:#d97b8f">Grid: [${gx}, ${gz}]</div>
+<div style="font-size:12px;color:#d97b8f;margin-top:6px">Density: ${density.toFixed(1)} artifacts</div>
+<div style="font-size:11px;color:#6b8a96;margin-top:4px">Depths present: ${Array.from(depths).sort((a,b)=>a-b).join(', ')}</div>
+</div>`;
+
+if(Object.keys(species).length>0){
+html+=`<div style="font-size:11px;color:#d97b8f;font-weight:bold;margin:12px 0">SPECIES COMPOSITION</div>`;
+Object.entries(species).sort((a,b)=>b[1]-a[1]).forEach(([sp,cnt])=>{
+const col=COLORS[sp]||COLORS.unknown;
+const colStr='#'+col.toString(16).padStart(6,'0');
+html+=`<div class="species-item" style="border-color:${colStr}">
+<div class="species-name" style="color:${colStr}">${sp.toUpperCase()}</div>
+<div class="species-stats">${cnt.toFixed(1)} artifacts · ${(cnt/density*100).toFixed(1)}%</div>
+</div>`;
+});
+}
+
+if(chambers.length>0){
+html+=`<div style="font-size:11px;color:#d97b8f;font-weight:bold;margin:12px 0">CHAMBERS (${chambers.length})</div>`;
+chambers.slice(0,5).forEach(ch=>{
+html+=`<div style="padding:6px;margin:4px 0;background:rgba(77,217,204,.08);border-left:2px solid #4dd9cc;border-radius:3px">
+<div style="font-size:10px;color:#4dd9cc;font-weight:bold">${ch.name}</div>
+<div style="font-size:9px;color:#6b8a96">Depth ${ch.depth} · ${ch.artifacts.length} artifacts</div>
+</div>`;
+});
+if(chambers.length>5){
+html+=`<div style="font-size:9px;color:#6b8a96;padding:6px">+${chambers.length-5} more chambers</div>`;
+}
+}
+
+document.getElementById('inspectorContent').innerHTML=html;
+document.getElementById('inspector').classList.add('open');
+}
+
+function onResize(){
+S.camera.aspect=window.innerWidth/window.innerHeight;
+S.camera.updateProjectionMatrix();
+S.renderer.setSize(window.innerWidth,window.innerHeight);
+}
+
+function onMouseDown(e){
+S.rotating=true;
+S.lastX=e.clientX;
+S.lastY=e.clientY;
+}
+
+function onMouseMove(e){
+if(!S.rotating)return;
+const dx=e.clientX-S.lastX;
+const dy=e.clientY-S.lastY;
+
+if(S.mode==='orbital'){
+S.camAngle-=dx*0.005;
+S.camHeight=Math.max(50,Math.min(1000,S.camHeight-dy));
+}
+
+S.lastX=e.clientX;
+S.lastY=e.clientY;
+}
+
+function onMouseUp(){
+S.rotating=false;
+}
+
+function onWheel(e){
+e.preventDefault();
+S.camDist=Math.max(200,Math.min(1500,S.camDist+e.deltaY*0.5));
+}
+
+// Controls
+document.getElementById('btnOrbital').onclick=()=>{
+S.mode='orbital';
+document.querySelectorAll('.controls .btn').forEach(b=>b.classList.remove('active'));
+document.getElementById('btnOrbital').classList.add('active');
+};
+
+document.getElementById('btnFly').onclick=()=>{
+S.mode='fly';
+document.querySelectorAll('.controls .btn').forEach(b=>b.classList.remove('active'));
+document.getElementById('btnFly').classList.add('active');
+};
+
+document.getElementById('btnTop').onclick=()=>{
+S.camera.position.set(0,1000,0.1);
+S.camera.lookAt(0,0,0);
+};
+
+document.getElementById('heightScale').oninput=(e)=>{
+S.heightScale=parseFloat(e.target.value);
+if(S.terrain){
+S.scene.remove(S.terrain);
+if(S.points)S.scene.remove(S.points);
+generateTerrain();
+}
+};
+
+document.getElementById('btnWireframe').onclick=()=>{
+if(S.terrain)S.terrain.material.wireframe=true;
+};
+
+document.getElementById('btnTexture').onclick=()=>{
+if(S.terrain)S.terrain.material.wireframe=false;
+};
+
+// Depth layer toggles
+function toggleDepth(depth){
+if(S.activeLayers.has(depth)){
+S.activeLayers.delete(depth);
+}else{
+S.activeLayers.add(depth);
+}
+updateActiveLayersDisplay();
+if(S.terrain){
+S.scene.remove(S.terrain);
+if(S.points)S.scene.remove(S.points);
+generateTerrain();
+}
+}
+
+function updateActiveLayersDisplay(){
+const active=Array.from(S.activeLayers).sort((a,b)=>a-b);
+if(active.length===0){
+document.getElementById('activeLayers').textContent='None (showing empty terrain)';
+document.getElementById('activeStrata').textContent='No layers active';
+}else if(active.length>=10){
+document.getElementById('activeLayers').textContent='All';
+document.getElementById('activeStrata').textContent='All Layers Visible';
+}else{
+document.getElementById('activeLayers').textContent='D'+active.join(', D');
+document.getElementById('activeStrata').textContent='Layers: D'+active.join(', D');
+}
+}
+
+document.getElementById('btnD0').onclick=function(){
+this.classList.toggle('active');
+toggleDepth(0);
+};
+
+document.getElementById('btnD1').onclick=function(){
+this.classList.toggle('active');
+toggleDepth(1);
+};
+
+document.getElementById('btnD2').onclick=function(){
+this.classList.toggle('active');
+toggleDepth(2);
+};
+
+document.getElementById('btnD3').onclick=function(){
+this.classList.toggle('active');
+toggleDepth(3);
+};
+
+document.getElementById('btnD4').onclick=function(){
+this.classList.toggle('active');
+// Toggle all depths 4 and above
+const maxDepth=Math.max(...S.chambers.map(c=>c.depth));
+for(let d=4;d<=maxDepth;d++){
+if(S.activeLayers.has(4)){
+S.activeLayers.delete(d);
+}else{
+S.activeLayers.add(d);
+}
+}
+updateActiveLayersDisplay();
+if(S.terrain){
+S.scene.remove(S.terrain);
+if(S.points)S.scene.remove(S.points);
+generateTerrain();
+}
+};
+
+load();
+</script>
+</body></html>

@@ -1,0 +1,804 @@
+🔬 ARKADU SCALE - Volume & Mass Measurement
+============================================================
+
+✅ Loaded 10094 artifacts from primitive.jsonl
+
+🌳 Building hierarchy tree...
+✅ Built tree with 10094 files
+
+⚖️  Measuring volumes and masses...
+✅ Measured 10094 files, 56.5GB total
+
+📊 GLOBAL SPECIES SUMMARY
+------------------------------------------------------------
+  .mp4            735 files (  7.3%)      41.1GB ( 72.7%)
+  .png           5966 files ( 59.1%)       6.4GB ( 11.3%)
+  .wav            350 files (  3.5%)       4.1GB (  7.2%)
+  .jpg           1316 files ( 13.0%)       3.0GB (  5.3%)
+  .zip             17 files (  0.2%)       1.1GB (  2.0%)
+  .mp3             76 files (  0.8%)     233.0MB (  0.4%)
+  .safetensors       6 files (  0.1%)     163.9MB (  0.3%)
+  .ts               6 files (  0.1%)     157.6MB (  0.3%)
+  .mkv              6 files (  0.1%)     150.4MB (  0.3%)
+  .md             144 files (  1.4%)     124.2MB (  0.2%)
+  .html           268 files (  2.7%)      14.2MB (  0.0%)
+  .json           726 files (  7.2%)      13.2MB (  0.0%)
+  .py             253 files (  2.5%)       2.7MB (  0.0%)
+  .jsonl            1 files (  0.0%)       2.0MB (  0.0%)
+  .pdf              2 files (  0.0%)       1.6MB (  0.0%)
+  .htm              1 files (  0.0%)       1.5MB (  0.0%)
+  .corrupted        1 files (  0.0%)     646.9KB (  0.0%)
+  .txt            111 files (  1.1%)     308.1KB (  0.0%)
+  .unknown         26 files (  0.3%)     262.1KB (  0.0%)
+  .sh              67 files (  0.7%)     180.3KB (  0.0%)
+  .svg              3 files (  0.0%)     124.7KB (  0.0%)
+  .csv              3 files (  0.0%)      93.9KB (  0.0%)
+  .bak              2 files (  0.0%)      91.7KB (  0.0%)
+  .js               3 files (  0.0%)      38.8KB (  0.0%)
+  .log              2 files (  0.0%)      12.2KB (  0.0%)
+  .css              2 files (  0.0%)      11.2KB (  0.0%)
+  .code-workspace       1 files (  0.0%)      482.0B (  0.0%)
+
+
+🗺️  TOP-LEVEL TERRITORIES (KINGDOMS)
+------------------------------------------------------------
+📦 LIZARD
+   Volume: 594 files
+   Mass:   25.2GB
+   Dominant: .mp4 (31.5%)
+   Species breakdown:
+     .mp4         187 files ( 31.5%)      22.0GB ( 87.4%)
+     .wav         322 files ( 54.2%)       3.2GB ( 12.5%)
+     .mp3           5 files (  0.8%)       7.0MB (  0.0%)
+     .py           22 files (  3.7%)     268.8KB (  0.0%)
+     .html          2 files (  0.3%)      42.7KB (  0.0%)
+
+📦 MANTA
+   Volume: 204 files
+   Mass:   10.0GB
+   Dominant: .mp4 (43.1%)
+   Species breakdown:
+     .mp4          88 files ( 43.1%)       9.7GB ( 96.5%)
+     .ts            6 files (  2.9%)     157.6MB (  1.5%)
+     .mkv           6 files (  2.9%)     150.4MB (  1.5%)
+     .mp3          19 files (  9.3%)      55.5MB (  0.5%)
+     .sh           59 files ( 28.9%)     166.5KB (  0.0%)
+
+📦 CAT
+   Volume: 1981 files
+   Mass:   7.3GB
+   Dominant: .jpg (38.3%)
+   Species breakdown:
+     .mp4           8 files (  0.4%)       3.0GB ( 40.7%)
+     .jpg         758 files ( 38.3%)       2.8GB ( 38.0%)
+     .png        1141 files ( 57.6%)       1.4GB ( 19.0%)
+     .safetensors      6 files (  0.3%)     163.9MB (  2.2%)
+     .html         31 files (  1.6%)       3.8MB (  0.0%)
+
+📦 DOG
+   Volume: 1230 files
+   Mass:   3.4GB
+   Dominant: .png (83.3%)
+   Species breakdown:
+     .mp4         151 files ( 12.3%)       2.5GB ( 74.5%)
+     .png        1025 files ( 83.3%)     810.5MB ( 23.2%)
+     .mp3          26 files (  2.1%)      78.1MB (  2.2%)
+     .json          6 files (  0.5%)       1.4MB (  0.0%)
+     .corrupted      1 files (  0.1%)     646.9KB (  0.0%)
+
+📦 IMPALA
+   Volume: 174 files
+   Mass:   1.5GB
+   Dominant: .mp4 (76.4%)
+   Species breakdown:
+     .mp4         133 files ( 76.4%)       1.4GB ( 99.2%)
+     .mp3           4 files (  2.3%)       9.0MB (  0.6%)
+     .jpg           8 files (  4.6%)       3.2MB (  0.2%)
+     .txt          26 files ( 14.9%)      34.0KB (  0.0%)
+     .unknown       3 files (  1.7%)      26.0KB (  0.0%)
+
+📦 TIGER
+   Volume: 1107 files
+   Mass:   1.4GB
+   Dominant: .png (87.9%)
+   Species breakdown:
+     .png         973 files ( 87.9%)       1.4GB ( 99.8%)
+     .md           60 files (  5.4%)       2.1MB (  0.1%)
+     .json         29 files (  2.6%)     631.3KB (  0.0%)
+     .html          7 files (  0.6%)     532.7KB (  0.0%)
+     .csv           2 files (  0.2%)      93.9KB (  0.0%)
+
+📦 JELLYFISH
+   Volume: 1168 files
+   Mass:   1.2GB
+   Dominant: .png (49.8%)
+   Species breakdown:
+     .png         582 files ( 49.8%)     763.1MB ( 63.2%)
+     .mp4          29 files (  2.5%)     268.2MB ( 22.2%)
+     .jpg         469 files ( 40.2%)     176.0MB ( 14.6%)
+     .py           65 files (  5.6%)     511.0KB (  0.0%)
+     .html         15 files (  1.3%)     392.0KB (  0.0%)
+
+📦 REAL
+   Volume: 17 files
+   Mass:   1.1GB
+   Dominant: .zip (100.0%)
+   Species breakdown:
+     .zip          17 files (100.0%)       1.1GB (100.0%)
+
+📦 SHARK
+   Volume: 801 files
+   Mass:   1.1GB
+   Dominant: .png (100.0%)
+   Species breakdown:
+     .png         801 files (100.0%)       1.1GB (100.0%)
+
+📦 BOY
+   Volume: 52 files
+   Mass:   1.1GB
+   Dominant: .mp4 (88.5%)
+   Species breakdown:
+     .mp4          46 files ( 88.5%)       1.1GB ( 99.0%)
+     .mp3           2 files (  3.8%)      10.6MB (  1.0%)
+     .unknown       2 files (  3.8%)      22.0KB (  0.0%)
+     .txt           1 files (  1.9%)       6.6KB (  0.0%)
+     .md            1 files (  1.9%)       1.6KB (  0.0%)
+
+📦 ANT
+   Volume: 879 files
+   Mass:   1.0GB
+   Dominant: .wav (1.7%)
+   Species breakdown:
+     .wav          15 files (  1.7%)     929.9MB ( 89.9%)
+     .mp4          28 files (  3.2%)      51.2MB (  5.0%)
+     .mp3          15 files (  1.7%)      37.0MB (  3.6%)
+     .jpg          80 files (  9.1%)       8.7MB (  0.8%)
+     .html         75 files (  8.5%)       4.1MB (  0.4%)
+
+📦 HONEYBADGER
+   Volume: 980 files
+   Mass:   605.7MB
+   Dominant: .png (91.4%)
+   Species breakdown:
+     .png         896 files ( 91.4%)     589.4MB ( 97.3%)
+     .mp4           1 files (  0.1%)      10.9MB (  1.8%)
+     .json         14 files (  1.4%)       4.7MB (  0.8%)
+     .py           51 files (  5.2%)     471.2KB (  0.1%)
+     .md           15 files (  1.5%)     157.4KB (  0.0%)
+
+📦 slideshows
+   Volume: 12 files
+   Mass:   431.0MB
+   Dominant: .mp4 (83.3%)
+   Species breakdown:
+     .mp4          10 files ( 83.3%)     425.0MB ( 98.6%)
+     .mp3           2 files ( 16.7%)       6.0MB (  1.4%)
+
+📦 ELEPHANT
+   Volume: 456 files
+   Mass:   322.1MB
+   Dominant: .png (89.5%)
+   Species breakdown:
+     .png         408 files ( 89.5%)     303.5MB ( 94.2%)
+     .mp4           2 files (  0.4%)      16.4MB (  5.1%)
+     .json          5 files (  1.1%)       1.3MB (  0.4%)
+     .py           35 files (  7.7%)     913.0KB (  0.3%)
+     .md            4 files (  0.9%)      45.9KB (  0.0%)
+
+📦 HORSE
+   Volume: 25 files
+   Mass:   236.0MB
+   Dominant: .mp4 (100.0%)
+   Species breakdown:
+     .mp4          25 files (100.0%)     236.0MB (100.0%)
+
+📦 SPIDER
+   Volume: 14 files
+   Mass:   231.7MB
+   Dominant: .mp4 (92.9%)
+   Species breakdown:
+     .mp4          13 files ( 92.9%)     231.7MB (100.0%)
+     .sh            1 files (  7.1%)       1.6KB (  0.0%)
+
+📦 boy_video.mp4
+   Volume: 1 files
+   Mass:   155.3MB
+   Dominant: .mp4 (100.0%)
+   Species breakdown:
+     .mp4           1 files (100.0%)     155.3MB (100.0%)
+
+📦 text_flow_analysis.md
+   Volume: 1 files
+   Mass:   121.3MB
+   Dominant: .md (100.0%)
+   Species breakdown:
+     .md            1 files (100.0%)     121.3MB (100.0%)
+
+📦 shots
+   Volume: 63 files
+   Mass:   106.4MB
+   Dominant: .png (100.0%)
+   Species breakdown:
+     .png          63 files (100.0%)     106.4MB (100.0%)
+
+📦 0_TIMAEUS_UNIFIED_DRONE
+   Volume: 24 files
+   Mass:   25.1MB
+   Dominant: .html (75.0%)
+   Species breakdown:
+     .mp3           1 files (  4.2%)      23.7MB ( 94.3%)
+     .html         18 files ( 75.0%)       1.4MB (  5.4%)
+     .json          3 files ( 12.5%)      42.5KB (  0.2%)
+     .unknown       1 files (  4.2%)       8.0KB (  0.0%)
+     .txt           1 files (  4.2%)       6.9KB (  0.0%)
+
+📦 media-manifest.json
+   Volume: 1 files
+   Mass:   3.2MB
+   Dominant: .json (100.0%)
+   Species breakdown:
+     .json          1 files (100.0%)       3.2MB (100.0%)
+
+📦 Resurrecting Atlantis remix v2.1_GOOD.mp3
+   Volume: 1 files
+   Mass:   3.0MB
+   Dominant: .mp3 (100.0%)
+   Species breakdown:
+     .mp3           1 files (100.0%)       3.0MB (100.0%)
+
+📦 ARKADU
+   Volume: 11 files
+   Mass:   2.1MB
+   Dominant: .jsonl (9.1%)
+   Species breakdown:
+     .jsonl         1 files (  9.1%)       2.0MB ( 95.6%)
+     .html          3 files ( 27.3%)      40.0KB (  1.8%)
+     .py            5 files ( 45.5%)      34.1KB (  1.6%)
+     .md            2 files ( 18.2%)      22.3KB (  1.0%)
+
+📦 output_poems_sequenced
+   Volume: 77 files
+   Mass:   2.1MB
+   Dominant: .png (100.0%)
+   Species breakdown:
+     .png          77 files (100.0%)       2.1MB (100.0%)
+
+📦 00_TIMAEUS
+   Volume: 24 files
+   Mass:   1.1MB
+   Dominant: .html (100.0%)
+   Species breakdown:
+     .html         24 files (100.0%)       1.1MB (100.0%)
+
+📦 ROSETTA
+   Volume: 41 files
+   Mass:   947.1KB
+   Dominant: .html (46.3%)
+   Species breakdown:
+     .html         19 files ( 46.3%)     813.5KB ( 85.9%)
+     .json         16 files ( 39.0%)      99.3KB ( 10.5%)
+     .py            4 files (  9.8%)      32.7KB (  3.5%)
+     .md            1 files (  2.4%)       1.6KB (  0.2%)
+     .txt           1 files (  2.4%)       35.0B (  0.0%)
+
+📦 METHODS
+   Volume: 7 files
+   Mass:   878.0KB
+   Dominant: .pdf (14.3%)
+   Species breakdown:
+     .pdf           1 files ( 14.3%)     840.5KB ( 95.7%)
+     .md            6 files ( 85.7%)      37.5KB (  4.3%)
+
+📦 0_MYTH TIME
+   Volume: 11 files
+   Mass:   480.6KB
+   Dominant: .html (90.9%)
+   Species breakdown:
+     .html         10 files ( 90.9%)     464.2KB ( 96.6%)
+     .json          1 files (  9.1%)      16.4KB (  3.4%)
+
+📦 0_GRID_TUBE
+   Volume: 14 files
+   Mass:   422.6KB
+   Dominant: .html (100.0%)
+   Species breakdown:
+     .html         14 files (100.0%)     422.6KB (100.0%)
+
+📦 output_poems
+   Volume: 15 files
+   Mass:   338.4KB
+   Dominant: .html (100.0%)
+   Species breakdown:
+     .html         15 files (100.0%)     338.4KB (100.0%)
+
+📦 0_FAL_SHEET
+   Volume: 8 files
+   Mass:   184.3KB
+   Dominant: .html (100.0%)
+   Species breakdown:
+     .html          8 files (100.0%)     184.3KB (100.0%)
+
+📦 0_CHANG-E
+   Volume: 6 files
+   Mass:   181.6KB
+   Dominant: .html (66.7%)
+   Species breakdown:
+     .html          4 files ( 66.7%)     161.1KB ( 88.7%)
+     .js            1 files ( 16.7%)      14.5KB (  8.0%)
+     .css           1 files ( 16.7%)       5.9KB (  3.3%)
+
+📦 0_AI IS MID
+   Volume: 6 files
+   Mass:   161.4KB
+   Dominant: .html (100.0%)
+   Species breakdown:
+     .html          6 files (100.0%)     161.4KB (100.0%)
+
+📦 assembly_scripts_index.md
+   Volume: 1 files
+   Mass:   134.5KB
+   Dominant: .md (100.0%)
+   Species breakdown:
+     .md            1 files (100.0%)     134.5KB (100.0%)
+
+📦 0_AA_MID_MONUMENT
+   Volume: 3 files
+   Mass:   86.7KB
+   Dominant: .html (100.0%)
+   Species breakdown:
+     .html          3 files (100.0%)      86.7KB (100.0%)
+
+📦 world_model.md
+   Volume: 1 files
+   Mass:   57.8KB
+   Dominant: .md (100.0%)
+   Species breakdown:
+     .md            1 files (100.0%)      57.8KB (100.0%)
+
+📦 PRIME
+   Volume: 5 files
+   Mass:   55.1KB
+   Dominant: .py (60.0%)
+   Species breakdown:
+     .py            3 files ( 60.0%)      42.9KB ( 77.9%)
+     .log           2 files ( 40.0%)      12.2KB ( 22.1%)
+
+📦 KOALA
+   Volume: 2 files
+   Mass:   51.7KB
+   Dominant: .html (100.0%)
+   Species breakdown:
+     .html          2 files (100.0%)      51.7KB (100.0%)
+
+📦 0_GATUBE
+   Volume: 1 files
+   Mass:   50.9KB
+   Dominant: .html (100.0%)
+   Species breakdown:
+     .html          1 files (100.0%)      50.9KB (100.0%)
+
+📦 dark_fusion_cinema.html
+   Volume: 1 files
+   Mass:   27.3KB
+   Dominant: .html (100.0%)
+   Species breakdown:
+     .html          1 files (100.0%)      27.3KB (100.0%)
+
+📦 assembly_scripts_olog.md
+   Volume: 1 files
+   Mass:   26.6KB
+   Dominant: .md (100.0%)
+   Species breakdown:
+     .md            1 files (100.0%)      26.6KB (100.0%)
+
+📦 atlantis_fusion.html
+   Volume: 1 files
+   Mass:   25.6KB
+   Dominant: .html (100.0%)
+   Species breakdown:
+     .html          1 files (100.0%)      25.6KB (100.0%)
+
+📦 retrowave_tv_animation.html
+   Volume: 1 files
+   Mass:   24.5KB
+   Dominant: .html (100.0%)
+   Species breakdown:
+     .html          1 files (100.0%)      24.5KB (100.0%)
+
+📦 notice-me.json
+   Volume: 1 files
+   Mass:   24.4KB
+   Dominant: .json (100.0%)
+   Species breakdown:
+     .json          1 files (100.0%)      24.4KB (100.0%)
+
+📦 departure.json
+   Volume: 1 files
+   Mass:   23.7KB
+   Dominant: .json (100.0%)
+   Species breakdown:
+     .json          1 files (100.0%)      23.7KB (100.0%)
+
+📦 fluid_atlantis_animation.html
+   Volume: 1 files
+   Mass:   22.6KB
+   Dominant: .html (100.0%)
+   Species breakdown:
+     .html          1 files (100.0%)      22.6KB (100.0%)
+
+📦 saul_bass_animation.html
+   Volume: 1 files
+   Mass:   21.7KB
+   Dominant: .html (100.0%)
+   Species breakdown:
+     .html          1 files (100.0%)      21.7KB (100.0%)
+
+📦 presentation-update.html
+   Volume: 1 files
+   Mass:   21.0KB
+   Dominant: .html (100.0%)
+   Species breakdown:
+     .html          1 files (100.0%)      21.0KB (100.0%)
+
+📦 memory_excavated.html
+   Volume: 1 files
+   Mass:   20.6KB
+   Dominant: .html (100.0%)
+   Species breakdown:
+     .html          1 files (100.0%)      20.6KB (100.0%)
+
+📦 .DS_Store
+   Volume: 1 files
+   Mass:   20.0KB
+   Dominant: .unknown (100.0%)
+   Species breakdown:
+     .unknown       1 files (100.0%)      20.0KB (100.0%)
+
+📦 resurrecting-atlantis.json
+   Volume: 1 files
+   Mass:   20.0KB
+   Dominant: .json (100.0%)
+   Species breakdown:
+     .json          1 files (100.0%)      20.0KB (100.0%)
+
+📦 gates_open.html
+   Volume: 1 files
+   Mass:   18.7KB
+   Dominant: .html (100.0%)
+   Species breakdown:
+     .html          1 files (100.0%)      18.7KB (100.0%)
+
+📦 screens_remember.html
+   Volume: 1 files
+   Mass:   18.3KB
+   Dominant: .html (100.0%)
+   Species breakdown:
+     .html          1 files (100.0%)      18.3KB (100.0%)
+
+📦 main.js
+   Volume: 1 files
+   Mass:   17.1KB
+   Dominant: .js (100.0%)
+   Species breakdown:
+     .js            1 files (100.0%)      17.1KB (100.0%)
+
+📦 generate_world_model.py
+   Volume: 1 files
+   Mass:   13.8KB
+   Dominant: .py (100.0%)
+   Species breakdown:
+     .py            1 files (100.0%)      13.8KB (100.0%)
+
+📦 scripts
+   Volume: 1 files
+   Mass:   12.9KB
+   Dominant: .py (100.0%)
+   Species breakdown:
+     .py            1 files (100.0%)      12.9KB (100.0%)
+
+📦 create_vintage_fixed_length.py
+   Volume: 1 files
+   Mass:   12.4KB
+   Dominant: .py (100.0%)
+   Species breakdown:
+     .py            1 files (100.0%)      12.4KB (100.0%)
+
+📦 enhance_voice_professional.py
+   Volume: 1 files
+   Mass:   12.3KB
+   Dominant: .py (100.0%)
+   Species breakdown:
+     .py            1 files (100.0%)      12.3KB (100.0%)
+
+📦 animation_trilogy.html
+   Volume: 1 files
+   Mass:   12.3KB
+   Dominant: .html (100.0%)
+   Species breakdown:
+     .html          1 files (100.0%)      12.3KB (100.0%)
+
+📦 WHALE
+   Volume: 17 files
+   Mass:   11.9KB
+   Dominant: .md (82.4%)
+   Species breakdown:
+     .sh            2 files ( 11.8%)       6.0KB ( 50.4%)
+     .md           14 files ( 82.4%)       5.0KB ( 42.6%)
+     .txt           1 files (  5.9%)      855.0B (  7.0%)
+
+📦 create_professional_vintage_mix.py
+   Volume: 1 files
+   Mass:   11.2KB
+   Dominant: .py (100.0%)
+   Species breakdown:
+     .py            1 files (100.0%)      11.2KB (100.0%)
+
+📦 emulate_assembly_outputs.py
+   Volume: 1 files
+   Mass:   11.2KB
+   Dominant: .py (100.0%)
+   Species breakdown:
+     .py            1 files (100.0%)      11.2KB (100.0%)
+
+📦 create_immersive_soundscape.py
+   Volume: 1 files
+   Mass:   10.8KB
+   Dominant: .py (100.0%)
+   Species breakdown:
+     .py            1 files (100.0%)      10.8KB (100.0%)
+
+📦 generate_olog_model.py
+   Volume: 1 files
+   Mass:   10.5KB
+   Dominant: .py (100.0%)
+   Species breakdown:
+     .py            1 files (100.0%)      10.5KB (100.0%)
+
+📦 create_immersive_soundscape_fixed.py
+   Volume: 1 files
+   Mass:   10.0KB
+   Dominant: .py (100.0%)
+   Species breakdown:
+     .py            1 files (100.0%)      10.0KB (100.0%)
+
+📦 assembly_scripts_analysis.md
+   Volume: 1 files
+   Mass:   9.3KB
+   Dominant: .md (100.0%)
+   Species breakdown:
+     .md            1 files (100.0%)       9.3KB (100.0%)
+
+📦 arkadu-recommendations.json
+   Volume: 1 files
+   Mass:   9.1KB
+   Dominant: .json (100.0%)
+   Species breakdown:
+     .json          1 files (100.0%)       9.1KB (100.0%)
+
+📦 create_advanced_voice_variations.py
+   Volume: 1 files
+   Mass:   8.9KB
+   Dominant: .py (100.0%)
+   Species breakdown:
+     .py            1 files (100.0%)       8.9KB (100.0%)
+
+📦 create_mixed_audio_video.py
+   Volume: 1 files
+   Mass:   8.8KB
+   Dominant: .py (100.0%)
+   Species breakdown:
+     .py            1 files (100.0%)       8.8KB (100.0%)
+
+📦 create_voice_variations_fixed.py
+   Volume: 1 files
+   Mass:   7.7KB
+   Dominant: .py (100.0%)
+   Species breakdown:
+     .py            1 files (100.0%)       7.7KB (100.0%)
+
+📦 create_voice_variations.py
+   Volume: 1 files
+   Mass:   7.1KB
+   Dominant: .py (100.0%)
+   Species breakdown:
+     .py            1 files (100.0%)       7.1KB (100.0%)
+
+📦 organize_lizard_videos.py
+   Volume: 1 files
+   Mass:   6.8KB
+   Dominant: .py (100.0%)
+   Species breakdown:
+     .py            1 files (100.0%)       6.8KB (100.0%)
+
+📦 analyze_assembly_scripts.py
+   Volume: 1 files
+   Mass:   6.7KB
+   Dominant: .py (100.0%)
+   Species breakdown:
+     .py            1 files (100.0%)       6.7KB (100.0%)
+
+📦 blueprints.md
+   Volume: 1 files
+   Mass:   6.1KB
+   Dominant: .md (100.0%)
+   Species breakdown:
+     .md            1 files (100.0%)       6.1KB (100.0%)
+
+📦 add_audio_to_video.py
+   Volume: 1 files
+   Mass:   5.4KB
+   Dominant: .py (100.0%)
+   Species breakdown:
+     .py            1 files (100.0%)       5.4KB (100.0%)
+
+📦 extract_poem_content.py
+   Volume: 1 files
+   Mass:   5.4KB
+   Dominant: .py (100.0%)
+   Species breakdown:
+     .py            1 files (100.0%)       5.4KB (100.0%)
+
+📦 styles.css
+   Volume: 1 files
+   Mass:   5.3KB
+   Dominant: .css (100.0%)
+   Species breakdown:
+     .css           1 files (100.0%)       5.3KB (100.0%)
+
+📦 adjust_audio_speed.py
+   Volume: 1 files
+   Mass:   4.5KB
+   Dominant: .py (100.0%)
+   Species breakdown:
+     .py            1 files (100.0%)       4.5KB (100.0%)
+
+📦 assemble_boy_video.py
+   Volume: 1 files
+   Mass:   4.4KB
+   Dominant: .py (100.0%)
+   Species breakdown:
+     .py            1 files (100.0%)       4.4KB (100.0%)
+
+📦 extract_compiled_poem.py
+   Volume: 1 files
+   Mass:   4.1KB
+   Dominant: .py (100.0%)
+   Species breakdown:
+     .py            1 files (100.0%)       4.1KB (100.0%)
+
+📦 assemble_lizard_videos.py
+   Volume: 1 files
+   Mass:   3.9KB
+   Dominant: .py (100.0%)
+   Species breakdown:
+     .py            1 files (100.0%)       3.9KB (100.0%)
+
+📦 index.html
+   Volume: 1 files
+   Mass:   3.6KB
+   Dominant: .html (100.0%)
+   Species breakdown:
+     .html          1 files (100.0%)       3.6KB (100.0%)
+
+📦 sequential_overlay.py
+   Volume: 1 files
+   Mass:   3.6KB
+   Dominant: .py (100.0%)
+   Species breakdown:
+     .py            1 files (100.0%)       3.6KB (100.0%)
+
+📦 extract_voice_track.py
+   Volume: 1 files
+   Mass:   3.4KB
+   Dominant: .py (100.0%)
+   Species breakdown:
+     .py            1 files (100.0%)       3.4KB (100.0%)
+
+📦 generate_assembly_index.py
+   Volume: 1 files
+   Mass:   3.1KB
+   Dominant: .py (100.0%)
+   Species breakdown:
+     .py            1 files (100.0%)       3.1KB (100.0%)
+
+📦 check_syntagmas.py
+   Volume: 1 files
+   Mass:   2.7KB
+   Dominant: .py (100.0%)
+   Species breakdown:
+     .py            1 files (100.0%)       2.7KB (100.0%)
+
+📦 split_packets.py
+   Volume: 1 files
+   Mass:   2.6KB
+   Dominant: .py (100.0%)
+   Species breakdown:
+     .py            1 files (100.0%)       2.6KB (100.0%)
+
+📦 find_long_videos.py
+   Volume: 1 files
+   Mass:   2.5KB
+   Dominant: .py (100.0%)
+   Species breakdown:
+     .py            1 files (100.0%)       2.5KB (100.0%)
+
+📦 emulation_log.md
+   Volume: 1 files
+   Mass:   2.4KB
+   Dominant: .md (100.0%)
+   Species breakdown:
+     .md            1 files (100.0%)       2.4KB (100.0%)
+
+📦 format_json_packets.py
+   Volume: 1 files
+   Mass:   2.2KB
+   Dominant: .py (100.0%)
+   Species breakdown:
+     .py            1 files (100.0%)       2.2KB (100.0%)
+
+📦 join_audio.py
+   Volume: 1 files
+   Mass:   2.1KB
+   Dominant: .py (100.0%)
+   Species breakdown:
+     .py            1 files (100.0%)       2.1KB (100.0%)
+
+📦 process_videos.py
+   Volume: 1 files
+   Mass:   1.8KB
+   Dominant: .py (100.0%)
+   Species breakdown:
+     .py            1 files (100.0%)       1.8KB (100.0%)
+
+📦 split_packets.sh
+   Volume: 1 files
+   Mass:   1.7KB
+   Dominant: .sh (100.0%)
+   Species breakdown:
+     .sh            1 files (100.0%)       1.7KB (100.0%)
+
+📦 clean_packets.sh
+   Volume: 1 files
+   Mass:   1.7KB
+   Dominant: .sh (100.0%)
+   Species breakdown:
+     .sh            1 files (100.0%)       1.7KB (100.0%)
+
+📦 extract_packets.sh
+   Volume: 1 files
+   Mass:   1.2KB
+   Dominant: .sh (100.0%)
+   Species breakdown:
+     .sh            1 files (100.0%)       1.2KB (100.0%)
+
+📦 split_prompt_packets.sh
+   Volume: 1 files
+   Mass:   985.0B
+   Dominant: .sh (100.0%)
+   Species breakdown:
+     .sh            1 files (100.0%)      985.0B (100.0%)
+
+📦 json_formatter.sh
+   Volume: 1 files
+   Mass:   778.0B
+   Dominant: .sh (100.0%)
+   Species breakdown:
+     .sh            1 files (100.0%)      778.0B (100.0%)
+
+📦 0_AA_A-PRIME-SEP12
+   Volume: 1 files
+   Mass:   162.0B
+   Dominant: .json (100.0%)
+   Species breakdown:
+     .json          1 files (100.0%)      162.0B (100.0%)
+
+📦 unique_prefixes.txt
+   Volume: 1 files
+   Mass:   30.0B
+   Dominant: .txt (100.0%)
+   Species breakdown:
+     .txt           1 files (100.0%)       30.0B (100.0%)
+
+💾 Verification data exported to: /Users/gaia/resurrecting atlantis/ARKADU/sys/scale-verification.json
+
+✅ Scale verification complete!

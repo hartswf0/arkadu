@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARKADU OS Terminal</title>
+<style>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+  background: #0a0a0a;
+  color: #00ff00;
+  padding: 20px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.terminal {
+  max-width: 1400px;
+  margin: 0 auto;
+  background: #000;
+  border: 2px solid #00ff00;
+  padding: 20px;
+  box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+}
+
+.header {
+  border-bottom: 2px solid #00ff00;
+  padding-bottom: 10px;
+  margin-bottom: 20px;
+}
+
+.header h1 {
+  font-size: 20px;
+  color: #00ff00;
+  text-align: center;
+}
+
+.tabs {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #00ff00;
+  padding-bottom: 10px;
+}
+
+.tab {
+  padding: 8px 16px;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid #00ff00;
+  color: #00ff00;
+  font-family: inherit;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+
+.tab:hover {
+  background: #00ff00;
+  color: #000;
+}
+
+.tab.active {
+  background: #00ff00;
+  color: #000;
+  font-weight: bold;
+}
+
+.content {
+  display: none;
+}
+
+.content.active {
+  display: block;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px;
+  margin-bottom: 30px;
+}
+
+.stat-box {
+  border: 1px solid #00ff00;
+  padding: 15px;
+  background: rgba(0, 255, 0, 0.05);
+}
+
+.stat-label {
+  color: #00cc00;
+  font-size: 11px;
+  margin-bottom: 5px;
+}
+
+.stat-value {
+  color: #00ff00;
+  font-size: 24px;
+  font-weight: bold;
+}
+
+.chamber-list {
+  margin-top: 20px;
+}
+
+.chamber-item {
+  padding: 10px;
+  border-left: 3px solid #00ff00;
+  margin-bottom: 10px;
+  background: rgba(0, 255, 0, 0.03);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.chamber-item:hover {
+  background: rgba(0, 255, 0, 0.1);
+  padding-left: 15px;
+}
+
+.chamber-name {
+  color: #00ff00;
+  font-weight: bold;
+  margin-bottom: 5px;
+}
+
+.chamber-stats {
+  color: #00aa00;
+  font-size: 12px;
+}
+
+.chain-item {
+  border: 1px solid #00ff00;
+  padding: 15px;
+  margin-bottom: 15px;
+  background: rgba(0, 255, 0, 0.03);
+}
+
+.chain-flow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0;
+  flex-wrap: wrap;
+}
+
+.chain-node {
+  padding: 5px 10px;
+  background: rgba(0, 255, 0, 0.1);
+  border: 1px solid #00ff00;
+  font-size: 12px;
+}
+
+.chain-arrow {
+  color: #00ff00;
+  font-size: 18px;
+}
+
+.prompt-text {
+  color: #00cc00;
+  font-style: italic;
+  margin-top: 10px;
+  padding: 10px;
+  background: rgba(0, 255, 0, 0.05);
+  border-left: 3px solid #00ff00;
+}
+
+.loading {
+  text-align: center;
+  padding: 40px;
+  color: #00ff00;
+}
+
+.error {
+  color: #ff0000;
+  border: 1px solid #ff0000;
+  padding: 15px;
+  margin: 20px 0;
+  background: rgba(255, 0, 0, 0.1);
+}
+
+.species-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  padding: 5px;
+}
+
+.species-name {
+  width: 100px;
+  color: #00ff00;
+}
+
+.species-count {
+  width: 80px;
+  color: #00cc00;
+  text-align: right;
+}
+
+.species-size {
+  width: 100px;
+  color: #00aa00;
+  text-align: right;
+}
+
+.bar {
+  flex: 1;
+  height: 20px;
+  background: rgba(0, 255, 0, 0.2);
+  border: 1px solid #00ff00;
+  position: relative;
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  background: #00ff00;
+  transition: width 0.5s ease;
+}
+
+.rank-section {
+  margin-bottom: 30px;
+}
+
+.rank-title {
+  color: #00ff00;
+  font-size: 16px;
+  font-weight: bold;
+  margin-bottom: 15px;
+  border-bottom: 1px solid #00ff00;
+  padding-bottom: 5px;
+}
+</style>
+</head>
+<body>
+
+<div class="terminal">
+  <div class="header">
+    <h1>╔════════════════════════════════════════════════════╗</h1>
+    <h1>║          ARKADU OS v1.0 - System Terminal         ║</h1>
+    <h1>╚════════════════════════════════════════════════════╝</h1>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('status')">STATUS</button>
+    <button class="tab" onclick="showTab('chambers')">CHAMBERS</button>
+    <button class="tab" onclick="showTab('species')">SPECIES</button>
+    <button class="tab" onclick="showTab('ekphrasis')">EKPHRASIS</button>
+  </div>
+
+  <!-- STATUS TAB -->
+  <div id="status" class="content active">
+    <div class="stats" id="statusStats">
+      <div class="loading">Loading system data...</div>
+    </div>
+    <div id="statusDetails"></div>
+  </div>
+
+  <!-- CHAMBERS TAB -->
+  <div id="chambers" class="content">
+    <div id="chambersContent">
+      <div class="loading">Loading chambers...</div>
+    </div>
+  </div>
+
+  <!-- SPECIES TAB -->
+  <div id="species" class="content">
+    <div id="speciesContent">
+      <div class="loading">Loading species...</div>
+    </div>
+  </div>
+
+  <!-- EKPHRASIS TAB -->
+  <div id="ekphrasis" class="content">
+    <div id="ekphrasisContent">
+      <div class="loading">Loading ekphrasis chains...</div>
+    </div>
+  </div>
+</div>
+
+<script>
+let systemData = {
+  artifacts: [],
+  chambers: [],
+  chains: []
+};
+
+// Tab switching
+function showTab(tabName) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.content').forEach(c => c.classList.remove('active'));
+  
+  event.target.classList.add('active');
+  document.getElementById(tabName).classList.add('active');
+}
+
+// Load JSONL files
+async function loadJSONL(path) {
+  try {
+    console.log(`Attempting to load: ${path}`);
+    const response = await fetch(path);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    const text = await response.text();
+    const lines = text.trim().split('\n').filter(line => line.length > 0);
+    return lines.map(line => JSON.parse(line));
+  } catch (error) {
+    console.error(`Error loading ${path}:`, error);
+    return [];
+  }
+}
+
+// Format bytes
+function formatBytes(bytes) {
+  if (bytes >= 1024 * 1024 * 1024) return (bytes / 1024 / 1024 / 1024).toFixed(2) + ' GB';
+  if (bytes >= 1024 * 1024) return (bytes / 1024 / 1024).toFixed(2) + ' MB';
+  return (bytes / 1024).toFixed(2) + ' KB';
+}
+
+// Render STATUS tab
+function renderStatus() {
+  const totalArtifacts = systemData.artifacts.length;
+  const totalBytes = systemData.artifacts.reduce((sum, a) => sum + a.size, 0);
+  const totalChambers = systemData.chambers.length;
+  const totalChains = systemData.chains.length;
+  const uniqueSpecies = new Set(systemData.artifacts.map(a => a.species)).size;
+  const promptFiles = systemData.artifacts.filter(a => a.prompts && a.prompts.has_prompts).length;
+
+  const html = `
+    <div class="stat-box">
+      <div class="stat-label">TOTAL ARTIFACTS</div>
+      <div class="stat-value">${totalArtifacts.toLocaleString()}</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">TOTAL STORAGE</div>
+      <div class="stat-value">${formatBytes(totalBytes)}</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">CHAMBERS INDEXED</div>
+      <div class="stat-value">${totalChambers}</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">EKPHRASIS CHAINS</div>
+      <div class="stat-value">${totalChains}</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">UNIQUE SPECIES</div>
+      <div class="stat-value">${uniqueSpecies}</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">PROMPT FILES</div>
+      <div class="stat-value">${promptFiles}</div>
+    </div>
+  `;
+
+  document.getElementById('statusStats').innerHTML = html;
+
+  // Show top kingdoms
+  const kingdoms = systemData.chambers.filter(c => c.depth === 1)
+    .sort((a, b) => b.total_bytes - a.total_bytes)
+    .slice(0, 10);
+
+  const kingdomsHtml = `
+    <div class="rank-section">
+      <div class="rank-title">TOP KINGDOMS (Depth 1)</div>
+      ${kingdoms.map(k => `
+        <div class="chamber-item">
+          <div class="chamber-name">${k.chamber}</div>
+          <div class="chamber-stats">
+            ${k.file_count} files · ${formatBytes(k.total_bytes)} · 
+            Species: ${k.dominant_species.join(', ')}
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+
+  document.getElementById('statusDetails').innerHTML = kingdomsHtml;
+}
+
+// Render CHAMBERS tab
+function renderChambers() {
+  const byRank = {
+    kingdom: systemData.chambers.filter(c => c.depth === 1),
+    phylum: systemData.chambers.filter(c => c.depth === 2),
+    class: systemData.chambers.filter(c => c.depth === 3)
+  };
+
+  let html = '';
+
+  for (const [rank, chambers] of Object.entries(byRank)) {
+    const sorted = chambers.sort((a, b) => b.total_bytes - a.total_bytes).slice(0, 15);
+    
+    html += `
+      <div class="rank-section">
+        <div class="rank-title">${rank.toUpperCase()} (Depth ${rank === 'kingdom' ? 1 : rank === 'phylum' ? 2 : 3})</div>
+        ${sorted.map(c => `
+          <div class="chamber-item">
+            <div class="chamber-name">${c.chamber}</div>
+            <div class="chamber-stats">
+              ${c.file_count} files · ${formatBytes(c.total_bytes)} · 
+              Species: ${c.dominant_species.join(', ')}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  document.getElementById('chambersContent').innerHTML = html;
+}
+
+// Render SPECIES tab
+function renderSpecies() {
+  const speciesData = {};
+  
+  systemData.artifacts.forEach(a => {
+    if (!speciesData[a.species]) {
+      speciesData[a.species] = { count: 0, bytes: 0 };
+    }
+    speciesData[a.species].count++;
+    speciesData[a.species].bytes += a.size;
+  });
+
+  const sorted = Object.entries(speciesData)
+    .sort((a, b) => b[1].bytes - a[1].bytes)
+    .slice(0, 20);
+
+  const maxBytes = sorted[0][1].bytes;
+
+  const html = sorted.map(([species, data]) => {
+    const pct = (data.bytes / maxBytes) * 100;
+    return `
+      <div class="species-bar">
+        <div class="species-name">${species}</div>
+        <div class="species-count">${data.count} files</div>
+        <div class="species-size">${formatBytes(data.bytes)}</div>
+        <div class="bar">
+          <div class="bar-fill" style="width: ${pct}%"></div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  document.getElementById('speciesContent').innerHTML = `
+    <div class="rank-title">FILE TYPES BY STORAGE SIZE</div>
+    ${html}
+  `;
+}
+
+// Render EKPHRASIS tab
+function renderEkphrasis() {
+  const chains = systemData.chains.slice(0, 20);
+
+  const html = chains.map(c => {
+    const promptFile = c.prompt_file.split('/').pop();
+    const script = c.script.split('/').pop();
+    
+    return `
+      <div class="chain-item">
+        <div class="chain-flow">
+          <div class="chain-node">📄 ${promptFile}</div>
+          <div class="chain-arrow">→</div>
+          <div class="chain-node">🐍 ${script}</div>
+          ${c.uses_ffmpeg ? '<div class="chain-arrow">→</div><div class="chain-node">🎬 ffmpeg</div>' : ''}
+          ${c.uses_drawtext ? '<div class="chain-arrow">→</div><div class="chain-node">📝 drawtext</div>' : ''}
+        </div>
+        ${c.sample_prompts && c.sample_prompts.length > 0 ? `
+          <div class="prompt-text">"${c.sample_prompts[0]}"</div>
+        ` : ''}
+        ${c.intent ? `<div class="chamber-stats" style="margin-top: 10px;">Intent: ${c.intent}</div>` : ''}
+      </div>
+    `;
+  }).join('');
+
+  document.getElementById('ekphrasisContent').innerHTML = `
+    <div class="rank-title">OPERATIVE EKPHRASIS CHAINS (Top 20)</div>
+    ${html}
+  `;
+}
+
+// Initialize
+async function init() {
+  try {
+    console.log('Loading system data...');
+    
+    // Try relative path first, then absolute path for HTTP server
+    const basePath = window.location.protocol === 'file:' ? '../sys/' : '/sys/';
+    console.log(`Using base path: ${basePath}`);
+    
+    systemData.artifacts = await loadJSONL(basePath + 'primitive.jsonl');
+    systemData.chambers = await loadJSONL(basePath + 'chambers.jsonl');
+    systemData.chains = await loadJSONL(basePath + 'ekphrasis.jsonl');
+
+    console.log('Data loaded:', {
+      artifacts: systemData.artifacts.length,
+      chambers: systemData.chambers.length,
+      chains: systemData.chains.length
+    });
+
+    renderStatus();
+    renderChambers();
+    renderSpecies();
+    renderEkphrasis();
+
+  } catch (error) {
+    console.error('Initialization error:', error);
+    document.getElementById('statusStats').innerHTML = `
+      <div class="error">
+        ERROR: Failed to load system data<br>
+        ${error.message}<br><br>
+        Make sure ARKADU/sys/*.jsonl files exist.<br>
+        Run: bash ARKADU/bin/scan
+      </div>
+    `;
+  }
+}
+
+init();
+</script>
+
+</body>
+</html>

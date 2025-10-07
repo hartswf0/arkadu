@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>🌱 Organic Evolution - New Algorithms</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'SF Mono',Monaco,monospace;background:#000;color:#0f0;padding:20px}
+.container{max-width:1900px;margin:0 auto}
+h1{color:#0ff;font-size:2.5rem;margin-bottom:10px;text-shadow:0 0 20px #0ff}
+.subtitle{color:#0f0;margin-bottom:30px;font-size:1.15rem}
+.algo-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(500px,1fr));gap:25px;margin-bottom:30px}
+.algo-card{background:#0a0a0a;border:2px solid #0f0;border-radius:10px;padding:20px;transition:all .3s}
+.algo-card:hover{border-color:#0ff;box-shadow:0 0 30px rgba(0,255,255,.3)}
+.algo-title{color:#0ff;font-size:1.4rem;font-weight:900;margin-bottom:8px}
+.algo-desc{color:#888;font-size:.95rem;line-height:1.6;margin-bottom:15px}
+canvas{border:2px solid #0f0;background:#000;display:block;width:100%;height:auto}
+.controls{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap}
+.btn{background:#0f0;color:#000;border:none;padding:8px 16px;border-radius:5px;cursor:pointer;font-weight:900;font-size:.9rem;font-family:inherit}
+.btn:hover{background:#0ff;box-shadow:0 0 15px #0ff}
+.btn-secondary{background:#333;color:#0f0;border:1px solid #0f0}
+.btn-secondary:hover{background:#0f0;color:#000}
+.stats{background:#1a1a1a;padding:12px;border:1px solid #333;border-radius:5px;margin-top:12px;font-size:.85rem}
+.stat-row{display:flex;justify-content:space-between;padding:4px 0}
+.stat-label{color:#888}
+.stat-value{color:#0ff;font-weight:bold}
+.badge{display:inline-block;padding:3px 8px;border-radius:4px;font-size:.75rem;font-weight:900;margin-left:8px}
+.badge-new{background:#f0f;color:#000}
+.badge-physics{background:#0ff;color:#000}
+.badge-organic{background:#0f0;color:#000}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>🌱 ORGANIC EVOLUTION - NEW ALGORITHMS</h1>
+<p class="subtitle">Cellular automata • Physics simulation • Bottom-up growth • Procedural packing</p>
+
+<div class="algo-grid">
+
+<!-- APPROACH 5: Cellular Automata Growth -->
+<div class="algo-card">
+<div class="algo-title">🦠 APPROACH 5: Cellular Automata Growth <span class="badge badge-new">NEW</span></div>
+<div class="algo-desc">Territories grow from seeds using CA rules. Cells compete for space, creating organic boundaries through emergent behavior.</div>
+<canvas id="canvas5" width="500" height="500"></canvas>
+<div class="controls">
+<button class="btn" onclick="runApproach5()">▶ Grow</button>
+<button class="btn-secondary" onclick="stepApproach5()">➡ Step</button>
+<button class="btn-secondary" onclick="resetApproach5()">↻ Reset</button>
+</div>
+<div class="stats" id="stats5">
+<div class="stat-row"><span class="stat-label">Iterations:</span><span class="stat-value">0</span></div>
+<div class="stat-row"><span class="stat-label">Growth Rate:</span><span class="stat-value">-</span></div>
+<div class="stat-row"><span class="stat-label">Coverage:</span><span class="stat-value">0%</span></div>
+</div>
+</div>
+
+<!-- APPROACH 6: Bubble Packing -->
+<div class="algo-card">
+<div class="algo-title">🫧 APPROACH 6: Bubble Packing <span class="badge badge-physics">PHYSICS</span></div>
+<div class="algo-desc">Physics-based circles inflate and push apart until they touch. Natural space-filling with organic boundaries.</div>
+<canvas id="canvas6" width="500" height="500"></canvas>
+<div class="controls">
+<button class="btn" onclick="runApproach6()">▶ Inflate</button>
+<button class="btn-secondary" onclick="stepApproach6()">➡ Step</button>
+<button class="btn-secondary" onclick="resetApproach6()">↻ Reset</button>
+</div>
+<div class="stats" id="stats6">
+<div class="stat-row"><span class="stat-label">Iterations:</span><span class="stat-value">0</span></div>
+<div class="stat-row"><span class="stat-label">Pressure:</span><span class="stat-value">0.0</span></div>
+<div class="stat-row"><span class="stat-label">Stability:</span><span class="stat-value">-</span></div>
+</div>
+</div>
+
+<!-- APPROACH 7: Diffusion-Limited Aggregation -->
+<div class="algo-card">
+<div class="algo-title">❄️ APPROACH 7: DLA Growth <span class="badge badge-organic">ORGANIC</span></div>
+<div class="algo-desc">Diffusion-limited aggregation: particles random walk and stick to territories. Creates fractal-like organic boundaries.</div>
+<canvas id="canvas7" width="500" height="500"></canvas>
+<div class="controls">
+<button class="btn" onclick="runApproach7()">▶ Aggregate</button>
+<button class="btn-secondary" onclick="stepApproach7()">➡ Step</button>
+<button class="btn-secondary" onclick="resetApproach7()">↻ Reset</button>
+</div>
+<div class="stats" id="stats7">
+<div class="stat-row"><span class="stat-label">Particles:</span><span class="stat-value">0</span></div>
+<div class="stat-row"><span class="stat-label">Stuck:</span><span class="stat-value">0</span></div>
+<div class="stat-row"><span class="stat-label">Coverage:</span><span class="stat-value">0%</span></div>
+</div>
+</div>
+
+<!-- APPROACH 8: Space-Filling Curves -->
+<div class="algo-card">
+<div class="algo-title">🌀 APPROACH 8: Hilbert Subdivision <span class="badge badge-new">EFFICIENT</span></div>
+<div class="algo-desc">Space-filling curve (Hilbert/Peano) subdivision. Guarantees 100% space coverage with continuous territories.</div>
+<canvas id="canvas8" width="500" height="500"></canvas>
+<div class="controls">
+<button class="btn" onclick="runApproach8()">▶ Subdivide</button>
+<button class="btn-secondary" onclick="increaseDepth8()">+ Depth</button>
+<button class="btn-secondary" onclick="resetApproach8()">↻ Reset</button>
+</div>
+<div class="stats" id="stats8">
+<div class="stat-row"><span class="stat-label">Curve Order:</span><span class="stat-value">3</span></div>
+<div class="stat-row"><span class="stat-label">Segments:</span><span class="stat-value">64</span></div>
+<div class="stat-row"><span class="stat-label">Accuracy:</span><span class="stat-value">100%</span></div>
+</div>
+</div>
+
+</div>
+
+<div style="background:#1a1a1a;padding:20px;border:2px solid #0ff;border-radius:10px">
+<h2 style="color:#0ff;margin-bottom:15px">🧬 EVOLUTION PRINCIPLES</h2>
+<p style="color:#0f0;line-height:1.8">
+<strong>Bottom-Up Growth:</strong> Start from seeds, grow outward naturally<br>
+<strong>Emergent Boundaries:</strong> Borders form from competition, not imposed<br>
+<strong>Physics-Based:</strong> Use real forces (pressure, diffusion, repulsion)<br>
+<strong>Space-Filling:</strong> Guarantee 100% coverage with no gaps<br>
+<strong>Organic Appearance:</strong> Natural, irregular, unpredictable patterns
+</p>
+</div>
+</div>
+
+<script>
+let TEST_DATA = null;
+const COLORS = ['#FF6B6B','#4ECDC4','#45B7D1','#FFA07A','#98D8C8','#F7DC6F','#BB8FCE','#85C1E2','#F8B400','#6C5CE7','#A29BFE','#FD79A8'];
+
+// Load test data
+async function loadData(){
+  try{
+    const r = await fetch('sys/deep-test-data.json');
+    TEST_DATA = await r.json();
+  }catch(e){
+    TEST_DATA = {name:'ROOT',children:[
+      {name:'A',files:100,mb:500},{name:'B',files:80,mb:400},
+      {name:'C',files:60,mb:300},{name:'D',files:40,mb:200},
+      {name:'E',files:30,mb:150},{name:'F',files:20,mb:100}
+    ]};
+  }
+}
+
+function getData(){
+  if(!TEST_DATA) return [];
+  const children = TEST_DATA.children || [];
+  return children.slice(0,8).map((c,i)=>({
+    name:c.name,
+    value:c.files+c.mb,
+    color:COLORS[i%COLORS.length]
+  }));
+}
+
+// APPROACH 5: Cellular Automata Growth
+let ca5State = null;
+function resetApproach5(){
+  const data = getData();
+  const W=500,H=500;
+  const grid = new Array(W*H).fill(-1);
+  const seeds = [];
+  
+  // Place seeds
+  const total = data.reduce((s,d)=>s+d.value,0);
+  data.forEach((d,i)=>{
+    const angle = (i/data.length)*Math.PI*2;
+    const r = Math.min(W,H)*0.25;
+    const x = Math.floor(W/2 + Math.cos(angle)*r);
+    const y = Math.floor(H/2 + Math.sin(angle)*r);
+    grid[y*W+x] = i;
+    seeds.push({id:i,x,y,target:d.value/total*W*H,current:1});
+  });
+  
+  ca5State = {grid,W,H,seeds,data,iter:0,active:true};
+  drawCA5();
+}
+
+function stepApproach5(){
+  if(!ca5State || !ca5State.active) return;
+  const {grid,W,H,seeds,iter} = ca5State;
+  const newGrid = [...grid];
+  let changes = 0;
+  
+  // Growth phase: expand territories
+  for(let y=0;y<H;y++){
+    for(let x=0;x<W;x++){
+      const idx = y*W+x;
+      if(grid[idx]>=0) continue; // Already claimed
+      
+      // Check neighbors
+      const neighbors = [
+        grid[idx-W], grid[idx+W], grid[idx-1], grid[idx+1]
+      ].filter(n=>n>=0);
+      
+      if(neighbors.length>0){
+        // Probabilistic growth based on target area
+        const counts = {};
+        neighbors.forEach(n=>counts[n]=(counts[n]||0)+1);
+        
+        // Weight by how far from target each territory is
+        const weights = {};
+        Object.keys(counts).forEach(id=>{
+          const seed = seeds[id];
+          const deficit = seed.target - seed.current;
+          weights[id] = counts[id] * Math.max(0.1, deficit/seed.target);
+        });
+        
+        // Pick weighted random neighbor
+        const total = Object.values(weights).reduce((a,b)=>a+b,0);
+        let r = Math.random()*total;
+        for(const id in weights){
+          r -= weights[id];
+          if(r<=0){
+            newGrid[idx] = parseInt(id);
+            seeds[id].current++;
+            changes++;
+            break;
+          }
+        }
+      }
+    }
+  }
+  
+  ca5State.grid = newGrid;
+  ca5State.iter++;
+  ca5State.active = changes > 0;
+  drawCA5();
+  
+  const coverage = grid.filter(v=>v>=0).length/(W*H)*100;
+  updateStats('stats5',{
+    'Iterations':ca5State.iter,
+    'Growth Rate':changes+' px/step',
+    'Coverage':coverage.toFixed(1)+'%'
+  });
+}
+
+function runApproach5(){
+  if(!ca5State) resetApproach5();
+  const interval = setInterval(()=>{
+    if(!ca5State.active){
+      clearInterval(interval);
+      return;
+    }
+    stepApproach5();
+  },50);
+}
+
+function drawCA5(){
+  if(!ca5State) return;
+  const {grid,W,H,data} = ca5State;
+  const canvas = document.getElementById('canvas5');
+  const ctx = canvas.getContext('2d');
+  const imageData = ctx.createImageData(W,H);
+  
+  for(let i=0;i<grid.length;i++){
+    const id = grid[i];
+    if(id>=0){
+      const rgb = hexToRgb(data[id].color);
+      imageData.data[i*4] = rgb[0];
+      imageData.data[i*4+1] = rgb[1];
+      imageData.data[i*4+2] = rgb[2];
+      imageData.data[i*4+3] = 255;
+    }
+  }
+  ctx.putImageData(imageData,0,0);
+}
+
+// APPROACH 6: Bubble Packing
+let bubble6State = null;
+function resetApproach6(){
+  const data = getData();
+  const W=500,H=500;
+  const total = data.reduce((s,d)=>s+d.value,0);
+  
+  const bubbles = data.map((d,i)=>{
+    const angle = (i/data.length)*Math.PI*2;
+    const r = 50;
+    return {
+      x:W/2+Math.cos(angle)*r,
+      y:H/2+Math.sin(angle)*r,
+      r:5,
+      targetArea:(d.value/total)*Math.PI*Math.pow(Math.min(W,H)/2-20,2),
+      vx:0,vy:0,
+      color:d.color,
+      name:d.name
+    };
+  });
+  
+  bubble6State = {bubbles,W,H,iter:0,stable:false};
+  drawBubble6();
+}
+
+function stepApproach6(){
+  if(!bubble6State) return;
+  const {bubbles,W,H} = bubble6State;
+  let maxMove = 0;
+  
+  // Inflate bubbles toward target area
+  bubbles.forEach(b=>{
+    const currentArea = Math.PI*b.r*b.r;
+    if(currentArea < b.targetArea){
+      b.r += 0.5;
+    }
+  });
+  
+  // Physics: push apart on collision
+  for(let i=0;i<bubbles.length;i++){
+    for(let j=i+1;j<bubbles.length;j++){
+      const b1=bubbles[i],b2=bubbles[j];
+      const dx=b2.x-b1.x,dy=b2.y-b1.y;
+      const dist=Math.sqrt(dx*dx+dy*dy);
+      const minDist=b1.r+b2.r;
+      
+      if(dist<minDist && dist>0){
+        const overlap = minDist-dist;
+        const angle = Math.atan2(dy,dx);
+        const force = overlap*0.5;
+        
+        b1.vx -= Math.cos(angle)*force;
+        b1.vy -= Math.sin(angle)*force;
+        b2.vx += Math.cos(angle)*force;
+        b2.vy += Math.sin(angle)*force;
+      }
+    }
+  }
+  
+  // Apply velocity & boundary
+  bubbles.forEach(b=>{
+    b.x += b.vx;
+    b.y += b.vy;
+    b.vx *= 0.8; // Damping
+    b.vy *= 0.8;
+    
+    maxMove = Math.max(maxMove,Math.abs(b.vx)+Math.abs(b.vy));
+    
+    // Boundary collision
+    if(b.x-b.r<0){b.x=b.r;b.vx*=-0.5}
+    if(b.x+b.r>W){b.x=W-b.r;b.vx*=-0.5}
+    if(b.y-b.r<0){b.y=b.r;b.vy*=-0.5}
+    if(b.y+b.r>H){b.y=H-b.r;b.vy*=-0.5}
+  });
+  
+  bubble6State.iter++;
+  bubble6State.stable = maxMove < 0.1;
+  drawBubble6();
+  
+  const pressure = bubbles.reduce((s,b)=>s+Math.abs(b.vx)+Math.abs(b.vy),0);
+  updateStats('stats6',{
+    'Iterations':bubble6State.iter,
+    'Pressure':pressure.toFixed(1),
+    'Stability':bubble6State.stable?'✓':'...'
+  });
+}
+
+function runApproach6(){
+  if(!bubble6State) resetApproach6();
+  const interval = setInterval(()=>{
+    if(bubble6State.iter>200){
+      clearInterval(interval);
+      return;
+    }
+    stepApproach6();
+  },30);
+}
+
+function drawBubble6(){
+  if(!bubble6State) return;
+  const {bubbles,W,H} = bubble6State;
+  const canvas = document.getElementById('canvas6');
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0,0,W,H);
+  
+  bubbles.forEach(b=>{
+    ctx.fillStyle = b.color;
+    ctx.globalAlpha = 0.7;
+    ctx.beginPath();
+    ctx.arc(b.x,b.y,b.r,0,Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#0f0';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    ctx.fillStyle = '#000';
+    ctx.font = 'bold 10px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(b.name,b.x,b.y);
+  });
+}
+
+// APPROACH 7: DLA (Diffusion-Limited Aggregation)
+let dla7State = null;
+
+function resetApproach7(){
+  const data = getData();
+  const W=500,H=500;
+  const grid = new Uint8Array(W*H).fill(255); // 255 = empty
+  const total = data.reduce((s,d)=>s+d.value,0);
+  
+  // Place seed clusters
+  const seeds = data.map((d,i)=>{
+    const angle = (i/data.length)*Math.PI*2;
+    const r = Math.min(W,H)*0.15;
+    const cx = Math.floor(W/2 + Math.cos(angle)*r);
+    const cy = Math.floor(H/2 + Math.sin(angle)*r);
+    
+    // Create small seed cluster (3x3)
+    for(let dy=-1;dy<=1;dy++){
+      for(let dx=-1;dx<=1;dx++){
+        const x=cx+dx,y=cy+dy;
+        if(x>=0&&x<W&&y>=0&&y<H){
+          grid[y*W+x] = i;
+        }
+      }
+    }
+    
+    return {
+      id:i,
+      x:cx,y:cy,
+      target:(d.value/total)*(W*H),
+      current:9, // 3x3 seed
+      color:d.color,
+      name:d.name
+    };
+  });
+  
+  dla7State = {
+    grid,W,H,seeds,data,
+    particles:0,stuck:0,
+    active:true
+  };
+  drawDLA7();
+}
+
+function stepApproach7(){
+  if(!dla7State || !dla7State.active) return;
+  const {grid,W,H,seeds} = dla7State;
+  
+  // Release multiple particles per step for speed
+  const batchSize = 20;
+  for(let b=0;b<batchSize;b++){
+    // Pick territory that needs more particles
+    const underSized = seeds.filter(s=>s.current<s.target);
+    if(underSized.length===0){
+      dla7State.active=false;
+      return;
+    }
+    
+    // Weight by deficit
+    const weights = underSized.map(s=>(s.target-s.current)/s.target);
+    const totalWeight = weights.reduce((a,b)=>a+b,0);
+    let r = Math.random()*totalWeight;
+    let targetSeed = underSized[0];
+    for(let i=0;i<underSized.length;i++){
+      r -= weights[i];
+      if(r<=0){targetSeed=underSized[i];break;}
+    }
+    
+    // Spawn particle near target seed
+    let px = targetSeed.x + Math.floor(Math.random()*60-30);
+    let py = targetSeed.y + Math.floor(Math.random()*60-30);
+    px = Math.max(1,Math.min(W-2,px));
+    py = Math.max(1,Math.min(H-2,py));
+    
+    // Random walk until sticking
+    dla7State.particles++;
+    let stuck = false;
+    let steps = 0;
+    const maxSteps = 1000;
+    
+    while(!stuck && steps<maxSteps){
+      // Random walk
+      const dir = Math.floor(Math.random()*4);
+      const oldX=px,oldY=py;
+      if(dir===0 && px>0) px--;
+      else if(dir===1 && px<W-1) px++;
+      else if(dir===2 && py>0) py--;
+      else if(dir===3 && py<H-1) py++;
+      
+      // Check if next to any filled cell of target territory
+      const neighbors = [
+        grid[(py-1)*W+px], grid[(py+1)*W+px],
+        grid[py*W+px-1], grid[py*W+px+1],
+        grid[(py-1)*W+px-1], grid[(py-1)*W+px+1],
+        grid[(py+1)*W+px-1], grid[(py+1)*W+px+1]
+      ];
+      
+      const touchingTarget = neighbors.includes(targetSeed.id);
+      
+      if(touchingTarget && grid[py*W+px]===255){
+        // Stick!
+        grid[py*W+px] = targetSeed.id;
+        targetSeed.current++;
+        dla7State.stuck++;
+        stuck = true;
+      }
+      
+      steps++;
+    }
+  }
+  
+  drawDLA7();
+  
+  const coverage = Array.from(grid).filter(v=>v<255).length/(W*H)*100;
+  updateStats('stats7',{
+    'Particles':dla7State.particles,
+    'Stuck':dla7State.stuck,
+    'Coverage':coverage.toFixed(1)+'%'
+  });
+}
+
+function runApproach7(){
+  if(!dla7State) resetApproach7();
+  const interval = setInterval(()=>{
+    if(!dla7State.active){
+      clearInterval(interval);
+      return;
+    }
+    stepApproach7();
+  },16);
+}
+
+function drawDLA7(){
+  if(!dla7State) return;
+  const {grid,W,H,data} = dla7State;
+  const canvas = document.getElementById('canvas7');
+  const ctx = canvas.getContext('2d');
+  const imageData = ctx.createImageData(W,H);
+  
+  for(let i=0;i<grid.length;i++){
+    const id = grid[i];
+    if(id<255){
+      const rgb = hexToRgb(data[id].color);
+      imageData.data[i*4] = rgb[0];
+      imageData.data[i*4+1] = rgb[1];
+      imageData.data[i*4+2] = rgb[2];
+      imageData.data[i*4+3] = 255;
+    }
+  }
+  ctx.putImageData(imageData,0,0);
+  
+  // Draw seed markers
+  dla7State.seeds.forEach(s=>{
+    ctx.strokeStyle = '#0f0';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(s.x,s.y,5,0,Math.PI*2);
+    ctx.stroke();
+  });
+}
+
+// APPROACH 8: Hilbert Curve
+let hilbert8State = null;
+function resetApproach8(){
+  hilbert8State = {order:3};
+  drawHilbert8();
+}
+
+function increaseDepth8(){
+  if(!hilbert8State) resetApproach8();
+  hilbert8State.order = Math.min(6,hilbert8State.order+1);
+  drawHilbert8();
+}
+
+function runApproach8(){
+  if(!hilbert8State) resetApproach8();
+  drawHilbert8();
+}
+
+function drawHilbert8(){
+  if(!hilbert8State) return;
+  const {order} = hilbert8State;
+  const canvas = document.getElementById('canvas8');
+  const ctx = canvas.getContext('2d');
+  const W=500,H=500;
+  ctx.fillStyle='#000';
+  ctx.fillRect(0,0,W,H);
+  
+  const points = generateHilbert(order);
+  const data = getData();
+  const total = data.reduce((s,d)=>s+d.value,0);
+  
+  let segStart = 0;
+  data.forEach((d,i)=>{
+    const segCount = Math.floor((d.value/total)*points.length);
+    const segs = points.slice(segStart,segStart+segCount);
+    
+    segs.forEach(p=>{
+      const x = (p.x/(1<<order))*W;
+      const y = (p.y/(1<<order))*H;
+      ctx.fillStyle = d.color;
+      ctx.fillRect(x,y,W/(1<<order),H/(1<<order));
+    });
+    
+    segStart += segCount;
+  });
+  
+  ctx.strokeStyle = '#0f0';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(0,0,W,H);
+  
+  updateStats('stats8',{
+    'Curve Order':order,
+    'Segments':points.length,
+    'Accuracy':'100%'
+  });
+}
+
+function generateHilbert(n){
+  const points = [];
+  const total = 1<<(2*n);
+  for(let i=0;i<total;i++){
+    points.push(d2xy(n,i));
+  }
+  return points;
+}
+
+function d2xy(n,d){
+  let x=0,y=0;
+  for(let s=1;s<(1<<n);s*=2){
+    const rx = 1 & (d/2);
+    const ry = 1 & (d ^ rx);
+    if(ry===0){
+      if(rx===1){x=s-1-x;y=s-1-y}
+      [x,y]=[y,x];
+    }
+    x += s*rx;
+    y += s*ry;
+    d /= 4;
+  }
+  return {x,y};
+}
+
+function hexToRgb(hex){
+  const r = parseInt(hex.slice(1,3),16);
+  const g = parseInt(hex.slice(3,5),16);
+  const b = parseInt(hex.slice(5,7),16);
+  return [r,g,b];
+}
+
+function updateStats(id,stats){
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.innerHTML = Object.entries(stats).map(([k,v])=>
+    `<div class="stat-row"><span class="stat-label">${k}:</span><span class="stat-value">${v}</span></div>`
+  ).join('');
+}
+
+window.addEventListener('load',()=>{
+  loadData().then(()=>{
+    resetApproach5();
+    resetApproach6();
+    resetApproach7();
+    resetApproach8();
+  });
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>ARKADU LIDAR — Ground Penetrating Media Scan</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000;color:#4dd9cc;font-family:'Courier New',monospace;overflow:hidden}
+#canvas{position:absolute;inset:0}
+
+.hud{position:fixed;top:20px;left:20px;background:rgba(0,0,0,.85);border:1px solid #4dd9cc;padding:14px;max-width:300px;z-index:100;font-size:11px;font-family:'Courier New';box-shadow:0 0 20px rgba(77,217,204,.3)}
+.hud-title{font-size:13px;font-weight:bold;color:#4dd9cc;margin-bottom:10px;letter-spacing:2px;border-bottom:1px solid #4dd9cc;padding-bottom:6px}
+.hud-row{display:flex;justify-content:space-between;margin:6px 0;padding:4px 0;border-bottom:1px solid rgba(77,217,204,.2)}
+.hud-label{color:#6b8a96;font-size:9px;text-transform:uppercase}
+.hud-value{color:#4dd9cc;font-size:11px;font-weight:bold}
+.hud-section{margin:12px 0;padding:8px 0;border-top:1px solid rgba(77,217,204,.3)}
+.scan-mode{display:flex;gap:6px;margin:6px 0}
+.mode-btn{flex:1;padding:6px;background:rgba(77,217,204,.1);border:1px solid #4dd9cc;color:#4dd9cc;cursor:pointer;font-size:9px;text-align:center;transition:all .2s}
+.mode-btn:hover{background:rgba(77,217,204,.2)}
+.mode-btn.active{background:#4dd9cc;color:#000}
+
+.scanner{position:fixed;top:20px;right:20px;background:rgba(0,0,0,.85);border:1px solid #d97b8f;padding:14px;width:320px;z-index:100;font-size:10px;box-shadow:0 0 20px rgba(217,123,143,.3);transform:translateX(400px);transition:transform .3s}
+.scanner.open{transform:translateX(0)}
+.scanner-close{position:absolute;top:10px;right:10px;width:18px;height:18px;cursor:pointer;color:#d97b8f;font-size:16px;text-align:center;line-height:18px}
+.scanner-title{font-size:12px;font-weight:bold;color:#d97b8f;margin-bottom:10px;letter-spacing:1px}
+.deposit-info{background:rgba(77,217,204,.05);border-left:2px solid #4dd9cc;padding:8px;margin:8px 0}
+.deposit-label{font-size:8px;text-transform:uppercase;color:#6b8a96;margin-top:6px}
+.deposit-value{font-size:10px;color:#4dd9cc}
+.species-graph{margin:10px 0}
+.species-bar{height:14px;margin:4px 0;display:flex;align-items:center;padding:0 6px;font-size:8px;font-weight:bold;border-left:3px solid}
+
+.depth-ruler{position:fixed;left:20px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.85);border:1px solid #4dd9cc;padding:10px;z-index:100;font-size:9px;width:60px}
+.depth-mark{margin:8px 0;display:flex;justify-content:space-between;align-items:center;color:#4dd9cc}
+.depth-line{width:20px;height:1px;background:#4dd9cc}
+
+.controls{position:fixed;bottom:20px;left:20px;background:rgba(0,0,0,.85);border:1px solid #4dd9cc;padding:12px;z-index:100;min-width:280px;box-shadow:0 0 20px rgba(77,217,204,.3)}
+.control-row{margin:8px 0;display:flex;align-items:center;gap:10px}
+.control-label{font-size:9px;color:#6b8a96;width:100px;text-transform:uppercase}
+.slider{flex:1;height:3px;-webkit-appearance:none;appearance:none;background:rgba(77,217,204,.3);outline:none}
+.slider::-webkit-slider-thumb{-webkit-appearance:none;width:10px;height:10px;background:#4dd9cc;cursor:pointer;box-shadow:0 0 8px #4dd9cc}
+.slider::-moz-range-thumb{width:10px;height:10px;background:#4dd9cc;cursor:pointer;border:none;box-shadow:0 0 8px #4dd9cc}
+.toggle{display:flex;align-items:center;gap:8px;cursor:pointer;padding:4px 8px;background:rgba(77,217,204,.1);border:1px solid rgba(77,217,204,.3);border-radius:3px;transition:all .2s}
+.toggle:hover{background:rgba(77,217,204,.2)}
+.toggle.on{background:#4dd9cc;color:#000;border-color:#4dd9cc}
+
+.legend{position:fixed;bottom:20px;right:20px;background:rgba(0,0,0,.85);border:1px solid #4dd9cc;padding:12px;z-index:100;font-size:9px}
+.legend-title{color:#4dd9cc;font-weight:bold;margin-bottom:8px;letter-spacing:1px}
+.legend-item{display:flex;align-items:center;gap:8px;margin:4px 0}
+.legend-dot{width:8px;height:8px;border-radius:50%;box-shadow:0 0 6px currentColor}
+
+.scan-grid{position:fixed;inset:0;pointer-events:none;z-index:1}
+.scan-line{position:absolute;width:100%;height:1px;background:linear-gradient(90deg,transparent,#4dd9cc,transparent);opacity:.1;animation:scanline 3s linear infinite}
+@keyframes scanline{from{top:0}to{top:100%}}
+
+.loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;background:#000;z-index:200;font-size:13px;color:#4dd9cc}
+.loading.hidden{display:none}
+.progress{width:300px;height:2px;background:rgba(77,217,204,.2);position:relative;overflow:hidden}
+.progress-bar{height:100%;background:#4dd9cc;width:0%;box-shadow:0 0 10px #4dd9cc;transition:width .3s}
+.loading-text{font-size:10px;color:#6b8a96;letter-spacing:2px}
+</style>
+</head><body>
+<div id="canvas"></div>
+<div class="scan-grid"><div class="scan-line"></div></div>
+
+<div class="loading" id="loading">
+<div>⬢ INITIALIZING LIDAR SCAN ⬢</div>
+<div class="progress"><div class="progress-bar" id="progress"></div></div>
+<div class="loading-text" id="loadStatus">CALIBRATING SENSORS...</div>
+</div>
+
+<div class="hud">
+<div class="hud-title">⬡ LIDAR SCAN ⬡</div>
+<div class="hud-row"><div class="hud-label">Points</div><div class="hud-value" id="pointCount">0</div></div>
+<div class="hud-row"><div class="hud-label">Deposits</div><div class="hud-value" id="depositCount">0</div></div>
+<div class="hud-row"><div class="hud-label">Max Depth</div><div class="hud-value" id="maxDepth">0m</div></div>
+<div class="hud-row"><div class="hud-label">Scan Mode</div><div class="hud-value" id="scanMode">FULL</div></div>
+<div class="hud-section">
+<div style="font-size:9px;color:#6b8a96;margin-bottom:6px">VISUALIZATION</div>
+<div class="scan-mode">
+<div class="mode-btn active" onclick="setScanMode('full')">FULL</div>
+<div class="mode-btn" onclick="setScanMode('species')">SPECIES</div>
+<div class="mode-btn" onclick="setScanMode('density')">DENSITY</div>
+</div>
+</div>
+<div class="hud-section">
+<div style="font-size:9px;color:#6b8a96;margin-bottom:6px">SCAN STATUS</div>
+<div style="font-size:9px;color:#4dd9cc" id="scanStatus">ACTIVE</div>
+</div>
+</div>
+
+<div class="scanner" id="scanner">
+<div class="scanner-close" onclick="closeScanner()">×</div>
+<div class="scanner-title">DEPOSIT ANALYSIS</div>
+<div id="scannerContent"></div>
+</div>
+
+<div class="depth-ruler">
+<div class="depth-mark"><span>0m</span><div class="depth-line"></div></div>
+<div class="depth-mark"><span>-50m</span><div class="depth-line"></div></div>
+<div class="depth-mark"><span>-100m</span><div class="depth-line"></div></div>
+<div class="depth-mark"><span>-150m</span><div class="depth-line"></div></div>
+</div>
+
+<div class="controls">
+<div class="control-row">
+<div class="control-label">Point Size</div>
+<input type="range" class="slider" id="pointSize" min="1" max="5" step="0.5" value="2">
+</div>
+<div class="control-row">
+<div class="control-label">Opacity</div>
+<input type="range" class="slider" id="opacity" min="0.1" max="1" step="0.1" value="0.7">
+</div>
+<div class="control-row">
+<div class="control-label">Depth Slice</div>
+<input type="range" class="slider" id="depthSlice" min="0" max="150" step="5" value="150">
+</div>
+<div class="control-row">
+<div class="control-label">Rotation</div>
+<input type="range" class="slider" id="rotation" min="0" max="10" step="1" value="2">
+</div>
+<div class="control-row" style="gap:6px;flex-wrap:wrap">
+<div class="toggle on" id="tog-xray" onclick="toggleXray()">X-RAY MODE</div>
+<div class="toggle on" id="tog-grid" onclick="toggleGrid()">SCAN GRID</div>
+</div>
+</div>
+
+<div class="legend">
+<div class="legend-title">SPECIES SIGNATURE</div>
+<div class="legend-item"><div class="legend-dot" style="background:#4dd9cc"></div>IMAGE (PNG/JPG)</div>
+<div class="legend-item"><div class="legend-dot" style="background:#d97b8f"></div>VIDEO (MP4)</div>
+<div class="legend-item"><div class="legend-dot" style="background:#e8b849"></div>AUDIO/CODE</div>
+<div class="legend-item"><div class="legend-dot" style="background:#9d7be8"></div>DATA (JSON)</div>
+<div class="legend-item"><div class="legend-dot" style="background:#6bbd8f"></div>WEB (HTML)</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const S={
+chambers:[],artifacts:[],points:[],
+scene:null,camera:null,renderer:null,pointCloud:null,
+rotation:0.002,autoRotate:true,
+mode:'full',xray:true,showGrid:true,
+pointSize:2,opacity:0.7,depthSlice:150,
+selected:null
+};
+
+const COLORS={
+png:0x4dd9cc,jpg:0x4dd9cc,
+mp4:0xd97b8f,
+mp3:0xe8b849,py:0xe8b849,
+json:0x9d7be8,
+html:0x6bbd8f,
+unknown:0x6b8a96
+};
+
+async function load(){
+try{
+updateProgress('Scanning subsurface...',20);
+const r=await fetch('/sys/primitive.jsonl');
+const t=await r.text();
+S.artifacts=t.trim().split('\n').map(l=>JSON.parse(l));
+
+updateProgress('Analyzing deposits...',40);
+buildChambers();
+
+updateProgress('Generating point cloud...',60);
+await initThree();
+
+updateProgress('Rendering scan...',80);
+generatePointCloud();
+
+updateProgress('Scan complete',100);
+setTimeout(()=>document.getElementById('loading').classList.add('hidden'),500);
+
+updateStats();
+animate();
+}catch(e){
+console.error(e);
+document.getElementById('loadStatus').innerHTML=`ERROR: ${e.message}`;
+}}
+
+function updateProgress(msg,pct){
+document.getElementById('loadStatus').textContent=msg.toUpperCase();
+document.getElementById('progress').style.width=pct+'%';
+}
+
+function buildChambers(){
+const m={};
+S.artifacts.forEach(a=>{
+const p=a.path.split('/');
+for(let d=1;d<=Math.min(p.length-1,3);d++){
+const cp=p.slice(0,d).join('/');
+if(!m[cp]){
+m[cp]={id:cp,name:p[d-1],depth:d-1,parent:d>1?p.slice(0,d-1).join('/'):null,children:[],artifacts:[],species:{},totalSize:0};
+}
+if(d===p.length-1){
+m[cp].artifacts.push(a);
+const s=(a.ext||'unknown').replace(/^\./,'');
+m[cp].species[s]=(m[cp].species[s]||0)+1;
+m[cp].totalSize+=(a.size||0);
+}
+}
+});
+Object.values(m).forEach(c=>{
+if(c.parent&&m[c.parent]&&!m[c.parent].children.includes(c.id)){
+m[c.parent].children.push(c.id);
+}
+});
+S.chambers=Object.values(m);
+}
+
+async function initThree(){
+S.scene=new THREE.Scene();
+S.scene.background=new THREE.Color(0x000000);
+S.scene.fog=new THREE.Fog(0x000000,300,800);
+
+S.camera=new THREE.PerspectiveCamera(75,window.innerWidth/window.innerHeight,1,2000);
+S.camera.position.set(0,100,300);
+S.camera.lookAt(0,0,0);
+
+S.renderer=new THREE.WebGLRenderer({antialias:true});
+S.renderer.setSize(window.innerWidth,window.innerHeight);
+document.getElementById('canvas').appendChild(S.renderer.domElement);
+
+// Ambient glow
+const ambient=new THREE.AmbientLight(0x1a3a52,0.3);
+S.scene.add(ambient);
+
+// Scan grid
+if(S.showGrid){
+const gridHelper=new THREE.GridHelper(600,60,0x4dd9cc,0x1a3a52);
+gridHelper.material.opacity=0.2;
+gridHelper.material.transparent=true;
+S.scene.add(gridHelper);
+
+// Vertical grid planes
+for(let i=-300;i<=300;i+=100){
+const geo=new THREE.PlaneGeometry(600,400);
+const mat=new THREE.MeshBasicMaterial({color:0x4dd9cc,wireframe:true,opacity:0.05,transparent:true});
+const plane=new THREE.Mesh(geo,mat);
+plane.position.z=i;
+S.scene.add(plane);
+}
+}
+
+window.addEventListener('resize',onResize);
+S.renderer.domElement.addEventListener('click',onClick);
+}
+
+function generatePointCloud(){
+const positions=[];
+const colors=[];
+const sizes=[];
+
+// Position chambers organically based on hash of name (consistent but natural-looking)
+const kingdoms=S.chambers.filter(c=>c.depth===0);
+
+// First pass: position chambers naturally using Perlin-like distribution
+kingdoms.forEach((kingdom,ki)=>{
+// Hash-based positioning for consistency
+const hash=hashString(kingdom.name);
+const angle=(hash%360)*(Math.PI/180);
+const radius=80+((hash>>8)%100);
+const kx=Math.cos(angle)*radius;
+const kz=Math.sin(angle)*radius;
+
+// Create organic cluster for kingdom
+kingdom.artifacts.forEach((art,ai)=>{
+// Gaussian-like distribution for natural clustering
+const r=gaussianRandom()*Math.sqrt(kingdom.artifacts.length)*2;
+const theta=Math.random()*Math.PI*2;
+const px=kx+Math.cos(theta)*r;
+const py=-(Math.abs(gaussianRandom())*15); // Irregular surface
+const pz=kz+Math.sin(theta)*r;
+
+const species=(art.ext||'unknown').replace(/^\./,'');
+const color=new THREE.Color(COLORS[species]||COLORS.unknown);
+
+positions.push(px,py,pz);
+colors.push(color.r,color.g,color.b);
+sizes.push(S.pointSize+(art.size?Math.log(art.size)/10:0));
+
+S.points.push({pos:[px,py,pz],chamber:kingdom,artifact:art,species,depth:0});
+});
+
+// Child chambers - subsurface layer with organic offset
+kingdom.children.forEach((cid,ci)=>{
+const child=S.chambers.find(c=>c.id===cid);
+if(!child)return;
+
+const childHash=hashString(child.name);
+const childAngle=angle+((childHash%180)-90)*(Math.PI/180)*0.5;
+const childRadius=radius*0.6+((childHash>>4)%30);
+const cx=Math.cos(childAngle)*childRadius;
+const cz=Math.sin(childAngle)*childRadius;
+
+child.artifacts.forEach(art=>{
+const r=gaussianRandom()*Math.sqrt(child.artifacts.length)*1.5;
+const theta=Math.random()*Math.PI*2;
+const px=cx+Math.cos(theta)*r;
+const py=-(50+Math.abs(gaussianRandom())*20); // Layer 1 depth variation
+const pz=cz+Math.sin(theta)*r;
+
+const species=(art.ext||'unknown').replace(/^\./,'');
+const color=new THREE.Color(COLORS[species]||COLORS.unknown);
+
+positions.push(px,py,pz);
+colors.push(color.r,color.g,color.b);
+sizes.push(S.pointSize+(art.size?Math.log(art.size)/10:0));
+
+S.points.push({pos:[px,py,pz],chamber:child,artifact:art,species,depth:1});
+});
+
+// Grandchildren - deepest layer
+child.children.forEach((gcid,gci)=>{
+const gc=S.chambers.find(c=>c.id===gcid);
+if(!gc)return;
+
+const gcHash=hashString(gc.name);
+const gcOffset=((gcHash%60)-30);
+const gcx=cx+gcOffset*0.5;
+const gcz=cz+gcOffset*0.3;
+
+gc.artifacts.forEach(art=>{
+const r=gaussianRandom()*Math.sqrt(gc.artifacts.length);
+const theta=Math.random()*Math.PI*2;
+const px=gcx+Math.cos(theta)*r;
+const py=-(100+Math.abs(gaussianRandom())*30); // Layer 2 deep variation
+const pz=gcz+Math.sin(theta)*r;
+
+const species=(art.ext||'unknown').replace(/^\./,'');
+const color=new THREE.Color(COLORS[species]||COLORS.unknown);
+
+positions.push(px,py,pz);
+colors.push(color.r,color.g,color.b);
+sizes.push(S.pointSize+(art.size?Math.log(art.size)/10:0));
+
+S.points.push({pos:[px,py,pz],chamber:gc,artifact:art,species,depth:2});
+});
+});
+});
+});
+
+// Generate organic iso-surfaces for each depth layer
+generateOrganicSurfaces();
+
+// Create point cloud geometry
+const geometry=new THREE.BufferGeometry();
+geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+geometry.setAttribute('size',new THREE.Float32BufferAttribute(sizes,1));
+
+// Helper functions for organic distribution
+function hashString(str){
+let hash=0;
+for(let i=0;i<str.length;i++){
+hash=((hash<<5)-hash)+str.charCodeAt(i);
+hash=hash&hash;
+}
+return Math.abs(hash);
+}
+
+function gaussianRandom(){
+// Box-Muller transform for Gaussian distribution
+let u=0,v=0;
+while(u===0)u=Math.random();
+while(v===0)v=Math.random();
+return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+}
+
+// Point material with custom shader for X-ray effect
+const material=new THREE.PointsMaterial({
+size:S.pointSize,
+vertexColors:true,
+transparent:true,
+opacity:S.opacity,
+blending:S.xray?THREE.AdditiveBlending:THREE.NormalBlending,
+sizeAttenuation:true
+});
+
+S.pointCloud=new THREE.Points(geometry,material);
+S.scene.add(S.pointCloud);
+}
+
+function generateOrganicSurfaces(){
+// Create contour surfaces for each depth layer using density-based marching squares
+const layers=[0,1,2];
+layers.forEach(depth=>{
+const layerPoints=S.points.filter(p=>p.depth===depth);
+if(layerPoints.length===0)return;
+
+// Build 2D density grid
+const gridSize=40;
+const gridRes=10;
+const grid=[];
+for(let i=0;i<gridSize;i++){
+grid[i]=[];
+for(let j=0;j<gridSize;j++){
+grid[i][j]=0;
+}
+}
+
+// Calculate density at each grid point
+layerPoints.forEach(p=>{
+const gx=Math.floor((p.pos[0]+200)/gridRes);
+const gz=Math.floor((p.pos[2]+200)/gridRes);
+if(gx>=0&&gx<gridSize&&gz>=0&&gz<gridSize){
+grid[gx][gz]++;
+// Spread to neighbors for smoothing
+if(gx>0)grid[gx-1][gz]+=0.3;
+if(gx<gridSize-1)grid[gx+1][gz]+=0.3;
+if(gz>0)grid[gx][gz-1]+=0.3;
+if(gz<gridSize-1)grid[gx][gz+1]+=0.3;
+}
+});
+
+// Find max density for normalization
+let maxDensity=0;
+grid.forEach(row=>row.forEach(v=>{if(v>maxDensity)maxDensity=v;}));
+
+// Generate contour lines at multiple levels using marching squares
+const contourLevels=[maxDensity*0.2,maxDensity*0.5,maxDensity*0.8];
+contourLevels.forEach((threshold,ti)=>{
+const contours=marchingSquares(grid,threshold,gridSize,gridRes);
+contours.forEach(contour=>{
+if(contour.length<3)return;
+
+// Create line from contour points
+const points=contour.map(p=>new THREE.Vector3(
+p[0]-200,
+-(depth*50+ti*5),
+p[1]-200
+));
+
+const lineGeo=new THREE.BufferGeometry().setFromPoints(points);
+const lineMat=new THREE.LineBasicMaterial({
+color:0x4dd9cc,
+opacity:0.3-ti*0.1,
+transparent:true,
+linewidth:1
+});
+const line=new THREE.Line(lineGeo,lineMat);
+S.scene.add(line);
+});
+});
+
+// Create organic surface mesh from density
+const surfaceGeo=new THREE.PlaneGeometry(400,400,gridSize-1,gridSize-1);
+const vertices=surfaceGeo.attributes.position.array;
+for(let i=0;i<gridSize;i++){
+for(let j=0;j<gridSize;j++){
+const idx=(i*gridSize+j)*3;
+const height=grid[i][j]/maxDensity*10;
+vertices[idx+2]=height; // Displace Z based on density
+}
+}
+surfaceGeo.computeVertexNormals();
+
+const surfaceMat=new THREE.MeshStandardMaterial({
+color:0x1a3a52,
+wireframe:true,
+opacity:0.15,
+transparent:true,
+side:THREE.DoubleSide
+});
+const surface=new THREE.Mesh(surfaceGeo,surfaceMat);
+surface.rotation.x=-Math.PI/2;
+surface.position.y=-(depth*50+5);
+S.scene.add(surface);
+});
+}
+
+function marchingSquares(grid,threshold,gridSize,gridRes){
+// Simple marching squares implementation for contour extraction
+const contours=[];
+const visited=[];
+for(let i=0;i<gridSize;i++)visited[i]=[];
+
+for(let i=0;i<gridSize-1;i++){
+for(let j=0;j<gridSize-1;j++){
+if(visited[i][j])continue;
+
+const a=grid[i][j]>threshold?1:0;
+const b=grid[i+1][j]>threshold?1:0;
+const c=grid[i+1][j+1]>threshold?1:0;
+const d=grid[i][j+1]>threshold?1:0;
+const caseIndex=a*8+b*4+c*2+d;
+
+if(caseIndex!==0&&caseIndex!==15){
+// Edge crossing detected
+const x=(i+0.5)*gridRes;
+const z=(j+0.5)*gridRes;
+let contour=[];
+traceContour(grid,threshold,i,j,gridSize,gridRes,contour,visited);
+if(contour.length>2)contours.push(contour);
+}
+}
+}
+return contours;
+}
+
+function traceContour(grid,threshold,si,sj,gridSize,gridRes,contour,visited){
+// Simple contour tracing
+let i=si,j=sj;
+let steps=0;
+const maxSteps=100;
+
+while(steps<maxSteps){
+if(i<0||i>=gridSize-1||j<0||j>=gridSize-1)break;
+if(visited[i][j])break;
+visited[i][j]=true;
+
+contour.push([i*gridRes,j*gridRes]);
+
+// Find next cell
+let found=false;
+const dirs=[[1,0],[0,1],[-1,0],[0,-1]];
+for(const[di,dj]of dirs){
+const ni=i+di,nj=j+dj;
+if(ni>=0&&ni<gridSize-1&&nj>=0&&nj<gridSize-1&&!visited[ni][nj]){
+const hasEdge=checkEdge(grid,threshold,ni,nj);
+if(hasEdge){i=ni;j=nj;found=true;break;}
+}
+}
+if(!found)break;
+steps++;
+}
+}
+
+function checkEdge(grid,threshold,i,j){
+const a=grid[i][j]>threshold?1:0;
+const b=grid[i+1][j]>threshold?1:0;
+const c=grid[i+1][j+1]>threshold?1:0;
+const d=grid[i][j+1]>threshold?1:0;
+const caseIndex=a*8+b*4+c*2+d;
+return caseIndex!==0&&caseIndex!==15;
+}
+
+function animate(){
+requestAnimationFrame(animate);
+
+if(S.autoRotate&&S.pointCloud){
+S.pointCloud.rotation.y+=S.rotation;
+}
+
+S.renderer.render(S.scene,S.camera);
+}
+
+function onResize(){
+S.camera.aspect=window.innerWidth/window.innerHeight;
+S.camera.updateProjectionMatrix();
+S.renderer.setSize(window.innerWidth,window.innerHeight);
+}
+
+const raycaster=new THREE.Raycaster();
+raycaster.params.Points.threshold=5;
+const mouse=new THREE.Vector2();
+
+function onClick(e){
+mouse.x=(e.clientX/window.innerWidth)*2-1;
+mouse.y=-(e.clientY/window.innerHeight)*2+1;
+raycaster.setFromCamera(mouse,S.camera);
+
+if(!S.pointCloud)return;
+const intersects=raycaster.intersectObject(S.pointCloud);
+if(intersects.length>0){
+const idx=intersects[0].index;
+const point=S.points[idx];
+if(point)analyzeDeposit(point);
+}
+}
+
+function analyzeDeposit(point){
+const chamber=point.chamber;
+const scanner=document.getElementById('scanner');
+const content=document.getElementById('scannerContent');
+
+let html=`
+<div class="deposit-info">
+<div style="font-weight:bold;color:#4dd9cc;font-size:11px;margin-bottom:8px">${chamber.name}</div>
+<div class="deposit-label">Depth Level</div>
+<div class="deposit-value">${chamber.depth}</div>
+<div class="deposit-label">Total Artifacts</div>
+<div class="deposit-value">${chamber.artifacts.length}</div>
+<div class="deposit-label">Volume</div>
+<div class="deposit-value">${(chamber.totalSize/1024/1024).toFixed(2)} MB</div>
+</div>
+
+<div style="margin-top:12px;font-size:9px;color:#6b8a96;margin-bottom:6px">SPECIES DISTRIBUTION</div>
+<div class="species-graph">`;
+
+Object.entries(chamber.species).sort((a,b)=>b[1]-a[1]).forEach(([sp,cnt])=>{
+const color=COLORS[sp]?'#'+COLORS[sp].toString(16).padStart(6,'0'):'#6b8a96';
+const pct=(cnt/chamber.artifacts.length*100).toFixed(1);
+html+=`<div class="species-bar" style="background:${color}20;border-color:${color};color:${color}">${sp.toUpperCase()} ${cnt} (${pct}%)</div>`;
+});
+
+html+=`</div>`;
+
+if(chamber.children.length>0){
+html+=`<div style="margin-top:12px;font-size:9px;color:#6b8a96">NESTED DEPOSITS: ${chamber.children.length}</div>`;
+}
+
+content.innerHTML=html;
+scanner.classList.add('open');
+}
+
+function closeScanner(){
+document.getElementById('scanner').classList.remove('open');
+}
+
+function updateStats(){
+document.getElementById('pointCount').textContent=S.points.length.toLocaleString();
+document.getElementById('depositCount').textContent=S.chambers.length;
+document.getElementById('maxDepth').textContent=Math.max(...S.chambers.map(c=>c.depth))*50+'m';
+}
+
+function setScanMode(mode){
+S.mode=mode;
+document.querySelectorAll('.mode-btn').forEach(btn=>btn.classList.remove('active'));
+event.target.classList.add('active');
+document.getElementById('scanMode').textContent=mode.toUpperCase();
+
+// Update visualization based on mode
+if(S.pointCloud){
+if(mode==='species'){
+// Already colored by species
+}else if(mode==='density'){
+// Could implement density-based coloring
+}
+}
+}
+
+function toggleXray(){
+S.xray=!S.xray;
+document.getElementById('tog-xray').classList.toggle('on');
+if(S.pointCloud){
+S.pointCloud.material.blending=S.xray?THREE.AdditiveBlending:THREE.NormalBlending;
+}
+}
+
+function toggleGrid(){
+S.showGrid=!S.showGrid;
+document.getElementById('tog-grid').classList.toggle('on');
+}
+
+document.getElementById('pointSize').oninput=e=>{
+S.pointSize=parseFloat(e.target.value);
+if(S.pointCloud)S.pointCloud.material.size=S.pointSize;
+};
+
+document.getElementById('opacity').oninput=e=>{
+S.opacity=parseFloat(e.target.value);
+if(S.pointCloud)S.pointCloud.material.opacity=S.opacity;
+};
+
+document.getElementById('depthSlice').oninput=e=>{
+S.depthSlice=parseFloat(e.target.value);
+// Could implement depth slicing
+};
+
+document.getElementById('rotation').oninput=e=>{
+S.rotation=parseFloat(e.target.value)/1000;
+};
+
+// Mouse drag to rotate
+let dragging=false,lastX=0,lastY=0;
+document.addEventListener('mousedown',e=>{
+if(e.target.tagName==='CANVAS'){
+dragging=true;
+lastX=e.clientX;
+lastY=e.clientY;
+S.autoRotate=false;
+}
+});
+document.addEventListener('mousemove',e=>{
+if(!dragging)return;
+const dx=e.clientX-lastX;
+const dy=e.clientY-lastY;
+if(S.pointCloud){
+S.pointCloud.rotation.y+=dx*0.005;
+S.pointCloud.rotation.x+=dy*0.005;
+}
+S.camera.position.y-=dy*0.3;
+lastX=e.clientX;
+lastY=e.clientY;
+});
+document.addEventListener('mouseup',()=>dragging=false);
+
+// Zoom
+document.addEventListener('wheel',e=>{
+S.camera.position.z=Math.max(100,Math.min(600,S.camera.position.z+e.deltaY*0.3));
+});
+
+load();
+</script>
+</body></html>

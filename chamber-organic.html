@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<title>ARKADU Organic Chamber Explorer — Viewport LOD</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0e1a;color:#4dd9cc;font-family:monospace;overflow:hidden}
+#canvas{display:block;cursor:grab}
+#canvas.dragging{cursor:grabbing}
+.hud{position:fixed;top:20px;left:20px;background:rgba(0,0,0,.95);border:1px solid #4dd9cc;
+padding:16px;width:340px;z-index:100;font-size:11px;border-radius:8px}
+.stat{margin:6px 0;padding:6px;background:rgba(77,217,204,.05);border-radius:4px}
+.label{color:#6b8a96;font-size:9px;text-transform:uppercase}
+.value{color:#4dd9cc;font-size:11px;font-weight:bold;margin-top:2px}
+.breadcrumb{margin:12px 0;padding:8px;background:rgba(77,217,204,.08);border-radius:4px;font-size:10px;
+color:#4dd9cc;cursor:pointer}
+.breadcrumb:hover{background:rgba(77,217,204,.15)}
+.loading-overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);display:flex;align-items:center;
+justify-content:center;z-index:150;opacity:0;pointer-events:none;transition:opacity .3s}
+.loading-overlay.active{opacity:1;pointer-events:all}
+.loading-content{text-align:center}
+.spinner{width:60px;height:60px;border:4px solid rgba(77,217,204,.2);border-top-color:#4dd9cc;
+border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 20px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.inspector{position:fixed;top:20px;right:20px;background:rgba(0,0,0,.95);
+border:1px solid #d97b8f;padding:16px;width:400px;max-height:80vh;overflow-y:auto;
+z-index:100;border-radius:8px;transform:translateX(450px);transition:transform .3s}
+.inspector.open{transform:translateX(0)}
+.close{position:absolute;top:16px;right:16px;cursor:pointer;color:#d97b8f;font-size:18px}
+.info-block{margin:10px 0;padding:10px;background:rgba(77,217,204,.05);border-radius:6px;font-size:10px}
+.btn-drill{padding:10px;margin:8px 0;background:rgba(77,217,204,.15);border:2px solid #4dd9cc;
+color:#4dd9cc;cursor:pointer;font-size:11px;border-radius:6px;text-align:center;font-weight:bold}
+.btn-drill:hover{background:rgba(77,217,204,.3);box-shadow:0 0 15px rgba(77,217,204,.4)}
+.loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+flex-direction:column;gap:20px;background:#000;z-index:200;color:#4dd9cc}
+.loading.hidden{display:none}
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+
+<div class="loading" id="loading">
+<div>⬢ INITIALIZING CHAMBER SYSTEM ⬢</div>
+<div id="status">Loading artifacts...</div>
+</div>
+
+<div class="loading-overlay" id="loadingOverlay">
+<div class="loading-content">
+<div class="spinner"></div>
+<div style="font-size:12px;color:#4dd9cc">Loading chambers...</div>
+</div>
+</div>
+
+<div class="hud">
+<div style="font-size:14px;color:#4dd9cc;font-weight:bold;margin-bottom:12px">
+ORGANIC CHAMBER EXPLORER
+</div>
+<div id="breadcrumbs"></div>
+<div class="stat"><div class="label">Visible Chambers</div><div class="value" id="visibleChambers">0</div></div>
+<div class="stat"><div class="label">In Viewport</div><div class="value" id="inViewport">0</div></div>
+<div class="stat"><div class="label">Total Artifacts</div><div class="value" id="totalArtifacts">0</div></div>
+<div class="stat"><div class="label">Zoom</div><div class="value" id="zoomLevel">1.0x</div></div>
+<div style="font-size:9px;color:#6b8a96;margin-top:12px">
+<strong>CONTROLS</strong><br>
+• Drag to pan<br>
+• Scroll to zoom<br>
+• Click to inspect<br>
+• Double-click to enter
+</div>
+</div>
+
+<div class="inspector" id="inspector">
+<div class="close" onclick="closeInspector()">×</div>
+<div style="font-size:13px;color:#d97b8f;font-weight:bold;margin-bottom:12px">CHAMBER</div>
+<div id="inspectorContent"></div>
+</div>
+
+<script>
+const CAN=document.getElementById('canvas');
+const CTX=CAN.getContext('2d');
+let DPR=window.devicePixelRatio||1;
+let W,H;
+
+const STATE={
+artifacts:[],
+chambers:[],
+chamberMap:{},
+navStack:[],
+visibleChambers:[],
+zoom:1,
+panX:0,
+panY:0,
+dragging:false,
+lastX:0,
+lastY:0,
+selectedChamber:null,
+hoverChamber:null,
+viewportBounds:{minX:0,maxX:0,minY:0,maxY:0}
+};
+
+const DEPTH_COLORS=[
+'#d97b8f','#e8b849','#9d7be8','#4dd9cc','#6bbd8f','#ffaa44'
+];
+
+// Simple noise function for organic shapes
+function noise(x,y,seed=0){
+const n=Math.sin(x*12.9898+y*78.233+seed)*43758.5453;
+return n-Math.floor(n);
+}
+
+async function load(){
+try{
+updateStatus('Loading artifacts...');
+const r=await fetch('sys/primitive.jsonl');
+const t=await r.text();
+STATE.artifacts=t.trim().split('\n').map(l=>JSON.parse(l));
+console.log(`Loaded ${STATE.artifacts.length} artifacts`);
+updateStatus('Building chamber hierarchy...');
+buildChambers();
+
+updateStatus('Initializing view...');
+resize();
+navigateTo(0,null,false);
+
+document.getElementById('loading').classList.add('hidden');
+updateHUD();
+animate();
+console.log('Started animation loop');
+}catch(e){
+console.error(e);
+document.getElementById('status').innerHTML=`<span style="color:#d97b8f">ERROR: ${e.message}</span>`;
+}}
+function updateStatus(msg){
+document.getElementById('status').textContent=msg;
+}
+
+function buildChambers(){
+STATE.chamberMap={};
+
+STATE.artifacts.forEach(art=>{
+const parts=art.path.split('/');
+for(let d=0;d<parts.length-1;d++){
+const id=parts.slice(0,d+1).join('/');
+if(!STATE.chamberMap[id]){
+STATE.chamberMap[id]={
+id:id,
+name:parts[d],
+depth:d,
+parent:d>0?parts.slice(0,d).join('/'):null,
+children:[],
+artifacts:[],
+totalCount:0,
+totalSize:0,
+species:{},
+blob:null
+};
+}
+}
+
+const leafId=parts.slice(0,-1).join('/');
+if(STATE.chamberMap[leafId]){
+STATE.chamberMap[leafId].artifacts.push(art);
+const ext=(art.ext||'').replace(/^\./,'')||'unknown';
+STATE.chamberMap[leafId].species[ext]=(STATE.chamberMap[leafId].species[ext]||0)+1;
+}
+});
+
+Object.values(STATE.chamberMap).forEach(ch=>{
+if(ch.parent&&STATE.chamberMap[ch.parent]){
+if(!STATE.chamberMap[ch.parent].children.includes(ch.id)){
+STATE.chamberMap[ch.parent].children.push(ch.id);
+}
+}
+});
+
+function aggregate(ch){
+ch.totalCount=ch.artifacts.length;
+ch.totalSize=ch.artifacts.reduce((s,a)=>s+(a.size||0),0);
+ch.children.forEach(childId=>{
+const child=STATE.chamberMap[childId];
+if(child){
+aggregate(child);
+ch.totalCount+=child.totalCount;
+ch.totalSize+=child.totalSize;
+Object.entries(child.species).forEach(([sp,cnt])=>{
+ch.species[sp]=(ch.species[sp]||0)+cnt;
+});
+}
+});
+}
+
+Object.values(STATE.chamberMap).forEach(aggregate);
+STATE.chambers=Object.values(STATE.chamberMap);
+console.log(`Built ${STATE.chambers.length} chambers`);
+}
+
+function navigateTo(depth,parentId,animate=true){
+if(animate){
+showLoadingOverlay();
+setTimeout(()=>{
+actualNavigate(depth,parentId);
+hideLoadingOverlay();
+},300);
+}else{
+actualNavigate(depth,parentId);
+}}
+
+function showLoadingOverlay(){
+document.getElementById('loadingOverlay').classList.add('active');
+}
+
+function hideLoadingOverlay(){
+document.getElementById('loadingOverlay').classList.remove('active');
+}
+
+function actualNavigate(depth,parentId){
+// Update nav stack
+if(STATE.navStack.length===0||STATE.navStack[STATE.navStack.length-1].parentId!==parentId){
+STATE.navStack.push({depth,parentId});
+}
+
+STATE.visibleChambers=STATE.chambers.filter(ch=>{
+if(parentId===null){
+return ch.depth===depth&&!ch.parent;
+}else{
+return ch.parent===parentId;
+}
+});
+
+console.log(`Navigate to depth ${depth}, parent ${parentId||'ROOT'}: ${STATE.visibleChambers.length} chambers`);
+
+// Organic layout with irregular spacing
+const cols=Math.ceil(Math.sqrt(STATE.visibleChambers.length));
+const spacing=400;
+
+STATE.visibleChambers.forEach((ch,i)=>{
+const col=i%cols;
+const row=Math.floor(i/cols);
+const jitterX=(noise(i,0,1)-0.5)*120;
+const jitterY=(noise(i,1,1)-0.5)*120;
+ch.x=-(cols*spacing)/2+col*spacing+spacing/2+jitterX;
+ch.y=-(Math.ceil(STATE.visibleChambers.length/cols)*spacing)/2+row*spacing+spacing/2+jitterY;
+ch.baseSize=Math.min(180,60+Math.log(ch.totalCount+1)*18);
+ch.blob=generateBlob(ch.baseSize,i); // Use index as seed for consistency
+});
+
+console.log(`Laid out ${STATE.visibleChambers.length} chambers`);
+if(STATE.visibleChambers.length>0){
+const first=STATE.visibleChambers[0];
+console.log('First chamber:',{name:first.name,x:first.x,y:first.y,size:first.baseSize,hasBlob:!!first.blob});
+}
+
+updateBreadcrumbs();
+updateHUD();
+}
+
+function generateBlob(size,seed){
+const points=12;
+const angles=[];
+const radii=[];
+for(let i=0;i<points;i++){
+const angle=(i/points)*Math.PI*2;
+const r=size*(0.7+noise(i,seed,0)*0.5);
+angles.push(angle);
+radii.push(r);
+}
+return {angles,radii};
+}
+
+function drawBlob(x,y,blob,color,selected=false){
+if(!blob)return;
+CTX.beginPath();
+for(let i=0;i<blob.angles.length;i++){
+const a=blob.angles[i];
+const r=blob.radii[i];
+const px=x+Math.cos(a)*r;
+const py=y+Math.sin(a)*r;
+if(i===0)CTX.moveTo(px,py);
+else CTX.lineTo(px,py);
+}
+CTX.closePath();
+
+CTX.fillStyle=hexToRgba(color,0.12);
+CTX.fill();
+
+CTX.strokeStyle=hexToRgba(color,selected?1:0.6);
+CTX.lineWidth=selected?3:1.5;
+CTX.stroke();
+}
+
+function updateViewportBounds(){
+const margin=200;
+STATE.viewportBounds={
+minX:(-W/2-STATE.panX-margin)/STATE.zoom,
+maxX:(-W/2-STATE.panX+W+margin)/STATE.zoom,
+minY:(-H/2-STATE.panY-margin)/STATE.zoom,
+maxY:(-H/2-STATE.panY+H+margin)/STATE.zoom
+};
+}
+
+function isInViewport(ch){
+if(!ch.blob)return false;
+const maxR=Math.max(...ch.blob.radii);
+return ch.x+maxR>=STATE.viewportBounds.minX&&
+ch.x-maxR<=STATE.viewportBounds.maxX&&
+ch.y+maxR>=STATE.viewportBounds.minY&&
+ch.y-maxR<=STATE.viewportBounds.maxY;
+}
+
+function draw(){
+CTX.fillStyle='#0a0e1a';
+CTX.fillRect(0,0,W*DPR,H*DPR);
+
+if(STATE.visibleChambers.length===0){
+console.warn('No visible chambers to draw!');
+return;
+}
+
+updateViewportBounds();
+
+CTX.save();
+CTX.scale(DPR,DPR);
+CTX.translate(W/2+STATE.panX,H/2+STATE.panY);
+CTX.scale(STATE.zoom,STATE.zoom);
+
+let inViewportCount=0;
+
+STATE.visibleChambers.forEach(ch=>{
+if(!isInViewport(ch))return;
+inViewportCount++;
+
+const color=ch.isArtifact?getSpeciesColor(ch.ext):DEPTH_COLORS[ch.depth%DEPTH_COLORS.length];
+const selected=ch===STATE.selectedChamber;
+const hover=ch===STATE.hoverChamber;
+
+drawBlob(ch.x,ch.y,ch.blob,color,selected||hover);
+
+// Name (smaller for artifacts)
+if(!ch.isArtifact){
+CTX.fillStyle=color;
+CTX.font='bold 13px monospace';
+CTX.textAlign='center';
+CTX.textBaseline='middle';
+CTX.fillText(ch.name,ch.x,ch.y-8);
+
+// Stats
+CTX.fillStyle='#6b8a96';
+CTX.font='10px monospace';
+CTX.fillText(`${ch.totalCount}`,ch.x,ch.y+10);
+
+if(ch.children.length>0){
+CTX.fillStyle='#4dd9cc';
+CTX.fillText(`${ch.children.length} →`,ch.x,ch.y+22);
+}else if(ch.artifacts.length>0){
+CTX.fillStyle='#e8b849';
+CTX.fillText(`🔬`,ch.x,ch.y+22);
+}
+}else{
+// Artifact - show just extension
+CTX.fillStyle=color;
+CTX.font='9px monospace';
+CTX.textAlign='center';
+CTX.textBaseline='middle';
+CTX.fillText(ch.ext||'?',ch.x,ch.y);
+}
+});
+
+document.getElementById('inViewport').textContent=inViewportCount;
+
+CTX.restore();
+}
+
+function animate(){
+requestAnimationFrame(animate);
+draw();
+}
+
+function formatSize(bytes){
+if(bytes<1024)return bytes+'B';
+if(bytes<1024*1024)return(bytes/1024).toFixed(1)+'KB';
+if(bytes<1024*1024*1024)return(bytes/1024/1024).toFixed(1)+'MB';
+return(bytes/1024/1024/1024).toFixed(2)+'GB';
+}
+
+function hexToRgba(hex,alpha){
+const h=hex.replace('#','');
+const r=parseInt(h.slice(0,2),16);
+const g=parseInt(h.slice(2,4),16);
+const b=parseInt(h.slice(4,6),16);
+return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function getSpeciesColor(ext){
+const colors={
+jpg:'#d97b8f',jpeg:'#d97b8f',png:'#d97b8f',gif:'#d97b8f',webp:'#d97b8f',
+mp4:'#e8b849',mov:'#e8b849',avi:'#e8b849',webm:'#e8b849',
+mp3:'#9d7be8',wav:'#9d7be8',flac:'#9d7be8',ogg:'#9d7be8',
+json:'#6bbd8f',txt:'#6bbd8f',md:'#6bbd8f',
+py:'#4dd9cc',js:'#4dd9cc',html:'#4dd9cc',css:'#4dd9cc'
+};
+const e=(ext||'').toLowerCase().replace(/^\./,'');
+return colors[e]||'#888';
+}
+
+function updateBreadcrumbs(){
+let html='';
+STATE.navStack.forEach((nav,i)=>{
+const isLast=i===STATE.navStack.length-1;
+let label='ROOT';
+if(nav.depth==='artifacts'){
+const ch=STATE.chamberMap[nav.parentId];
+if(ch)label=ch.name+' [ARTIFACTS]';
+}else if(nav.parentId){
+const ch=STATE.chamberMap[nav.parentId];
+if(ch)label=ch.name;
+}
+html+=`<div class="breadcrumb" onclick="goToNav(${i})" style="${isLast?'font-weight:bold':''}">
+${label} ${nav.depth==='artifacts'?'':'(depth '+nav.depth+')'}
+</div>`;
+});
+document.getElementById('breadcrumbs').innerHTML=html;
+}
+
+window.goToNav=function(index){
+const nav=STATE.navStack[index];
+STATE.navStack=STATE.navStack.slice(0,index+1);
+navigateTo(nav.depth,nav.parentId);
+closeInspector();
+};
+
+function updateHUD(){
+document.getElementById('visibleChambers').textContent=STATE.visibleChambers.length;
+document.getElementById('totalArtifacts').textContent=STATE.artifacts.length.toLocaleString();
+document.getElementById('zoomLevel').textContent=STATE.zoom.toFixed(2)+'x';
+}
+
+function resize(){
+W=window.innerWidth;
+H=window.innerHeight;
+CAN.width=W*DPR;
+CAN.height=H*DPR;
+CAN.style.width=W+'px';
+CAN.style.height=H+'px';
+}
+
+window.addEventListener('resize',()=>{resize();});
+
+CAN.addEventListener('wheel',e=>{
+e.preventDefault();
+const delta=e.deltaY>0?0.9:1.1;
+STATE.zoom=Math.max(0.2,Math.min(5,STATE.zoom*delta));
+updateHUD();
+},{passive:false});
+
+CAN.addEventListener('mousedown',e=>{
+STATE.dragging=true;
+STATE.lastX=e.clientX;
+STATE.lastY=e.clientY;
+CAN.classList.add('dragging');
+});
+
+CAN.addEventListener('mousemove',e=>{
+if(STATE.dragging){
+STATE.panX+=e.clientX-STATE.lastX;
+STATE.panY+=e.clientY-STATE.lastY;
+STATE.lastX=e.clientX;
+STATE.lastY=e.clientY;
+updateHUD();
+}else{
+// Hover detection
+const rect=CAN.getBoundingClientRect();
+const mx=((e.clientX-rect.left-W/2-STATE.panX)/STATE.zoom);
+const my=((e.clientY-rect.top-H/2-STATE.panY)/STATE.zoom);
+
+STATE.hoverChamber=null;
+STATE.visibleChambers.forEach(ch=>{
+if(!isInViewport(ch))return;
+const dx=ch.x-mx;
+const dy=ch.y-my;
+const d=Math.sqrt(dx*dx+dy*dy);
+if(d<ch.baseSize){
+STATE.hoverChamber=ch;
+}
+});
+}
+});
+
+CAN.addEventListener('mouseup',()=>{
+STATE.dragging=false;
+CAN.classList.remove('dragging');
+});
+
+let clickTimeout=null;
+CAN.addEventListener('click',e=>{
+if(clickTimeout){
+clearTimeout(clickTimeout);
+clickTimeout=null;
+return;
+}
+
+clickTimeout=setTimeout(()=>{
+if(STATE.dragging){
+clickTimeout=null;
+return;
+}
+const rect=CAN.getBoundingClientRect();
+const mx=(e.clientX-rect.left-W/2-STATE.panX)/STATE.zoom;
+const my=(e.clientY-rect.top-H/2-STATE.panY)/STATE.zoom;
+
+let closest=null;
+let minDist=Infinity;
+
+STATE.visibleChambers.forEach(ch=>{
+if(!isInViewport(ch))return;
+const dx=ch.x-mx;
+const dy=ch.y-my;
+const d=Math.sqrt(dx*dx+dy*dy);
+if(d<ch.baseSize&&d<minDist){
+minDist=d;
+closest=ch;
+}
+});
+
+if(closest){
+STATE.selectedChamber=closest;
+inspectChamber(closest);
+}
+clickTimeout=null;
+},250);
+});
+
+CAN.addEventListener('dblclick',e=>{
+e.preventDefault();
+if(clickTimeout){
+clearTimeout(clickTimeout);
+clickTimeout=null;
+}
+
+const rect=CAN.getBoundingClientRect();
+const mx=(e.clientX-rect.left-W/2-STATE.panX)/STATE.zoom;
+const my=(e.clientY-rect.top-H/2-STATE.panY)/STATE.zoom;
+
+let closest=null;
+let minDist=Infinity;
+
+STATE.visibleChambers.forEach(ch=>{
+if(!isInViewport(ch))return;
+const dx=ch.x-mx;
+const dy=ch.y-my;
+const d=Math.sqrt(dx*dx+dy*dy);
+if(d<ch.baseSize&&d<minDist){
+minDist=d;
+closest=ch;
+}
+});
+
+if(closest){
+if(closest.children.length>0){
+drillDown(closest.id);
+}else if(closest.artifacts.length>0){
+showArtifacts(closest.id);
+}
+}
+});
+
+function inspectChamber(ch){
+const color=DEPTH_COLORS[ch.depth%DEPTH_COLORS.length];
+let html=`
+<div class="info-block">
+<div class="label">Name</div><div class="value" style="color:${color}">${ch.name}</div>
+<div class="label">Depth</div><div class="value">${ch.depth}</div>
+<div class="label">Artifacts</div><div class="value">${ch.totalCount.toLocaleString()}</div>
+<div class="label">Size</div><div class="value">${formatSize(ch.totalSize)}</div>
+<div class="label">Children</div><div class="value">${ch.children.length}</div>
+<div class="label">Species Types</div><div class="value">${Object.keys(ch.species).length}</div>
+</div>`;
+
+if(ch.children.length>0){
+html+=`<div class="btn-drill" onclick="drillDown('${ch.id}')">
+⬇ ENTER ${ch.name.toUpperCase()} (${ch.children.length} chambers)
+</div>`;
+}else if(ch.artifacts.length>0&&!ch.isArtifact){
+html+=`<div class="btn-drill" onclick="showArtifacts('${ch.id}')">
+🔬 VIEW ${ch.artifacts.length} ARTIFACTS (species level)
+</div>`;
+}
+
+if(ch.isArtifact){
+const art=ch.artifacts[0];
+html+=`<div class="info-block">
+<div class="label">File Type</div><div class="value">${ch.ext||'unknown'}</div>
+<div class="label">Full Path</div><div class="value" style="font-size:9px;word-break:break-all">${art.path}</div>
+</div>`;
+}
+
+if(Object.keys(ch.species).length>0){
+html+=`<div style="font-size:11px;color:#e8b849;font-weight:bold;margin:12px 0">
+SPECIES COMPOSITION</div>`;
+Object.entries(ch.species).sort((a,b)=>b[1]-a[1]).slice(0,8).forEach(([sp,cnt])=>{
+const pct=(cnt/ch.totalCount*100).toFixed(1);
+html+=`<div style="padding:5px;margin:3px 0;background:rgba(232,184,73,.05);
+border-left:2px solid #e8b849;font-size:10px">
+<strong>${sp.toUpperCase()}</strong>: ${cnt} (${pct}%)
+</div>`;
+});
+}
+
+document.getElementById('inspectorContent').innerHTML=html;
+document.getElementById('inspector').classList.add('open');
+}
+
+window.drillDown=function(chamberId){
+const ch=STATE.chamberMap[chamberId];
+if(ch&&ch.children.length>0){
+navigateTo(ch.depth+1,ch.id);
+closeInspector();
+}
+};
+
+function showArtifacts(chamberId){
+const ch=STATE.chamberMap[chamberId];
+if(!ch||ch.artifacts.length===0)return;
+
+showLoadingOverlay();
+setTimeout(()=>{
+STATE.navStack.push({depth:'artifacts',parentId:chamberId});
+
+// Layout artifacts as small dots
+const arts=ch.artifacts;
+const cols=Math.ceil(Math.sqrt(arts.length));
+const spacing=80;
+
+STATE.visibleChambers=arts.map((art,i)=>{
+const col=i%cols;
+const row=Math.floor(i/cols);
+const jitterX=(noise(i,0,2)-0.5)*20;
+const jitterY=(noise(i,1,2)-0.5)*20;
+return{
+id:art.path,
+name:art.path.split('/').pop(),
+path:art.path,
+depth:'artifact',
+parent:chamberId,
+children:[],
+artifacts:[art],
+totalCount:1,
+totalSize:art.size||0,
+species:{[(art.ext||'').replace(/^\./,'')||'unknown']:1},
+x:-(cols*spacing)/2+col*spacing+spacing/2+jitterX,
+y:-(Math.ceil(arts.length/cols)*spacing)/2+row*spacing+spacing/2+jitterY,
+baseSize:12,
+blob:generateBlob(12,i),
+isArtifact:true,
+ext:art.ext
+};
+});
+
+updateBreadcrumbs();
+updateHUD();
+hideLoadingOverlay();
+},300);
+}
+
+function closeInspector(){
+document.getElementById('inspector').classList.remove('open');
+STATE.selectedChamber=null;
+}
+
+load();
+</script>
+</body></html>

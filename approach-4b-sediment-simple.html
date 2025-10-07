@@ -1,0 +1,1412 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<title>Approach 4B: Sedimentary Strata - Simplified Immediate Render</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0e1a;color:#4dd9cc;font-family:monospace;overflow:hidden}
+canvas{display:block;width:100vw;height:100vh;cursor:pointer}
+
+/* Vertical control strip - mirrors core sample */
+#excavationTools{position:fixed;left:20px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.95);border:1px solid rgba(77,217,204,.3);padding:15px 8px;border-radius:8px;z-index:100;backdrop-filter:blur(10px);width:60px;box-shadow:0 0 15px rgba(77,217,204,.3)}
+.tool-section{margin-bottom:15px;padding-bottom:15px;border-bottom:1px solid rgba(77,217,204,.2)}
+.tool-section:last-child{border-bottom:none;margin-bottom:0}
+.tool-label{font-size:7px;color:#6b8a96;margin-bottom:8px;text-transform:uppercase;letter-spacing:1px;text-align:center;writing-mode:horizontal-tb}
+.tool-row{display:flex;flex-direction:column;gap:8px;align-items:center}
+.mode-indicator{font-size:8px;color:#e8b849;padding:6px 4px;background:rgba(232,184,73,.1);border-radius:4px;margin-top:8px;text-align:center;writing-mode:vertical-rl;transform:rotate(180deg)}
+.tool-btn{width:44px;height:44px;background:rgba(77,217,204,.1);border:1px solid #4dd9cc;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;position:relative;font-size:10px}
+.tool-btn:hover{background:rgba(77,217,204,.3);transform:scale(1.05)}
+.tool-btn:active{transform:scale(0.95)}
+.tool-btn.active{background:rgba(232,184,73,.25);border-color:#e8b849;box-shadow:0 0 12px rgba(232,184,73,.6);animation:pulse 2s ease-in-out infinite}
+
+@keyframes pulse{
+  0%, 100%{box-shadow:0 0 12px rgba(232,184,73,.6)}
+  50%{box-shadow:0 0 20px rgba(232,184,73,.9)}
+}
+.tool-btn.disabled{opacity:0.3;cursor:not-allowed;pointer-events:none}
+
+/* Mode overlays */
+.mode-overlay{position:fixed;inset:0;pointer-events:none;z-index:5}
+.mode-overlay.flag-mode{background:radial-gradient(circle at center,rgba(232,184,73,.05) 0%,transparent 70%)}
+.mode-overlay.tag-mode{background:radial-gradient(circle at center,rgba(157,123,232,.05) 0%,transparent 70%)}
+.mode-overlay.measure-mode{background:radial-gradient(circle at center,rgba(107,189,143,.05) 0%,transparent 70%)}
+
+/* Strata interaction */
+.strata-flagged{outline:3px solid #e8b849;outline-offset:-3px}
+.strata-tagged{outline:3px solid #9d7be8;outline-offset:-3px}
+.flag-marker{position:absolute;width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-bottom:12px solid #e8b849;filter:drop-shadow(0 0 4px rgba(232,184,73,.6))}
+
+/* Filter panel */
+#filterPanel{position:fixed;top:80px;right:20px;background:rgba(0,0,0,.95);border:1px solid rgba(77,217,204,.3);padding:15px;border-radius:8px;z-index:50;backdrop-filter:blur(15px);box-shadow:0 0 20px rgba(77,217,204,.2);min-width:200px}
+.filter-section{margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid rgba(77,217,204,.2)}
+.filter-section:last-child{border-bottom:none;margin-bottom:0}
+.filter-title{font-size:9px;color:#6b8a96;margin-bottom:8px;text-transform:uppercase;letter-spacing:1px;font-weight:bold}
+.filter-option{display:flex;align-items:center;gap:8px;padding:6px 8px;cursor:pointer;border-radius:4px;transition:all .2s;font-size:10px}
+.filter-option:hover{background:rgba(77,217,204,.1)}
+.filter-option input[type="checkbox"]{width:14px;height:14px;cursor:pointer}
+.filter-option label{cursor:pointer;color:#4dd9cc;flex:1}
+
+/* Context menu */
+#contextMenu{position:fixed;background:rgba(0,0,0,.98);border:1px solid rgba(77,217,204,.4);border-radius:6px;padding:8px 0;z-index:1000;display:none;min-width:150px;backdrop-filter:blur(10px)}
+.context-item{padding:8px 12px;font-size:10px;color:#4dd9cc;cursor:pointer;transition:all .2s}
+.context-item:hover{background:rgba(77,217,204,.2);color:#e8b849}
+.context-divider{height:1px;background:rgba(77,217,204,.2);margin:4px 0}
+.context-label{font-size:8px;color:#6b8a96;padding:4px 12px;text-transform:uppercase;letter-spacing:1px}
+
+/* Geometric shapes */
+.shape{width:24px;height:24px;position:relative}
+.shape-triangle{width:0;height:0;border-left:12px solid transparent;border-right:12px solid transparent;border-bottom:20px solid currentColor}
+.shape-triangle.up{transform:rotate(0deg)}
+.shape-triangle.down{transform:rotate(180deg)}
+.shape-triangle.left{transform:rotate(90deg)}
+.shape-triangle.right{transform:rotate(-90deg)}
+.shape-circle{width:20px;height:20px;border-radius:50%;border:3px solid currentColor}
+.shape-square{width:18px;height:18px;border:3px solid currentColor}
+.shape-home{width:20px;height:16px;position:relative}
+.shape-home::before{content:'';position:absolute;width:0;height:0;border-left:10px solid transparent;border-right:10px solid transparent;border-bottom:10px solid currentColor;top:-8px;left:0}
+.shape-home::after{content:'';position:absolute;width:20px;height:10px;background:currentColor;bottom:0;left:0}
+.shape-stack{width:20px;height:18px;position:relative}
+.shape-stack::before,.shape-stack::after{content:'';position:absolute;width:20px;height:3px;background:currentColor;left:0}
+.shape-stack::before{top:0}
+.shape-stack::after{bottom:0}
+.shape-stack .middle{position:absolute;width:20px;height:3px;background:currentColor;top:50%;transform:translateY(-50%)}
+.shape-layers{width:22px;height:20px;position:relative}
+.shape-layers::before,.shape-layers::after{content:'';position:absolute;width:100%;height:4px;background:currentColor;left:0;border-radius:2px}
+.shape-layers::before{top:0}
+.shape-layers::after{bottom:0}
+.shape-layers .mid1,.shape-layers .mid2{position:absolute;width:100%;height:4px;background:currentColor;left:0;border-radius:2px}
+.shape-layers .mid1{top:33%}
+.shape-layers .mid2{top:66%}
+
+/* HUD - Operating System style with mobile responsiveness */
+#hud{position:fixed;top:20px;left:100px;right:180px;background:rgba(0,0,0,.92);border:1px solid rgba(77,217,204,.4);padding:12px 20px;border-radius:8px;z-index:10;backdrop-filter:blur(15px);box-shadow:0 0 20px rgba(77,217,204,.2);display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap}
+.hud-section{display:flex;flex-direction:column;gap:3px;min-width:50px}
+.hud-label{font-size:8px;color:#6b8a96;text-transform:uppercase;letter-spacing:1px}
+.hud-value{font-size:11px;color:#4dd9cc;font-weight:bold}
+.hud-mode{font-size:13px;color:#e8b849;font-weight:bold;padding:6px 12px;background:rgba(232,184,73,.15);border-radius:5px;border:1px solid rgba(232,184,73,.4);text-transform:uppercase;letter-spacing:1px;white-space:nowrap}
+.hud-filters{display:flex;gap:8px;align-items:center}
+.filter-chip{font-size:9px;padding:4px 10px;background:rgba(77,217,204,.15);border:1px solid rgba(77,217,204,.4);border-radius:12px;cursor:pointer;transition:all .2s;color:#4dd9cc}
+.filter-chip:hover{background:rgba(77,217,204,.3);transform:translateY(-1px)}
+.filter-chip.active{background:rgba(232,184,73,.25);border-color:#e8b849;color:#e8b849}
+
+/* Mobile compact mode */
+@media (max-width: 768px){
+  #hud{left:80px;right:20px;padding:8px 12px;gap:10px}
+  .hud-label{font-size:7px}
+  .hud-value{font-size:10px}
+  .hud-mode{font-size:11px;padding:5px 10px}
+  .filter-chip{font-size:8px;padding:3px 8px}
+}
+
+@media (max-width: 480px){
+  #hud{left:20px;top:80px;right:20px;flex-direction:column;align-items:stretch;padding:8px;gap:8px}
+  .hud-section{flex-direction:row;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(77,217,204,.2);padding:4px 0}
+  .hud-section:last-of-type{border-bottom:none}
+  .hud-label{font-size:9px;flex:1}
+  .hud-value{font-size:12px;text-align:right}
+  .hud-mode{width:100%;text-align:center;font-size:12px}
+  .hud-filters{justify-content:center}
+  #excavationTools{left:10px;width:50px;padding:10px 4px}
+  .tool-btn{width:38px;height:38px;font-size:9px}
+  .tool-label{font-size:6px}
+}
+
+/* Ultra-compact for very narrow screens */
+@media (max-width: 360px){
+  #hud{flex-direction:row;flex-wrap:wrap;padding:6px}
+  .hud-mode{order:-1;width:100%;margin-bottom:4px;font-size:10px;padding:4px 8px}
+  .hud-section{flex-direction:column;min-width:40px;border:none}
+  .hud-label{display:none}
+  .hud-value{font-size:11px;text-align:center}
+  .hud-value::before{content:attr(data-symbol);display:block;font-size:14px;margin-bottom:2px;color:var(--symbol-color)}
+  .hud-section:nth-child(2) .hud-value::before{color:#4dd9cc}
+  .hud-section:nth-child(3) .hud-value::before{color:#6bbd8f}
+  .hud-section:nth-child(4) .hud-value::before{color:#9d7be8}
+}
+
+/* Sibling navigator */
+#siblingNav{position:fixed;bottom:20px;left:100px;background:rgba(0,0,0,.9);border:1px solid rgba(157,123,232,.4);padding:10px;border-radius:6px;display:none;z-index:10;backdrop-filter:blur(10px)}
+.sibling-item{display:inline-block;margin:4px;padding:6px 10px;background:rgba(157,123,232,.1);border:1px solid #9d7be8;border-radius:4px;cursor:pointer;font-size:10px;transition:all .2s}
+.sibling-item:hover{background:rgba(157,123,232,.3);transform:translateY(-2px)}
+.sibling-item.active{background:rgba(232,184,73,.25);border-color:#e8b849;font-weight:bold}
+
+/* History log - minimal */
+#navLog{position:fixed;bottom:20px;right:20px;background:rgba(0,0,0,.9);border:1px solid rgba(157,123,232,.3);padding:12px;border-radius:6px;z-index:10;max-width:300px;max-height:350px;overflow-y:auto;display:none}
+#navLog h4{color:#9d7be8;font-size:11px;margin-bottom:6px;border-bottom:1px solid rgba(157,123,232,.2);padding-bottom:4px}
+.nav-entry{font-size:9px;padding:5px 6px;margin:3px 0;background:rgba(157,123,232,.08);border-radius:3px;border-left:2px solid #9d7be8;opacity:0.7;transition:opacity .2s}
+.nav-entry.current{opacity:1;background:rgba(232,184,73,.15);border-left-color:#e8b849;font-weight:bold}
+.nav-entry:hover{opacity:1}
+
+.ghost-indicator{position:fixed;top:20px;right:20px;background:rgba(157,123,232,.1);border:1px solid rgba(157,123,232,.4);padding:8px 12px;border-radius:5px;font-size:10px;color:#9d7be8;z-index:5}
+
+/* Button labels on hover */
+.tool-btn::after{content:attr(data-label);position:absolute;left:55px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.95);border:1px solid #4dd9cc;padding:6px 10px;border-radius:4px;font-size:10px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .2s;z-index:1}
+.tool-btn:hover::after{opacity:1}
+
+/* Rebar is interactive */
+.rebar-interactive{cursor:ns-resize}
+.rebar-dragging{cursor:grabbing}
+</style>
+</head>
+<body>
+
+<!-- Vertical control strip - mirrors core sample -->
+<div id="excavationTools">
+  <div class="tool-section">
+    <div class="tool-label">NAV</div>
+    <div class="tool-row">
+      <div class="tool-btn" id="btnUp" onclick="navUp()" data-label="Ascend (Up)" style="color:#4dd9cc">
+        <div class="shape"><div class="shape-triangle up" style="color:#4dd9cc"></div></div>
+      </div>
+      <div class="tool-btn" id="btnDown" onclick="navToFirstChild()" data-label="Descend (Down)" style="color:#6bbd8f">
+        <div class="shape"><div class="shape-triangle down" style="color:#6bbd8f"></div></div>
+      </div>
+      <div class="tool-btn" id="btnPrev" onclick="navPrevSibling()" data-label="Prev Sibling" style="color:#9d7be8">
+        <div class="shape"><div class="shape-triangle left" style="color:#9d7be8"></div></div>
+      </div>
+      <div class="tool-btn" id="btnNext" onclick="navNextSibling()" data-label="Next Sibling" style="color:#9d7be8">
+        <div class="shape"><div class="shape-triangle right" style="color:#9d7be8"></div></div>
+      </div>
+      <div class="tool-btn" onclick="navRoot()" data-label="Jump to Surface" style="color:#e8b849">
+        <div class="shape shape-home" style="color:#e8b849"></div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="tool-section">
+    <div class="tool-label">MODE</div>
+    <div class="tool-row">
+      <div class="tool-btn" id="modeExplore" onclick="setMode('explore')" data-label="Explore Mode" style="color:#4dd9cc">E</div>
+      <div class="tool-btn" id="modeFlag" onclick="setMode('flag')" data-label="Flag Mode" style="color:#e8b849">F</div>
+      <div class="tool-btn" id="modeTag" onclick="setMode('tag')" data-label="Tag Mode" style="color:#9d7be8">T</div>
+      <div class="tool-btn" id="modeMeasure" onclick="setMode('measure')" data-label="Measure Mode" style="color:#6bbd8f">M</div>
+    </div>
+  </div>
+  
+  <div class="tool-section">
+    <div class="tool-label">DATA</div>
+    <div class="tool-row">
+      <div class="tool-btn" onclick="loadReal()" data-label="Load ARKADU Data" style="color:#6bbd8f">
+        <div class="shape shape-circle" style="color:#6bbd8f"></div>
+      </div>
+      <div class="tool-btn" onclick="genMock(9)" data-label="Generate Mock Data" style="color:#6b8a96">
+        <div class="shape shape-square" style="color:#6b8a96"></div>
+      </div>
+      <div class="tool-btn" onclick="toggleNavLog()" data-label="Show History Log" style="color:#d97b8f">
+        <div class="shape shape-stack" style="color:#d97b8f"><div class="middle"></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Context menu -->
+<div id="contextMenu"></div>
+
+<!-- HUD - Operating System Interface -->
+<div id="hud">
+  <div class="hud-mode" id="hudMode">⛏ EXPLORE</div>
+  <div class="hud-section">
+    <div class="hud-label">Depth</div>
+    <div class="hud-value" id="hudDepth" data-symbol="↓" data-color="#4dd9cc">D0</div>
+  </div>
+  <div class="hud-section">
+    <div class="hud-label">Files</div>
+    <div class="hud-value" id="hudFiles" data-symbol="●" data-color="#6bbd8f">0</div>
+  </div>
+  <div class="hud-section">
+    <div class="hud-label">Size</div>
+    <div class="hud-value" id="hudSize" data-symbol="■" data-color="#9d7be8">0MB</div>
+  </div>
+  <div class="hud-section">
+    <div class="hud-label">Flagged</div>
+    <div class="hud-value" id="hudFlags" style="color:#e8b849" data-symbol="⚑">0</div>
+  </div>
+  <div class="hud-section">
+    <div class="hud-label">Tagged</div>
+    <div class="hud-value" id="hudTags" style="color:#9d7be8" data-symbol="✎">0</div>
+  </div>
+  <div class="hud-filters">
+    <div class="filter-chip" onclick="toggleFilterPanel()">⚙</div>
+  </div>
+</div>
+
+<!-- Mode overlay -->
+<div id="modeOverlay" class="mode-overlay"></div>
+
+<!-- Filter panel -->
+<div id="filterPanel" style="display:none">
+  <div class="filter-section">
+    <div class="filter-title">📁 File Types</div>
+    <div class="filter-option">
+      <input type="checkbox" id="filter-mp4" onchange="toggleFilter('extensions','mp4')">
+      <label for="filter-mp4">MP4 Videos</label>
+    </div>
+    <div class="filter-option">
+      <input type="checkbox" id="filter-png" onchange="toggleFilter('extensions','png')">
+      <label for="filter-png">PNG Images</label>
+    </div>
+    <div class="filter-option">
+      <input type="checkbox" id="filter-wav" onchange="toggleFilter('extensions','wav')">
+      <label for="filter-wav">WAV Audio</label>
+    </div>
+    <div class="filter-option">
+      <input type="checkbox" id="filter-json" onchange="toggleFilter('extensions','json')">
+      <label for="filter-json">JSON Data</label>
+    </div>
+  </div>
+  
+  <div class="filter-section">
+    <div class="filter-title">🏷️ Annotations</div>
+    <div class="filter-option">
+      <input type="checkbox" id="filter-flagged" checked onchange="activeFilters.showFlagged=this.checked;render()">
+      <label for="filter-flagged">Show Flagged</label>
+    </div>
+    <div class="filter-option">
+      <input type="checkbox" id="filter-tagged" checked onchange="activeFilters.showTagged=this.checked;render()">
+      <label for="filter-tagged">Show Tagged</label>
+    </div>
+    <div class="filter-option">
+      <input type="checkbox" id="filter-visited" checked onchange="activeFilters.showVisited=this.checked;render()">
+      <label for="filter-visited">Show Visited</label>
+    </div>
+  </div>
+  
+  <div style="text-align:center;margin-top:10px">
+    <button onclick="clearAllFilters()" style="padding:6px 12px;background:rgba(77,217,204,.2);border:1px solid #4dd9cc;border-radius:4px;color:#4dd9cc;cursor:pointer;font-size:9px;font-family:monospace">CLEAR ALL</button>
+  </div>
+</div>
+
+<!-- Sibling navigator -->
+<div id="siblingNav"></div>
+
+<!-- History log -->
+<div id="navLog">
+<h4>NAVIGATION TRAIL</h4>
+<div id="navLogContent"></div>
+</div>
+
+<div id="ghostIndicator" class="ghost-indicator" style="display:none"></div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+const CAN=document.getElementById('canvas');
+const CTX=CAN.getContext('2d');
+const DPR=window.devicePixelRatio||1;
+
+let W=window.innerWidth;
+let H=window.innerHeight;
+CAN.width=W*DPR;
+CAN.height=H*DPR;
+
+const COLORS={
+  jpg:'#d97b8f',png:'#d97b8f',mp4:'#e8b849',mp3:'#9d7be8',
+  json:'#6bbd8f',py:'#4dd9cc',txt:'#6b8a96',html:'#4dd9cc'
+};
+
+let chambers={}; // All chambers by id
+let root=null;
+let current=null; // Current chamber being viewed
+let path=[]; // Breadcrumb path
+let navHistory=[]; // Full navigation history with timestamps
+let stateBuffer=[]; // Ring buffer for state recording (max 100 states)
+const BUFFER_SIZE=100;
+let bufferIndex=0; // Current position in ring buffer
+let visitedNodes=new Set(); // Track all visited node IDs
+let flaggedNodes=new Set(); // Flagged strata
+let taggedNodes=new Map(); // Tagged strata with labels
+let cameFrom=null; // Which chamber we just navigated from (highlight it)
+let ghostLayers=[]; // Previous depth layers to show as ghosts
+let camera={scale:1,tx:0,ty:0,targetScale:1,targetTx:0,targetTy:0};
+let animating=false;
+let hoveredLayer=null;
+let showNavLog=false;
+let excavationMode='explore'; // explore, flag, tag, measure
+let rebarDragging=false;
+let contextMenuTarget=null;
+let activeFilters={
+  types:new Set(['kingdom','phylum','class','order','family','genus','species']),
+  extensions:new Set(),
+  sizeMin:0,
+  sizeMax:Infinity,
+  showFlagged:true,
+  showTagged:true,
+  showVisited:true
+};
+let showFilterPanel=false;
+
+function noise(x,y){
+  const n=Math.sin(x*12.9898+y*78.233)*43758.5453;
+  return n-Math.floor(n);
+}
+
+function genMock(count,parentId=null,depth=0){
+  console.log(`Generating ${count} sediment layers at depth ${depth}...`);
+  
+  // Create root chamber (only on initial call)
+  if(!parentId){
+    chambers={};
+    root={id:'ROOT',name:'ROOT',depth:0,parent:null,children:[],fileCount:0,bytes:0,weight:0,layers:[]};
+    chambers['ROOT']=root;
+  }
+  
+  const types=['jpg','png','mp4','mp3','json','py','txt','html'];
+  const parent=parentId?chambers[parentId]:root;
+  
+  for(let i=0;i<count;i++){
+    const type=types[i%types.length];
+    const fileCount=Math.floor(50+noise(i,depth)*500);
+    const avgSize=type==='mp4'?5000:(type==='png'?200:50); // KB
+    const bytes=fileCount*avgSize*1024;
+    const MB=bytes/(1024*1024);
+    const weight=fileCount+MB;
+    
+    const id=`${parent.id}_${String.fromCharCode(65+i)}`;
+    const chamber={id,name:`${parent.name}.${String.fromCharCode(65+i)}`,depth:depth,parent:parent.id,children:[],fileCount,bytes,weight,type,color:COLORS[type]||'#6b8a96'};
+    
+    chambers[id]=chamber;
+    parent.children.push(id);
+    
+    // Recursively create 2-4 children for each chamber (up to depth 8)
+    if(depth<8){
+      const childCount=Math.floor(2+noise(i,depth+100)*3);
+      genMock(childCount,id,depth+1);
+    }
+  }
+  
+  // After building hierarchy, navigate to root
+  if(!parentId){
+    // Calculate aggregate weights
+    function aggregateWeights(ch){
+      ch.children.forEach(cid=>{
+        const child=chambers[cid];
+        aggregateWeights(child);
+        ch.fileCount+=child.fileCount;
+        ch.bytes+=child.bytes;
+      });
+      ch.weight=ch.fileCount+(ch.bytes/(1024*1024));
+    }
+    aggregateWeights(root);
+    
+    console.log(`Built ${Object.keys(chambers).length} chambers, max depth 8`);
+    navTo(root.id,'init');
+  }
+}
+
+function navTo(id,direction='dive'){
+  const chamber=chambers[id];
+  if(!chamber)return;
+  
+  // Store where we came from for ghost visualization
+  if(current){
+    cameFrom=current;
+    // Store current layers as ghosts with fade timestamp
+    if(current.layers){
+      ghostLayers=current.layers.map(l=>({...l,ghostTime:Date.now(),fromDepth:current.depth}));
+    }
+  }
+  
+  current=chamber;
+  
+  // Add to navigation history with full path
+  const fullPath=[];
+  let pathNode=chamber;
+  while(pathNode){
+    fullPath.unshift(pathNode.name);
+    pathNode=pathNode.parent?chambers[pathNode.parent]:null;
+  }
+  
+  navHistory.push({
+    id:chamber.id,
+    name:chamber.name,
+    depth:chamber.depth,
+    timestamp:new Date().toLocaleTimeString(),
+    direction,
+    fileCount:chamber.fileCount,
+    pathIds:fullPath
+  });
+  
+  // Keep history reasonable size
+  if(navHistory.length>50)navHistory.shift();
+  
+  // Add to ring buffer for infinite replay
+  const state={
+    id:chamber.id,
+    depth:chamber.depth,
+    timestamp:Date.now(),
+    camera:{...camera},
+    pathIds:path.map(p=>p.id)
+  };
+  stateBuffer[bufferIndex]=state;
+  bufferIndex=(bufferIndex+1)%BUFFER_SIZE;
+  
+  // Mark as visited
+  visitedNodes.add(chamber.id);
+  
+  updateNavLog();
+  updateDepthMap();
+  
+  // Build path
+  path=[];
+  let pathBuilder=chamber;
+  while(pathBuilder){
+    path.unshift(pathBuilder);
+    pathBuilder=pathBuilder.parent?chambers[pathBuilder.parent]:null;
+  }
+  
+  // Breadcrumb removed - path now shown as rebar in strata
+  
+  // Prepare layers for this chamber
+  const layers=chamber.children.map(cid=>chambers[cid]).filter(shouldShowLayer);
+  layers.sort((a,b)=>b.weight-a.weight); // Heaviest sinks
+  
+  const totalWeight=layers.reduce((s,l)=>s+l.weight,0)||1;
+  layers.forEach(l=>l.heightRatio=l.weight/totalWeight);
+  chamber.layers=layers;
+  
+  // Update HUD
+  updateHUD();
+  
+  // Animate camera zoom
+  animateCameraTo(1,0,0);
+  
+  // Update navigation buttons
+  updateNavButtons();
+  updateSiblingNav();
+  updateDepthMap();
+}
+
+function navUp(){
+  if(current&&current.parent)navTo(current.parent,'ascend');
+}
+
+function navRoot(){
+  if(root)navTo(root.id,'jump-root');
+}
+
+function toggleNavLog(){
+  showNavLog=!showNavLog;
+  document.getElementById('navLog').style.display=showNavLog?'block':'none';
+}
+
+function toggleSiblings(){
+  const nav=document.getElementById('siblingNav');
+  const isVisible=nav.style.display==='block';
+  nav.style.display=isVisible?'none':'block';
+  if(!isVisible)updateSiblingNav();
+}
+
+function navToFirstChild(){
+  if(current&&current.children.length>0)navTo(current.children[0],'dive');
+}
+
+function navPrevSibling(){
+  if(!current||!current.parent)return;
+  const parent=chambers[current.parent];
+  const siblings=parent.children;
+  const idx=siblings.indexOf(current.id);
+  if(idx>0)navTo(siblings[idx-1],'sibling-prev');
+}
+
+function navNextSibling(){
+  if(!current||!current.parent)return;
+  const parent=chambers[current.parent];
+  const siblings=parent.children;
+  const idx=siblings.indexOf(current.id);
+  if(idx<siblings.length-1)navTo(siblings[idx+1],'sibling-next');
+}
+
+function updateSiblingNav(){
+  const nav=document.getElementById('siblingNav');
+  if(!current||!current.parent){
+    nav.innerHTML='<div style="color:#6b8a96;font-size:9px">No siblings (at root)</div>';
+    return;
+  }
+  
+  const parent=chambers[current.parent];
+  const siblings=parent.children.map(id=>chambers[id]);
+  
+  nav.innerHTML=siblings.map(sib=>{
+    const isCurrent=sib.id===current.id;
+    return `<div class="sibling-item ${isCurrent?'active':''}" onclick="navTo('${sib.id}','sibling-jump')">
+      ${sib.name}<br><span style="font-size:8px;color:#6b8a96">${sib.fileCount}f</span>
+    </div>`;
+  }).join('');
+}
+
+function updateNavButtons(){
+  // Update button states
+  const btnUp=document.getElementById('btnUp');
+  const btnDown=document.getElementById('btnDown');
+  const btnPrev=document.getElementById('btnPrev');
+  const btnNext=document.getElementById('btnNext');
+  
+  if(!current)return;
+  
+  // Disable/enable based on availability
+  btnUp.classList.toggle('disabled',!current.parent);
+  btnDown.classList.toggle('disabled',current.children.length===0);
+  
+  if(current.parent){
+    const parent=chambers[current.parent];
+    const siblings=parent.children;
+    const idx=siblings.indexOf(current.id);
+    btnPrev.classList.toggle('disabled',idx<=0);
+    btnNext.classList.toggle('disabled',idx>=siblings.length-1);
+  }else{
+    btnPrev.classList.add('disabled');
+    btnNext.classList.add('disabled');
+  }
+}
+
+function setMode(mode){
+  excavationMode=mode;
+  
+  // Update active button
+  document.querySelectorAll('#excavationTools .tool-btn').forEach(btn=>{
+    btn.classList.remove('active');
+  });
+  document.getElementById('mode'+mode.charAt(0).toUpperCase()+mode.slice(1))?.classList.add('active');
+  
+  // Update cursor
+  const canvas=document.getElementById('canvas');
+  if(mode==='flag')canvas.style.cursor='crosshair';
+  else if(mode==='tag')canvas.style.cursor='text';
+  else if(mode==='measure')canvas.style.cursor='crosshair';
+  else canvas.style.cursor='pointer';
+  
+  // Update mode overlay
+  const overlay=document.getElementById('modeOverlay');
+  overlay.className='mode-overlay';
+  if(mode!=='explore')overlay.classList.add(mode+'-mode');
+  
+  updateHUD();
+}
+
+function updateHUD(){
+  const hudMode=document.getElementById('hudMode');
+  const hudDepth=document.getElementById('hudDepth');
+  const hudFiles=document.getElementById('hudFiles');
+  const hudSize=document.getElementById('hudSize');
+  const hudFlags=document.getElementById('hudFlags');
+  const hudTags=document.getElementById('hudTags');
+  
+  // Mode display
+  const modeIcons={explore:'⛏',flag:'⚑',tag:'✎',measure:'📏'};
+  hudMode.textContent=modeIcons[excavationMode]+' '+excavationMode.toUpperCase();
+  
+  if(current){
+    hudDepth.textContent=`D${current.depth}`;
+    hudFiles.textContent=current.fileCount.toLocaleString();
+    hudSize.textContent=((current.bytes||0)/1024/1024).toFixed(1)+'MB';
+  }
+  
+  hudFlags.textContent=flaggedNodes.size;
+  hudTags.textContent=taggedNodes.size;
+}
+
+function toggleFilterPanel(){
+  showFilterPanel=!showFilterPanel;
+  document.getElementById('filterPanel').style.display=showFilterPanel?'block':'none';
+}
+
+function toggleFilter(category,value){
+  if(category==='types'){
+    if(activeFilters.types.has(value)){
+      activeFilters.types.delete(value);
+    }else{
+      activeFilters.types.add(value);
+    }
+  }else if(category==='extensions'){
+    if(activeFilters.extensions.has(value)){
+      activeFilters.extensions.delete(value);
+    }else{
+      activeFilters.extensions.add(value);
+    }
+  }
+  render();
+}
+
+function clearAllFilters(){
+  activeFilters.types=new Set(['kingdom','phylum','class','order','family','genus','species']);
+  activeFilters.extensions=new Set();
+  activeFilters.sizeMin=0;
+  activeFilters.sizeMax=Infinity;
+  document.querySelectorAll('#filterPanel input[type="checkbox"]').forEach(cb=>cb.checked=false);
+  render();
+}
+
+function shouldShowLayer(layer){
+  // Type filter (only apply to real ARKADU data with taxonomy types)
+  const taxonomyTypes=['kingdom','phylum','class','order','family','genus','species'];
+  if(activeFilters.types.size>0&&taxonomyTypes.includes(layer.type)&&!activeFilters.types.has(layer.type))return false;
+  
+  // Extension filter
+  if(activeFilters.extensions.size>0){
+    const ext=layer.name.split('.').pop().toLowerCase();
+    if(!activeFilters.extensions.has(ext))return false;
+  }
+  
+  // Size filter
+  const sizeMB=(layer.bytes||0)/1024/1024;
+  if(sizeMB<activeFilters.sizeMin||sizeMB>activeFilters.sizeMax)return false;
+  
+  // Flag/tag filters
+  if(!activeFilters.showFlagged&&flaggedNodes.has(layer.id))return false;
+  if(!activeFilters.showTagged&&taggedNodes.has(layer.id))return false;
+  if(!activeFilters.showVisited&&visitedNodes.has(layer.id))return false;
+  
+  return true;
+}
+
+function toggleFlag(layerId){
+  if(flaggedNodes.has(layerId)){
+    flaggedNodes.delete(layerId);
+  }else{
+    flaggedNodes.add(layerId);
+  }
+  render();
+}
+
+function tagLayer(layerId,label){
+  if(!label){
+    taggedNodes.delete(layerId);
+  }else{
+    taggedNodes.set(layerId,label);
+  }
+  render();
+}
+
+function showContextMenu(x,y,layer){
+  contextMenuTarget=layer;
+  const menu=document.getElementById('contextMenu');
+  
+  const isFlagged=flaggedNodes.has(layer.id);
+  const hasTag=taggedNodes.has(layer.id);
+  
+  menu.innerHTML=`
+    <div class="context-label">Stratum: ${layer.name}</div>
+    <div class="context-divider"></div>
+    <div class="context-item" onclick="toggleFlag('${layer.id}');hideContextMenu()">
+      ${isFlagged?'⚑ Unflag':'⚐ Flag'} Layer
+    </div>
+    <div class="context-item" onclick="promptTag('${layer.id}');hideContextMenu()">
+      ${hasTag?'✎ Edit Tag':'✎ Add Tag'}
+    </div>
+    <div class="context-item" onclick="navTo('${layer.id}','context');hideContextMenu()">
+      ⛏ Excavate Here
+    </div>
+    <div class="context-divider"></div>
+    <div class="context-item" onclick="hideContextMenu()" style="color:#6b8a96">
+      Cancel
+    </div>
+  `;
+  
+  menu.style.left=x+'px';
+  menu.style.top=y+'px';
+  menu.style.display='block';
+}
+
+function hideContextMenu(){
+  document.getElementById('contextMenu').style.display='none';
+  contextMenuTarget=null;
+}
+
+function promptTag(layerId){
+  const existing=taggedNodes.get(layerId)||'';
+  const label=prompt('Enter tag label:',existing);
+  if(label!==null)tagLayer(layerId,label);
+}
+
+function updateDepthMap(){
+  // Path now embedded in strata as rebar - render() handles it
+}
+
+function updateScrubber(){
+  // Scrubber replaced by flow diagram - this function kept for compatibility
+}
+
+function replayFromBuffer(idx){
+  // Replay state from ring buffer
+  const state=stateBuffer[idx];
+  if(!state||!chambers[state.id])return;
+  
+  navTo(state.id,'replay');
+  camera=state.camera;
+}
+
+function updateNavLog(){
+  const content=document.getElementById('navLogContent');
+  if(!content)return;
+  
+  // Show last 20 entries, most recent first
+  const recent=navHistory.slice(-20).reverse();
+  
+  content.innerHTML=recent.map((entry,i)=>{
+    const isCurrent=i===0;
+    const arrow=entry.direction==='dive'?'↓ DIVE':entry.direction==='ascend'?'↑ ASCEND':entry.direction.includes('core')?'⚫ CORE':entry.direction.includes('rebar')?'⚫ JUMP':'→ NAV';
+    const icon=entry.direction==='dive'?'⛏':'🪜';
+    
+    // Full path for reconstruction
+    const fullPath=entry.pathIds?entry.pathIds.join(' / '):'N/A';
+    
+    return `<div class="nav-entry ${isCurrent?'current':''}">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="color:#4dd9cc">${icon} ${arrow}</span>
+        <span style="color:#6b8a96;font-size:9px">${entry.timestamp}</span>
+      </div>
+      <div style="margin-top:3px;color:#e8b849">D${entry.depth} • ${entry.name}</div>
+      <div style="font-size:7px;color:#6b8a96;font-family:monospace;margin-top:2px;opacity:0.7">${fullPath}</div>
+      <div style="font-size:9px;color:#6b8a96;margin-top:2px">${entry.fileCount.toLocaleString()} files</div>
+    </div>`;
+  }).join('');
+}
+
+function animateCameraTo(scale,tx,ty){
+  camera.targetScale=scale;
+  camera.targetTx=tx;
+  camera.targetTy=ty;
+  
+  if(animating)return;
+  animating=true;
+  
+  const startTime=Date.now();
+  const duration=800; // Dramatic 800ms zoom
+  const startScale=camera.scale;
+  const startTx=camera.tx;
+  const startTy=camera.ty;
+  
+  function step(){
+    const elapsed=Date.now()-startTime;
+    const t=Math.min(elapsed/duration,1);
+    
+    // Dramatic easing (elastic-out)
+    const ease=t<0.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+    
+    camera.scale=startScale+(camera.targetScale-startScale)*ease;
+    camera.tx=startTx+(camera.targetTx-startTx)*ease;
+    camera.ty=startTy+(camera.targetTy-startTy)*ease;
+    
+    render();
+    
+    if(t<1)requestAnimationFrame(step);
+    else animating=false;
+  }
+  
+  step();
+}
+
+function render(){
+  // Clear
+  CTX.fillStyle='#0a0e1a';
+  CTX.fillRect(0,0,W*DPR,H*DPR);
+  
+  if(!current||!current.layers||current.layers.length===0){
+    CTX.save();
+    CTX.scale(DPR,DPR);
+    CTX.fillStyle='#6b8a96';
+    CTX.font='14px monospace';
+    CTX.textAlign='center';
+    CTX.fillText('Click a button to generate sedimentary strata',W/2,H/2);
+    CTX.restore();
+    return;
+  }
+  
+  const layers=current.layers;
+  
+  CTX.save();
+  CTX.scale(DPR,DPR);
+  
+  // Apply camera transform for zoom
+  CTX.translate(camera.tx,camera.ty);
+  CTX.scale(camera.scale,camera.scale);
+  
+  // Draw ghost layers from previous depth (fading trail)
+  const now=Date.now();
+  const ghostFadeDuration=1200; // 1.2s fade
+  
+  ghostLayers.forEach((ghost,i)=>{
+    const age=now-ghost.ghostTime;
+    if(age>ghostFadeDuration)return; // Fully faded
+    
+    const fadeProgress=age/ghostFadeDuration;
+    const opacity=(1-fadeProgress)*0.15; // Max 15% opacity
+    
+    if(!ghost.bounds)return;
+    
+    CTX.fillStyle=ghost.color;
+    CTX.globalAlpha=opacity;
+    
+    // Simple rectangle for ghosts (no waves)
+    CTX.fillRect(ghost.bounds.xLeft,ghost.bounds.yTop,ghost.bounds.xRight-ghost.bounds.xLeft,ghost.bounds.yBottom-ghost.bounds.yTop);
+    
+    // Ghost label
+    CTX.fillStyle='#9d7be8';
+    CTX.font='italic 10px monospace';
+    CTX.textAlign='center';
+    const labelY=(ghost.bounds.yTop+ghost.bounds.yBottom)/2;
+    CTX.fillText(`👻 ${ghost.name}`,W/2,labelY);
+  });
+  
+  CTX.globalAlpha=1;
+  
+  const margin=80;
+  const strataWidth=W-margin*2;
+  const strataHeight=H-margin*2;
+  
+  let y=margin+strataHeight; // Start at bottom
+  
+  layers.forEach((layer,i)=>{
+    const layerH=strataHeight*layer.heightRatio;
+    const yTop=y-layerH;
+    
+    // Store layer bounds for click detection
+    layer.bounds={yTop,yBottom:y,xLeft:margin,xRight:margin+strataWidth};
+    
+    // Check if this is where we came from (highlight it)
+    const isCameFrom=cameFrom&&cameFrom.id===layer.id;
+    
+    // Check if flagged or tagged
+    const isFlagged=flaggedNodes.has(layer.id);
+    const isTagged=taggedNodes.has(layer.id);
+    
+    // Highlight hovered layer
+    const isHovered=hoveredLayer===layer;
+    
+    // Draw strata rectangle with organic edges
+    CTX.fillStyle=layer.color;
+    // Special glow for "came from" layer
+    if(isCameFrom){
+      CTX.globalAlpha=0.9;
+      CTX.shadowColor='#e8b849';
+      CTX.shadowBlur=20;
+    }else{
+      CTX.globalAlpha=isHovered?0.85:0.6;
+      CTX.shadowBlur=0;
+    }
+    
+    // Organic top edge using noise
+    CTX.beginPath();
+    CTX.moveTo(margin,yTop);
+    
+    // More organic wavy top edge
+    const segments=60;
+    for(let s=0;s<=segments;s++){
+      const x=margin+(s/segments)*strataWidth;
+      // Multiple wave frequencies for organic look
+      const wave1=Math.sin(s*0.3+i*2)*12*noise(s,i);
+      const wave2=Math.sin(s*0.8+i*3)*6*noise(s+100,i);
+      const wave3=Math.sin(s*1.5+i)*3*noise(s+200,i);
+      const waveY=yTop+wave1+wave2+wave3;
+      if(s===0)CTX.lineTo(x,waveY);
+      else CTX.lineTo(x,waveY);
+    }
+    
+    // Right edge with organic variation
+    const rightNoise=noise(i,999)*5;
+    CTX.lineTo(margin+strataWidth+rightNoise,y);
+    
+    // Bottom edge (or wavy if not bottom layer)
+    if(i===0){
+      // Bottom layer - slightly wavy
+      for(let s=segments;s>=0;s--){
+        const x=margin+(s/segments)*strataWidth;
+        const waveY=y+Math.sin(s*0.3)*3;
+        CTX.lineTo(x,waveY);
+      }
+    }else{
+      // Wavy bottom matching previous top (more organic)
+      for(let s=segments;s>=0;s--){
+        const x=margin+(s/segments)*strataWidth;
+        const wave1=Math.sin(s*0.3+(i-1)*2)*12*noise(s,i-1);
+        const wave2=Math.sin(s*0.8+(i-1)*3)*6*noise(s+100,i-1);
+        const wave3=Math.sin(s*1.5+(i-1))*3*noise(s+200,i-1);
+        const waveY=y+wave1+wave2+wave3;
+        CTX.lineTo(x,waveY);
+      }
+    }
+    
+    CTX.closePath();
+    CTX.fill();
+    
+    // Border
+    CTX.globalAlpha=0.8;
+    CTX.strokeStyle=layer.color;
+    CTX.lineWidth=1;
+    CTX.stroke();
+    
+    // Label
+    CTX.globalAlpha=1;
+    CTX.shadowBlur=0;
+    
+    // Color coding for different states
+    let labelColor='#fff';
+    let labelFont='11px monospace';
+    if(isCameFrom){
+      labelColor='#e8b849';
+      labelFont='bold 13px monospace';
+    }else if(isHovered){
+      labelColor='#e8b849';
+      labelFont='bold 12px monospace';
+    }
+    
+    CTX.fillStyle=labelColor;
+    CTX.font=labelFont;
+    CTX.textAlign='left';
+    const labelY=(yTop+y)/2;
+    const hasChildren=layer.children.length>0;
+    const childIndicator=hasChildren?' ▶':'';
+    const cameFromIndicator=isCameFrom?' ⬅ YOU WERE HERE':'';
+    const flagIndicator=isFlagged?' ⚑':'';
+    const tagIndicator=isTagged?' ❖'+taggedNodes.get(layer.id):'';
+    CTX.fillText(`${layer.name} • ${layer.type.toUpperCase()} • ${layer.fileCount}f • ${(layer.bytes/1024/1024).toFixed(1)}MB${childIndicator}${cameFromIndicator}${flagIndicator}${tagIndicator}`,margin+12,labelY);
+    
+    // Density indicator (small bars on right)
+    const barX=margin+strataWidth-60;
+    const barW=layer.weight/10; // Scale
+    CTX.fillStyle=layer.color;
+    CTX.globalAlpha=0.4;
+    CTX.fillRect(barX,labelY-6,Math.min(barW,50),12);
+    
+    y=yTop; // Move up
+  });
+  
+  // CORE SAMPLE visualization - dramatic vertical path display on right
+  const coreX=W-150; // Right side
+  const coreWidth=120;
+  const coreTop=margin;
+  const coreHeight=strataHeight;
+  
+  // Core sample background (like a drill core)
+  CTX.globalAlpha=0.95;
+  CTX.fillStyle='rgba(0,0,0,0.9)';
+  CTX.fillRect(coreX-10,coreTop-10,coreWidth+20,coreHeight+20);
+  
+  // Border glow
+  CTX.strokeStyle='#4dd9cc';
+  CTX.lineWidth=2;
+  CTX.shadowColor='#4dd9cc';
+  CTX.shadowBlur=15;
+  CTX.strokeRect(coreX-10,coreTop-10,coreWidth+20,coreHeight+20);
+  CTX.shadowBlur=0;
+  
+  // Title
+  CTX.globalAlpha=1;
+  CTX.fillStyle='#4dd9cc';
+  CTX.font='bold 11px monospace';
+  CTX.textAlign='center';
+  CTX.fillText('CORE SAMPLE',coreX+coreWidth/2,coreTop-20);
+  CTX.font='9px monospace';
+  CTX.fillStyle='#6b8a96';
+  CTX.fillText(`${path.length} depths excavated`,coreX+coreWidth/2,coreTop-6);
+  
+  // Draw trail connections between segments
+  CTX.globalAlpha=0.3;
+  CTX.strokeStyle='#9d7be8';
+  CTX.lineWidth=2;
+  CTX.setLineDash([3,3]);
+  for(let i=0;i<path.length-1;i++){
+    const y1=coreTop+(i/(path.length||1))*coreHeight+coreHeight/(path.length*2);
+    const y2=coreTop+((i+1)/(path.length||1))*coreHeight+coreHeight/(path.length*2);
+    CTX.beginPath();
+    CTX.moveTo(coreX-5,y1);
+    CTX.lineTo(coreX-5,y2);
+    CTX.stroke();
+    
+    // Trail marker dots
+    CTX.fillStyle='#9d7be8';
+    CTX.beginPath();
+    CTX.arc(coreX-5,y1,3,0,Math.PI*2);
+    CTX.fill();
+  }
+  CTX.setLineDash([]);
+  
+  // Draw each depth as a segment
+  CTX.globalAlpha=1;
+  path.forEach((node,idx)=>{
+    const segmentH=coreHeight/path.length;
+    const segmentY=coreTop+idx*segmentH;
+    const isCurrent=node.id===current.id;
+    const isVisited=visitedNodes.has(node.id)&&!isCurrent;
+    
+    // Segment background (color-coded by depth)
+    const depthColor=isCurrent?'rgba(232,184,73,0.4)':(isVisited?'rgba(157,123,232,0.2)':'rgba(77,217,204,0.15)');
+    CTX.fillStyle=depthColor;
+    CTX.fillRect(coreX,segmentY,coreWidth,segmentH-2);
+    
+    // Visit count indicator (if visited multiple times)
+    const visitCount=navHistory.filter(e=>e.id===node.id).length;
+    if(visitCount>1){
+      CTX.fillStyle='#9d7be8';
+      CTX.font='bold 8px monospace';
+      CTX.textAlign='left';
+      CTX.fillText(`×${visitCount}`,coreX+2,segmentY+10);
+    }
+    
+    // Border between segments
+    CTX.strokeStyle='rgba(77,217,204,0.3)';
+    CTX.lineWidth=1;
+    CTX.beginPath();
+    CTX.moveTo(coreX,segmentY);
+    CTX.lineTo(coreX+coreWidth,segmentY);
+    CTX.stroke();
+    
+    // Current depth highlight
+    if(isCurrent){
+      CTX.strokeStyle='#e8b849';
+      CTX.lineWidth=3;
+      CTX.shadowColor='#e8b849';
+      CTX.shadowBlur=10;
+      CTX.strokeRect(coreX-2,segmentY-2,coreWidth+4,segmentH);
+      CTX.shadowBlur=0;
+    }
+    
+    // Depth marker on left
+    CTX.fillStyle=isCurrent?'#e8b849':'#4dd9cc';
+    CTX.font=isCurrent?'bold 10px monospace':'9px monospace';
+    CTX.textAlign='right';
+    CTX.fillText(`D${node.depth}`,coreX-5,segmentY+segmentH/2+3);
+    
+    // Node name (truncated if needed)
+    const nameMaxLen=12;
+    const displayName=node.name.length>nameMaxLen?node.name.substr(0,nameMaxLen)+'...':node.name;
+    CTX.fillStyle=isCurrent?'#e8b849':'#4dd9cc';
+    CTX.font=isCurrent?'bold 9px monospace':'8px monospace';
+    CTX.textAlign='left';
+    CTX.fillText(displayName,coreX+5,segmentY+segmentH/2+3);
+    
+    // File count indicator
+    CTX.fillStyle='#6b8a96';
+    CTX.font='7px monospace';
+    CTX.textAlign='right';
+    CTX.fillText(`${node.fileCount}f`,coreX+coreWidth-5,segmentY+segmentH/2+3);
+    
+    // Interactive circle (for clicking)
+    if(segmentH>15){
+      const circleX=coreX+coreWidth+15;
+      const circleY=segmentY+segmentH/2;
+      CTX.beginPath();
+      CTX.arc(circleX,circleY,isCurrent?7:5,0,Math.PI*2);
+      CTX.fillStyle=isCurrent?'#e8b849':'#4dd9cc';
+      CTX.fill();
+      CTX.strokeStyle=isCurrent?'#e8b849':'rgba(77,217,204,0.5)';
+      CTX.lineWidth=2;
+      CTX.stroke();
+      
+      // Pulse animation for current
+      if(isCurrent&&segmentH>20){
+        CTX.globalAlpha=0.3;
+        CTX.beginPath();
+        CTX.arc(circleX,circleY,10+Math.sin(Date.now()/300)*3,0,Math.PI*2);
+        CTX.strokeStyle='#e8b849';
+        CTX.lineWidth=2;
+        CTX.stroke();
+        CTX.globalAlpha=1;
+      }
+      
+      // Store click target
+      node._clickTarget={x:circleX,y:circleY,r:isCurrent?12:10};
+    }
+  });
+  
+  CTX.globalAlpha=1;
+  
+  // Scale labels
+  CTX.fillStyle='#6b8a96';
+  CTX.font='9px monospace';
+  CTX.textAlign='right';
+  CTX.fillText('SURFACE',margin-8,margin+10);
+  CTX.fillText('BEDROCK',margin-8,margin+strataHeight);
+  
+  // Current depth indicator (top right)
+  CTX.fillStyle='#9d7be8';
+  CTX.font='bold 11px monospace';
+  CTX.textAlign='right';
+  CTX.fillText(`DEPTH ${current.depth}`,W-margin-10,margin+20);
+  
+  CTX.restore();
+  
+  // Update ghost indicator UI
+  const ghostUI=document.getElementById('ghostIndicator');
+  if(ghostLayers.length>0&&now-ghostLayers[0].ghostTime<ghostFadeDuration){
+    ghostUI.style.display='block';
+    ghostUI.textContent=`👻 Ghosts from Depth ${ghostLayers[0].fromDepth} fading...`;
+  }else{
+    ghostUI.style.display='none';
+  }
+  
+  // Clear old ghosts
+  ghostLayers=ghostLayers.filter(g=>now-g.ghostTime<ghostFadeDuration);
+}
+
+// Mouse interaction with excavation modes
+CAN.addEventListener('click',e=>{
+  if(!current||!current.layers)return;
+  if(rebarDragging)return;
+  
+  const rect=CAN.getBoundingClientRect();
+  const mx=(e.clientX-rect.left-camera.tx)/camera.scale;
+  const my=(e.clientY-rect.top-camera.ty)/camera.scale;
+  
+  // Check core sample clicks for path navigation
+  const coreX=W-150;
+  
+  for(const node of path){
+    if(node._clickTarget){
+      const {x,y,r}=node._clickTarget;
+      const dist=Math.sqrt(Math.pow(mx-x,2)+Math.pow(my-y,2));
+      if(dist<r){
+        navTo(node.id,'core-jump');
+        return;
+      }
+    }
+  }
+  
+  // Check which layer was clicked
+  for(const layer of current.layers){
+    if(!layer.bounds)continue;
+    if(mx>=layer.bounds.xLeft&&mx<=layer.bounds.xRight&&my>=layer.bounds.yTop&&my<=layer.bounds.yBottom){
+      // Handle based on mode
+      if(excavationMode==='explore'){
+        if(layer.children.length>0){
+          navTo(layer.id,'dive');
+        }
+      }else if(excavationMode==='flag'){
+        toggleFlag(layer.id);
+      }else if(excavationMode==='tag'){
+        promptTag(layer.id);
+      }else if(excavationMode==='measure'){
+        console.log('Measure:',layer.name,layer.fileCount,'files',((layer.bytes||0)/1024/1024).toFixed(2)+'MB');
+      }
+      return;
+    }
+  }
+  
+  // Click on outer strata background to ascend (zoom out)
+  const margin=80;
+  const strataWidth=W-margin*2;
+  const strataHeight=H-margin*2;
+  if(mx>=margin&&mx<=margin+strataWidth&&my>=margin&&my<=margin+strataHeight){
+    // Clicked in strata area but not on a specific layer - go up
+    if(current.parent){
+      navUp();
+    }
+  }
+});
+
+// Right-click context menu
+CAN.addEventListener('contextmenu',e=>{
+  e.preventDefault();
+  if(!current||!current.layers)return;
+  
+  const rect=CAN.getBoundingClientRect();
+  const mx=(e.clientX-rect.left-camera.tx)/camera.scale;
+  const my=(e.clientY-rect.top-camera.ty)/camera.scale;
+  
+  for(const layer of current.layers){
+    if(!layer.bounds)continue;
+    if(mx>=layer.bounds.xLeft&&mx<=layer.bounds.xRight&&my>=layer.bounds.yTop&&my<=layer.bounds.yBottom){
+      showContextMenu(e.clientX,e.clientY,layer);
+      return;
+    }
+  }
+});
+
+// Rebar dragging for scrubbing
+let rebarDragStart=null;
+CAN.addEventListener('mousedown',e=>{
+  if(!path.length)return;
+  const rect=CAN.getBoundingClientRect();
+  const mx=(e.clientX-rect.left-camera.tx)/camera.scale;
+  const my=(e.clientY-rect.top-camera.ty)/camera.scale;
+  
+  const margin=80;
+  const coreX=W-150;
+  const coreWidth=120;
+  
+  // Check if clicking in core sample area
+  if(mx>=coreX-10&&mx<=coreX+coreWidth+10&&my>=margin-10&&my<=margin+H-margin*2+10){
+    rebarDragging=true;
+    rebarDragStart=my;
+    CAN.style.cursor='grabbing';
+  }
+});
+
+CAN.addEventListener('mousemove',e=>{
+  if(rebarDragging&&path.length){
+    const rect=CAN.getBoundingClientRect();
+    const my=(e.clientY-rect.top-camera.ty)/camera.scale;
+    
+    const margin=80;
+    const strataHeight=H-margin*2;
+    const percent=Math.max(0,Math.min(1,(my-margin)/strataHeight));
+    const idx=Math.round(percent*(path.length-1));
+    
+    if(path[idx]&&path[idx].id!==current.id){
+      navTo(path[idx].id,'rebar-scrub');
+      if(navigator.vibrate)navigator.vibrate(5);
+    }
+    return;
+  }
+  
+  // Hover detection
+  if(!current||!current.layers)return;
+  const rect=CAN.getBoundingClientRect();
+  const mx=(e.clientX-rect.left-camera.tx)/camera.scale;
+  const my=(e.clientY-rect.top-camera.ty)/camera.scale;
+  
+  hoveredLayer=null;
+  for(const layer of current.layers){
+    if(!layer.bounds)continue;
+    if(mx>=layer.bounds.xLeft&&mx<=layer.bounds.xRight&&my>=layer.bounds.yTop&&my<=layer.bounds.yBottom){
+      hoveredLayer=layer;
+      break;
+    }
+  }
+  
+  render();
+});
+
+window.addEventListener('mouseup',()=>{
+  if(rebarDragging){
+    rebarDragging=false;
+    CAN.style.cursor='pointer';
+  }
+});
+
+// Hide context menu on click elsewhere
+window.addEventListener('click',e=>{
+  if(!e.target.closest('#contextMenu')){
+    hideContextMenu();
+  }
+});
+
+
+// Keyboard navigation
+window.addEventListener('keydown',e=>{
+  if(!current)return;
+  
+  if(e.key==='ArrowUp'||e.key==='Escape'){
+    navUp();
+    e.preventDefault();
+  }else if(e.key==='ArrowDown'){
+    // Dive into first child
+    if(current.children.length>0)navTo(current.children[0],'dive');
+    e.preventDefault();
+  }else if(e.key==='ArrowLeft'){
+    navPrevSibling();
+    e.preventDefault();
+  }else if(e.key==='ArrowRight'){
+    navNextSibling();
+    e.preventDefault();
+  }else if(e.key==='Home'){
+    navRoot();
+    e.preventDefault();
+  }else if(e.key==='e'||e.key==='E'){
+    setMode('explore');
+  }else if(e.key==='f'||e.key==='F'){
+    setMode('flag');
+  }else if(e.key==='t'||e.key==='T'){
+    setMode('tag');
+  }else if(e.key==='m'||e.key==='M'){
+    setMode('measure');
+  }else if(e.key==='/'||e.key==='?'){
+    toggleFilterPanel();
+    e.preventDefault();
+  }
+});
+
+async function loadReal(){
+  try{
+    const r=await fetch('sys/primitive.jsonl');
+    const t=await r.text();
+    const artifacts=t.trim().split('\n').map(l=>JSON.parse(l));
+    console.log(`Loaded ${artifacts.length} artifacts`);
+    
+    // Build full hierarchy
+    chambers={};
+    const dirMap={};
+    
+    artifacts.forEach(art=>{
+      const parts=art.path.split('/');
+      
+      // Build directory hierarchy
+      for(let d=0;d<parts.length-1;d++){
+        const id=parts.slice(0,d+1).join('/');
+        if(!dirMap[id]){
+          const parentId=d>0?parts.slice(0,d).join('/'):null;
+          dirMap[id]={id,name:parts[d],depth:d,parent:parentId,children:[],files:[],bytes:0,species:{}};
+        }
+        dirMap[id].files.push(art);
+        dirMap[id].bytes+=(art.size||0);
+        const ext=(art.ext||'').replace(/^\./,'')||'unknown';
+        if(!dirMap[id].species[ext])dirMap[id].species[ext]=0;
+        dirMap[id].species[ext]++;
+      }
+    });
+    
+    // Build parent-child links
+    Object.values(dirMap).forEach(dir=>{
+      if(dir.parent&&dirMap[dir.parent]){
+        if(!dirMap[dir.parent].children.includes(dir.id)){
+          dirMap[dir.parent].children.push(dir.id);
+        }
+      }
+    });
+    
+    // Create root
+    const roots=Object.values(dirMap).filter(d=>!d.parent);
+    if(roots.length>1){
+      root={id:'ROOT',name:'ROOT',depth:0,parent:null,children:roots.map(r=>r.id),fileCount:0,bytes:0};
+      chambers['ROOT']=root;
+      roots.forEach(r=>{r.parent='ROOT';r.depth++;});
+    }else{
+      root=roots[0];
+    }
+    
+    // Convert to chambers structure
+    Object.values(dirMap).forEach(dir=>{
+      const fileCount=dir.files.length;
+      const MB=dir.bytes/(1024*1024);
+      const weight=fileCount+MB;
+      
+      let domSpecies='unknown';
+      let maxCount=0;
+      Object.entries(dir.species).forEach(([ext,count])=>{
+        if(count>maxCount){maxCount=count;domSpecies=ext;}
+      });
+      
+      chambers[dir.id]={...dir,fileCount,weight,type:domSpecies,color:COLORS[domSpecies]||'#6b8a96'};
+    });
+    
+    console.log(`Loaded ${Object.keys(chambers).length} chambers from ARKADU data`);
+    navTo(root.id,'load-data');
+  }catch(e){
+    console.error('Failed to load ARKADU data:',e);
+    alert('Could not load sys/primitive.jsonl. Generating mock data instead.');
+    genMock(9);
+  }
+}
+
+window.addEventListener('resize',()=>{
+  W=window.innerWidth;
+  H=window.innerHeight;
+  CAN.width=W*DPR;
+  CAN.height=H*DPR;
+  render();
+});
+
+// Auto-generate on load
+genMock(9);
+
+// Set initial mode
+setMode('explore');
+
+// Continuous animation loop for pulse effects
+function animationLoop(){
+  render();
+  requestAnimationFrame(animationLoop);
+}
+animationLoop();
+</script>
+
+</body></html>

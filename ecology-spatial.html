@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>ARKADU Spatial Ecology</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+--void:#0a0e1a;--panel:#0f1419;--grid:#1a3a52;--text:#b8dbd9;--dim:#6b8a96;
+--blue:#4dd9cc;--coral:#d97b8f;--amber:#e8b849;--purple:#9d7be8;--green:#6bbd8f;
+}
+body{background:var(--void);color:var(--text);font-family:'Courier New',monospace;overflow:hidden;height:100vh}
+.app{display:grid;grid-template-columns:1fr;grid-template-rows:50px 1fr 40px;height:100vh}
+.hdr{background:var(--panel);padding:0 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--grid)}
+.brand{font-size:16px;font-weight:bold;color:var(--blue)}
+.view-btns{display:flex;gap:8px}
+.btn{padding:6px 14px;background:var(--void);border:1px solid var(--grid);color:var(--text);cursor:pointer;font-size:11px;border-radius:5px;font-family:inherit}
+.btn.active{background:var(--blue);color:var(--void);border-color:var(--blue)}
+.stats{font-size:11px;color:var(--dim);display:flex;gap:12px}
+
+.stage{position:relative;overflow:hidden}
+.view{position:absolute;inset:0;display:none}
+.view.active{display:block}
+
+/* LANDSCAPE: Treemap of entire ecosystem */
+.landscape{padding:20px;overflow:auto}
+.kingdom-box{position:absolute;border:2px solid var(--grid);border-radius:8px;overflow:hidden;cursor:pointer;transition:all .3s}
+.kingdom-box:hover{border-color:var(--blue);box-shadow:0 0 30px rgba(77,217,204,.3)}
+.kingdom-title{position:absolute;top:8px;left:8px;font-size:13px;font-weight:bold;color:var(--blue);z-index:10;background:rgba(10,14,26,.8);padding:4px 8px;border-radius:4px}
+.kingdom-stats{position:absolute;bottom:8px;left:8px;font-size:9px;color:var(--dim);z-index:10;background:rgba(10,14,26,.8);padding:4px 8px;border-radius:4px}
+.species-dots{position:absolute;inset:40px 8px 32px 8px;display:flex;flex-wrap:wrap;gap:2px;align-content:flex-start}
+.dot{border-radius:50%;cursor:pointer}
+.dot:hover{transform:scale(1.8);z-index:100}
+.dot[data-s="png"],.dot[data-s="jpg"]{background:var(--blue)}
+.dot[data-s="mp4"]{background:var(--coral)}
+.dot[data-s="mp3"],.dot[data-s="py"]{background:var(--amber)}
+.dot[data-s="json"]{background:var(--purple)}
+.dot[data-s="html"]{background:var(--green)}
+
+/* GALAXY: 3D spatial view */
+.galaxy{perspective:1200px;overflow:hidden}
+#canvas3d{width:100%;height:100%}
+
+/* STRATA: Horizontal layers */
+.strata{padding:20px;overflow-y:auto}
+.stratum{position:relative;min-height:200px;margin:0 0 40px 0;border:2px solid var(--grid);border-radius:10px;padding:16px;background:linear-gradient(135deg,rgba(26,58,82,.1) 0%,rgba(15,20,25,.3) 100%)}
+.stratum-label{position:absolute;top:-14px;left:20px;background:var(--panel);padding:6px 14px;border:2px solid var(--grid);border-radius:6px;font-size:12px;font-weight:bold;color:var(--blue)}
+.stratum-content{display:flex;flex-wrap:wrap;gap:3px;padding-top:20px}
+.chamber-cluster{display:inline-flex;flex-direction:column;align-items:flex-start;margin:10px;padding:8px;border:1px solid var(--grid);border-radius:6px;background:rgba(15,20,25,.5)}
+.chamber-name{font-size:9px;color:var(--blue);margin-bottom:6px;font-weight:bold}
+.chamber-dots{display:flex;flex-wrap:wrap;gap:2px;max-width:180px}
+
+/* HEAT: Density visualization */
+.heat{overflow:auto}
+#heatCanvas{width:100%;height:100%}
+
+/* FLOW: Connections */
+.flow{overflow:hidden}
+.flow-layer{position:absolute;inset:0}
+svg.flow-svg{width:100%;height:100%;position:absolute}
+.node-group{cursor:pointer}
+.node-circle{fill:var(--panel);stroke:var(--blue);stroke-width:2;transition:all .2s}
+.node-circle:hover{fill:var(--blue);r:25}
+.node-label{fill:var(--text);font-size:11px;pointer-events:none;text-anchor:middle}
+.flow-link{fill:none;stroke-width:2;opacity:.4;stroke:var(--grid)}
+.flow-link.generates{stroke:var(--coral)}
+.flow-link.ekphrasis{stroke:var(--purple);stroke-width:3}
+
+.ftr{background:var(--panel);padding:0 16px;display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--dim);border-top:1px solid var(--grid)}
+.controls{display:flex;gap:8px}
+.slider-group{display:flex;align-items:center;gap:8px;font-size:10px}
+.slider{width:100px}
+
+.tooltip{position:absolute;background:rgba(15,20,25,.95);border:1px solid var(--blue);padding:10px;border-radius:6px;font-size:10px;pointer-events:none;z-index:1000;display:none}
+.loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:var(--void);z-index:2000;font-size:14px;color:var(--blue)}
+.loading.hidden{display:none}
+</style>
+</head><body>
+<div class="app">
+<header class="hdr">
+<div class="brand">ARKADU SPATIAL ECOLOGY</div>
+<div class="view-btns">
+<button class="btn active" onclick="setView('landscape')" id="vLand">LANDSCAPE</button>
+<button class="btn" onclick="setView('strata')" id="vStrata">STRATA</button>
+<button class="btn" onclick="setView('flow')" id="vFlow">FLOW</button>
+<button class="btn" onclick="setView('galaxy')" id="vGalaxy">GALAXY</button>
+</div>
+<div class="stats"><span id="sc">0</span><span id="sa">0</span><span id="sz">0</span></div>
+</header>
+
+<main class="stage">
+<div class="loading" id="loading">Loading ecosystem...</div>
+<div class="tooltip" id="tooltip"></div>
+
+<!-- LANDSCAPE: Treemap showing all kingdoms proportionally -->
+<div class="view active" id="landscape">
+<div class="landscape" id="landscapeContainer"></div>
+</div>
+
+<!-- STRATA: All depths visible as horizontal layers -->
+<div class="view" id="strata">
+<div class="strata" id="strataContainer"></div>
+</div>
+
+<!-- FLOW: Force-directed graph of all chambers -->
+<div class="view" id="flow">
+<div class="flow-layer">
+<svg class="flow-svg" id="flowSvg"></svg>
+</div>
+</div>
+
+<!-- GALAXY: 3D space -->
+<div class="view" id="galaxy">
+<div class="galaxy"><canvas id="canvas3d"></canvas></div>
+</div>
+</main>
+
+<footer class="ftr">
+<div id="info">Ready</div>
+<div class="controls">
+<div class="slider-group">
+<label>Grain Size</label>
+<input type="range" class="slider" id="grainSize" min="3" max="20" value="8" step="1">
+</div>
+<div class="slider-group">
+<label>Density</label>
+<input type="range" class="slider" id="density" min="10" max="500" value="150" step="10">
+</div>
+</div>
+</footer>
+</div>
+
+<script>
+const S={view:'landscape',kingdoms:[],chambers:[],artifacts:[],chains:[],grainSize:8,density:150};
+
+async function load(){
+try{
+const r=await fetch('/sys/primitive.jsonl');
+const t=await r.text();
+S.artifacts=t.trim().split('\n').map(l=>JSON.parse(l));
+try{
+const cr=await fetch('/sys/ekphrasis.jsonl');
+const ct=await cr.text();
+S.chains=ct.trim().split('\n').map(l=>JSON.parse(l));
+}catch(e){S.chains=[];}
+buildChambers();
+init();
+}catch(e){
+document.getElementById('loading').innerHTML=`<div style="color:var(--coral)">ERROR: ${e.message}</div>`;
+}}
+
+function buildChambers(){
+const m={};
+S.artifacts.forEach(a=>{
+const p=a.path.split('/');
+for(let d=1;d<=Math.min(p.length-1,3);d++){
+const cp=p.slice(0,d).join('/');
+if(!m[cp]){
+m[cp]={id:cp,name:p[d-1],depth:d-1,parent:d>1?p.slice(0,d-1).join('/'):null,children:[],artifacts:[],species:{},totalSize:0};
+}
+if(d===p.length-1){
+m[cp].artifacts.push(a);
+const s=(a.ext||'unknown').replace(/^\./,'');
+m[cp].species[s]=(m[cp].species[s]||0)+1;
+m[cp].totalSize+=(a.size||0);
+}
+}
+});
+Object.values(m).forEach(c=>{
+if(c.parent&&m[c.parent]){
+if(!m[c.parent].children.includes(c.id))m[c.parent].children.push(c.id);
+}
+});
+S.chambers=Object.values(m);
+S.kingdoms=S.chambers.filter(c=>c.depth===0).sort((a,b)=>b.totalSize-a.totalSize);
+}
+
+function init(){
+document.getElementById('loading').classList.add('hidden');
+renderLandscape();
+updateStats();
+setupControls();
+}
+
+function updateStats(){
+document.getElementById('sc').textContent=S.kingdoms.length+' kingdoms';
+document.getElementById('sa').textContent=S.artifacts.length.toLocaleString()+' artifacts';
+const total=S.kingdoms.reduce((s,k)=>s+k.totalSize,0);
+document.getElementById('sz').textContent=(total/1024/1024/1024).toFixed(2)+' GB';
+}
+
+// ===== LANDSCAPE: Treemap =====
+function renderLandscape(){
+const cont=document.getElementById('landscapeContainer');
+cont.innerHTML='';
+const w=cont.clientWidth||1400;
+const h=cont.clientHeight||800;
+const total=S.kingdoms.reduce((s,k)=>s+k.totalSize,0);
+
+let x=0,y=0,rowH=0;
+S.kingdoms.forEach(k=>{
+const ratio=k.totalSize/total;
+const area=w*h*ratio;
+const boxW=Math.min(Math.sqrt(area*1.5),w-x);
+const boxH=area/boxW;
+
+const box=document.createElement('div');
+box.className='kingdom-box';
+box.style.left=x+'px';
+box.style.top=y+'px';
+box.style.width=boxW+'px';
+box.style.height=boxH+'px';
+box.style.background=`linear-gradient(135deg, rgba(26,58,82,.2), rgba(15,20,25,.6))`;
+
+const title=document.createElement('div');
+title.className='kingdom-title';
+title.textContent=k.name;
+box.appendChild(title);
+
+const stats=document.createElement('div');
+stats.className='kingdom-stats';
+stats.textContent=`${k.artifacts.length} files • ${(k.totalSize/1024/1024).toFixed(1)} MB`;
+box.appendChild(stats);
+
+const dots=document.createElement('div');
+dots.className='species-dots';
+Object.entries(k.species).forEach(([sp,cnt])=>{
+const toShow=Math.min(cnt,S.density);
+for(let i=0;i<toShow;i++){
+const d=document.createElement('div');
+d.className='dot';
+d.dataset.s=sp;
+const size=S.grainSize;
+d.style.width=size+'px';
+d.style.height=size+'px';
+d.title=`${sp} (${k.name})`;
+d.onmouseenter=e=>showTooltip(e,`${sp.toUpperCase()}<br>${k.name}<br>${cnt} files`);
+d.onmouseleave=hideTooltip;
+dots.appendChild(d);
+}
+});
+box.appendChild(dots);
+
+cont.appendChild(box);
+
+rowH=Math.max(rowH,boxH);
+x+=boxW+4;
+if(x>w-200){x=0;y+=rowH+4;rowH=0;}
+});
+}
+
+// ===== STRATA: Horizontal layers =====
+function renderStrata(){
+const cont=document.getElementById('strataContainer');
+cont.innerHTML='';
+[0,1,2].forEach(depth=>{
+const chambers=S.chambers.filter(c=>c.depth===depth);
+if(chambers.length===0)return;
+
+const stratum=document.createElement('div');
+stratum.className='stratum';
+const label=document.createElement('div');
+label.className='stratum-label';
+const totalArts=chambers.reduce((s,c)=>s+c.artifacts.length,0);
+label.textContent=`DEPTH ${depth} — ${chambers.length} chambers • ${totalArts.toLocaleString()} artifacts`;
+stratum.appendChild(label);
+
+const content=document.createElement('div');
+content.className='stratum-content';
+chambers.forEach(ch=>{
+const cluster=document.createElement('div');
+cluster.className='chamber-cluster';
+const name=document.createElement('div');
+name.className='chamber-name';
+name.textContent=ch.name;
+cluster.appendChild(name);
+
+const dotsCont=document.createElement('div');
+dotsCont.className='chamber-dots';
+Object.entries(ch.species).forEach(([sp,cnt])=>{
+const toShow=Math.min(cnt,50);
+for(let i=0;i<toShow;i++){
+const d=document.createElement('div');
+d.className='dot';
+d.dataset.s=sp;
+d.style.width=S.grainSize+'px';
+d.style.height=S.grainSize+'px';
+d.title=`${sp} (${ch.name})`;
+dotsCont.appendChild(d);
+}
+});
+cluster.appendChild(dotsCont);
+content.appendChild(cluster);
+});
+
+stratum.appendChild(content);
+cont.appendChild(stratum);
+});
+}
+
+// ===== FLOW: Force graph =====
+function renderFlow(){
+const svg=document.getElementById('flowSvg');
+const w=svg.clientWidth||1200;
+const h=svg.clientHeight||800;
+svg.innerHTML='';
+svg.setAttribute('viewBox',`0 0 ${w} ${h}`);
+
+const nodes=S.kingdoms.map((k,i)=>{
+const angle=(i/S.kingdoms.length)*Math.PI*2;
+const r=Math.min(w,h)*0.35;
+return{
+id:k.id,
+name:k.name,
+x:w/2+Math.cos(angle)*r,
+y:h/2+Math.sin(angle)*r,
+size:k.artifacts.length,
+species:k.species
+};
+});
+
+const links=[];
+S.kingdoms.forEach(k=>{
+k.children.forEach(cid=>{
+const child=S.chambers.find(c=>c.id===cid);
+if(child)links.push({source:k.id,target:cid});
+});
+});
+
+links.forEach(l=>{
+const src=nodes.find(n=>n.id===l.source);
+const tgt=nodes.find(n=>n.id===l.target)||src;
+if(!src||!tgt)return;
+const path=document.createElementNS('http://www.w3.org/2000/svg','line');
+path.setAttribute('class','flow-link');
+path.setAttribute('x1',src.x);
+path.setAttribute('y1',src.y);
+path.setAttribute('x2',tgt.x);
+path.setAttribute('y2',tgt.y);
+svg.appendChild(path);
+});
+
+nodes.forEach(n=>{
+const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+g.setAttribute('class','node-group');
+g.setAttribute('transform',`translate(${n.x},${n.y})`);
+
+const circle=document.createElementNS('http://www.w3.org/2000/svg','circle');
+circle.setAttribute('class','node-circle');
+circle.setAttribute('r',Math.min(50,10+Math.sqrt(n.size)));
+g.appendChild(circle);
+
+const text=document.createElementNS('http://www.w3.org/2000/svg','text');
+text.setAttribute('class','node-label');
+text.setAttribute('y',4);
+text.textContent=n.name;
+g.appendChild(text);
+
+const specCount=Object.keys(n.species).length;
+const subtext=document.createElementNS('http://www.w3.org/2000/svg','text');
+subtext.setAttribute('class','node-label');
+subtext.setAttribute('y',16);
+subtext.setAttribute('style','font-size:8px;fill:var(--dim)');
+subtext.textContent=`${n.size} • ${specCount} types`;
+g.appendChild(subtext);
+
+g.onmouseenter=e=>showTooltip(e,`${n.name}<br>${n.size} artifacts<br>${Object.keys(n.species).join(', ')}`);
+g.onmouseleave=hideTooltip;
+
+svg.appendChild(g);
+});
+}
+
+// ===== GALAXY: 3D WebGL =====
+function renderGalaxy(){
+const canvas=document.getElementById('canvas3d');
+const ctx=canvas.getContext('2d');
+canvas.width=canvas.clientWidth;
+canvas.height=canvas.clientHeight;
+const w=canvas.width;
+const h=canvas.height;
+ctx.fillStyle='#0a0e1a';
+ctx.fillRect(0,0,w,h);
+
+let angle=0;
+function draw(){
+ctx.fillStyle='rgba(10,14,26,.1)';
+ctx.fillRect(0,0,w,h);
+angle+=0.005;
+
+S.kingdoms.forEach((k,i)=>{
+const theta=(i/S.kingdoms.length)*Math.PI*2;
+const phi=Math.sin(angle+i)*0.5;
+const r=250;
+const x=w/2+Math.cos(theta)*r*Math.cos(phi);
+const y=h/2+Math.sin(theta)*r*Math.cos(phi);
+const z=Math.sin(phi)*100;
+const scale=1+(z/300);
+const size=Math.min(60,10+Math.sqrt(k.artifacts.length))*scale;
+
+ctx.beginPath();
+ctx.arc(x,y,size,0,Math.PI*2);
+const hue=180+z;
+ctx.fillStyle=`hsla(${hue},70%,60%,${0.3+scale*0.3})`;
+ctx.fill();
+ctx.strokeStyle='rgba(77,217,204,.5)';
+ctx.lineWidth=2;
+ctx.stroke();
+
+ctx.fillStyle='rgba(184,219,217,.9)';
+ctx.font='11px Courier New';
+ctx.textAlign='center';
+ctx.fillText(k.name,x,y+4);
+});
+
+requestAnimationFrame(draw);
+}
+draw();
+}
+
+function setView(v){
+S.view=v;
+['landscape','strata','flow','galaxy'].forEach(view=>{
+document.getElementById(view).classList.toggle('active',view===v);
+const btn=document.getElementById('v'+view.charAt(0).toUpperCase()+view.slice(1,4));
+if(btn)btn.classList.toggle('active',view===v);
+});
+if(v==='strata')renderStrata();
+if(v==='flow')renderFlow();
+if(v==='galaxy')renderGalaxy();
+document.getElementById('info').textContent=`View: ${v.toUpperCase()}`;
+}
+
+function setupControls(){
+document.getElementById('grainSize').oninput=e=>{
+S.grainSize=parseInt(e.target.value);
+if(S.view==='landscape')renderLandscape();
+if(S.view==='strata')renderStrata();
+};
+document.getElementById('density').oninput=e=>{
+S.density=parseInt(e.target.value);
+if(S.view==='landscape')renderLandscape();
+if(S.view==='strata')renderStrata();
+};
+window.onresize=()=>{
+if(S.view==='landscape')renderLandscape();
+if(S.view==='flow')renderFlow();
+if(S.view==='galaxy')renderGalaxy();
+};
+}
+
+function showTooltip(e,html){
+const tt=document.getElementById('tooltip');
+tt.innerHTML=html;
+tt.style.display='block';
+tt.style.left=(e.clientX+15)+'px';
+tt.style.top=(e.clientY+15)+'px';
+}
+
+function hideTooltip(){
+document.getElementById('tooltip').style.display='none';
+}
+
+load();
+</script>
+</body></html>

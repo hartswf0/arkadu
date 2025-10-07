@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<title>ARKADU Stratigraphic Deep Survey</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0e1a;color:#4dd9cc;font-family:monospace;overflow:hidden}
+#canvas{display:block}
+.hud{position:fixed;top:20px;left:20px;background:rgba(0,0,0,.95);border:1px solid #4dd9cc;
+padding:16px;width:340px;z-index:100;font-size:11px;border-radius:8px}
+.stat{margin:6px 0;padding:6px;background:rgba(77,217,204,.05);border-radius:4px}
+.label{color:#6b8a96;font-size:9px}
+.value{color:#4dd9cc;font-size:11px;font-weight:bold}
+.controls{position:fixed;bottom:20px;left:20px;background:rgba(0,0,0,.95);
+border:1px solid #4dd9cc;padding:16px;width:340px;border-radius:8px;z-index:100}
+.btn{padding:8px 12px;margin:4px;background:rgba(77,217,204,.1);border:1px solid rgba(77,217,204,.3);
+color:#4dd9cc;cursor:pointer;font-size:10px;display:inline-block;border-radius:4px}
+.btn:hover{background:rgba(77,217,204,.2)}
+.btn.active{background:#4dd9cc;color:#000}
+.slider-group{margin:10px 0}
+.slider{width:100%;margin:6px 0}
+#labels{position:fixed;inset:0;pointer-events:none;z-index:50}
+.chamber-label{position:absolute;pointer-events:all;cursor:pointer;padding:4px 8px;
+background:rgba(0,0,0,.85);border:1px solid #4dd9cc;border-radius:4px;font-size:9px;
+white-space:nowrap;color:#4dd9cc}
+.chamber-label:hover{background:rgba(77,217,204,.2);border-color:#fff}
+.chamber-label.depth0{font-size:12px;font-weight:bold;border-color:#d97b8f;color:#d97b8f}
+.chamber-label.depth1{font-size:10px;border-color:#e8b849;color:#e8b849}
+.chamber-label.depth2{font-size:9px;border-color:#9d7be8;color:#9d7be8}
+.inspector{position:fixed;top:20px;right:20px;background:rgba(0,0,0,.95);
+border:1px solid #d97b8f;padding:16px;width:400px;max-height:80vh;overflow-y:auto;
+z-index:100;border-radius:8px;transform:translateX(450px);transition:transform .3s}
+.inspector.open{transform:translateX(0)}
+.close{position:absolute;top:16px;right:16px;cursor:pointer;color:#d97b8f;font-size:18px}
+.info-sec{margin:10px 0;padding:10px;background:rgba(77,217,204,.05);border-radius:4px;font-size:10px}
+.loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+flex-direction:column;gap:20px;background:#000;z-index:200;color:#4dd9cc}
+.loading.hidden{display:none}
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<div id="labels"></div>
+
+<div class="loading" id="loading">
+<div>⬢ BUILDING STRATIGRAPHIC SURVEY ⬢</div>
+<div id="status">Loading...</div>
+</div>
+
+<div class="hud">
+<div class="stat"><div class="label">Total Chambers</div><div class="value" id="totalChambers">0</div></div>
+<div class="stat"><div class="label">Max Depth</div><div class="value" id="maxDepth">0</div></div>
+<div class="stat"><div class="label">Total Artifacts</div><div class="value" id="totalArtifacts">0</div></div>
+<div class="stat"><div class="label">Total Size</div><div class="value" id="totalSize">0</div></div>
+<div class="stat"><div class="label">Active Metric</div><div class="value" id="activeMetric">COUNT</div></div>
+<div class="stat"><div class="label">Visible Depths</div><div class="value" id="visibleDepths">All</div></div>
+</div>
+
+<div class="controls">
+<div><strong>Topographic Metric</strong></div>
+<div class="btn active" id="btnCount">By Count</div>
+<div class="btn" id="btnSize">By Size</div>
+<div class="btn" id="btnDual">Dual View</div>
+<div style="margin-top:12px"><strong>Depth Layers</strong></div>
+<div class="btn active" id="btnD0">D0</div>
+<div class="btn active" id="btnD1">D1</div>
+<div class="btn active" id="btnD2">D2</div>
+<div class="btn active" id="btnD3">D3</div>
+<div class="btn active" id="btnD4">D4</div>
+<div class="btn active" id="btnD5">D5+</div>
+<div class="slider-group">
+<div class="label">Contour Detail</div>
+<input type="range" class="slider" id="contourDetail" min="3" max="15" value="8">
+</div>
+<div class="slider-group">
+<div class="label">Layer Spacing</div>
+<input type="range" class="slider" id="layerSpacing" min="20" max="150" value="60">
+</div>
+</div>
+
+<div class="inspector" id="inspector">
+<div class="close" onclick="closeInspector()">×</div>
+<div style="font-size:13px;color:#d97b8f;font-weight:bold;margin-bottom:12px">CHAMBER ANALYSIS</div>
+<div id="inspectorContent"></div>
+</div>
+
+<script>
+const CAN=document.getElementById('canvas');
+const CTX=CAN.getContext('2d');
+let DPR=window.devicePixelRatio||1;
+let W,H;
+
+const STATE={
+artifacts:[],
+chambers:[], // Full hierarchy with parent/child
+maxDepth:0,
+metric:'count', // count, size, or dual
+activeLayers:new Set([0,1,2,3,4,5,6,7,8,9]),
+contourLevels:8,
+layerSpacing:60,
+zoom:1,
+panX:0,
+panY:0,
+dragging:false,
+lastX:0,
+lastY:0,
+selectedChamber:null
+};
+
+async function load(){
+try{
+updateStatus('Loading artifacts...');
+const r=await fetch('sys/primitive.jsonl');
+const t=await r.text();
+STATE.artifacts=t.trim().split('\n').map(l=>JSON.parse(l));
+console.log(`Loaded ${STATE.artifacts.length} artifacts`);
+
+updateStatus('Building chamber hierarchy...');
+buildFullHierarchy();
+
+updateStatus('Generating stratigraphy...');
+resize();
+draw();
+
+document.getElementById('loading').classList.add('hidden');
+updateHUD();
+}catch(e){
+console.error(e);
+document.getElementById('status').innerHTML=`<span style="color:#d97b8f">ERROR: ${e.message}</span>`;
+}}
+
+function updateStatus(msg){
+document.getElementById('status').textContent=msg;
+}
+
+function buildFullHierarchy(){
+const chamberMap={};
+const ROOT={id:'ROOT',name:'ROOT',depth:-1,parent:null,children:[],artifacts:[],
+totalCount:0,totalSize:0,species:{},descendants:0};
+chamberMap['ROOT']=ROOT;
+
+// Build all chamber nodes
+STATE.artifacts.forEach(art=>{
+const parts=art.path.split('/');
+for(let d=0;d<parts.length-1;d++){
+const pathSoFar=parts.slice(0,d+1).join('/');
+if(!chamberMap[pathSoFar]){
+chamberMap[pathSoFar]={
+id:pathSoFar,
+name:parts[d],
+depth:d,
+parent:d>0?parts.slice(0,d).join('/'):null,
+children:[],
+artifacts:[],
+totalCount:0,
+totalSize:0,
+species:{},
+descendants:0
+};
+}
+}
+// Leaf node gets the artifact
+const leafPath=parts.slice(0,-1).join('/');
+if(chamberMap[leafPath]){
+chamberMap[leafPath].artifacts.push(art);
+const ext=(art.ext||'').replace(/^\./,'')||'unknown';
+chamberMap[leafPath].species[ext]=(chamberMap[leafPath].species[ext]||0)+1;
+}
+});
+
+// Link children to parents
+Object.values(chamberMap).forEach(ch=>{
+if(ch.parent&&chamberMap[ch.parent]){
+if(!chamberMap[ch.parent].children.includes(ch.id)){
+chamberMap[ch.parent].children.push(ch.id);
+}
+}
+});
+
+// Aggregate counts and sizes up the tree
+function aggregate(ch){
+ch.totalCount=ch.artifacts.length;
+ch.totalSize=ch.artifacts.reduce((s,a)=>s+(a.size||0),0);
+ch.descendants=ch.children.length;
+ch.children.forEach(childId=>{
+const child=chamberMap[childId];
+if(child){
+aggregate(child);
+ch.totalCount+=child.totalCount;
+ch.totalSize+=child.totalSize;
+ch.descendants+=child.descendants+1;
+// Merge species
+Object.entries(child.species).forEach(([sp,cnt])=>{
+ch.species[sp]=(ch.species[sp]||0)+cnt;
+});
+}
+});
+}
+
+Object.values(chamberMap).filter(c=>c.children.length>0||c.artifacts.length>0).forEach(aggregate);
+
+STATE.chambers=Object.values(chamberMap).filter(c=>c.id!=='ROOT');
+STATE.maxDepth=Math.max(...STATE.chambers.map(c=>c.depth));
+
+console.log(`Built ${STATE.chambers.length} chambers at ${STATE.maxDepth+1} depths`);
+console.log('Depth distribution:',STATE.chambers.reduce((acc,c)=>{
+acc[c.depth]=(acc[c.depth]||0)+1;
+return acc;
+},{}));
+}
+
+function draw(){
+CTX.fillStyle='#0a0e1a';
+CTX.fillRect(0,0,W,H);
+
+CTX.save();
+CTX.translate(STATE.panX,STATE.panY);
+CTX.scale(STATE.zoom,STATE.zoom);
+
+// Group chambers by depth
+const byDepth={};
+STATE.chambers.forEach(ch=>{
+if(!STATE.activeLayers.has(ch.depth))return;
+if(!byDepth[ch.depth])byDepth[ch.depth]=[];
+byDepth[ch.depth].push(ch);
+});
+
+// Draw from bottom up (depth 0 at bottom)
+const depths=Object.keys(byDepth).map(Number).sort((a,b)=>b-a);
+let baseY=H/(STATE.zoom*DPR)-100;
+
+depths.forEach(depth=>{
+const chambers=byDepth[depth];
+const layerY=baseY-depth*STATE.layerSpacing;
+drawStratumLayer(chambers,layerY,depth);
+});
+
+CTX.restore();
+updateLabels();
+}
+
+function drawStratumLayer(chambers,baseY,depth){
+// Sort chambers by metric
+const metric=STATE.metric==='count'?'totalCount':'totalSize';
+chambers.sort((a,b)=>b[metric]-a[metric]);
+
+const colors=['#d97b8f','#e8b849','#9d7be8','#4dd9cc','#6bbd8f','#ffaa44'];
+const layerColor=colors[depth%colors.length];
+
+let x=100;
+const chamberSpacing=20;
+
+chambers.forEach((ch,idx)=>{
+const value=ch[metric];
+const width=Math.max(40,Math.sqrt(value)*0.5);
+const height=Math.log(value+1)*15;
+
+// Draw chamber base
+CTX.fillStyle=hexToRgba(layerColor,0.15);
+CTX.fillRect(x,baseY-height,width,height);
+
+// Draw contour lines
+CTX.strokeStyle=hexToRgba(layerColor,0.6);
+CTX.lineWidth=1.5;
+for(let i=1;i<=STATE.contourLevels;i++){
+const y=baseY-height*(i/STATE.contourLevels);
+CTX.beginPath();
+CTX.moveTo(x,y);
+CTX.lineTo(x+width,y);
+CTX.stroke();
+}
+
+// Border
+CTX.strokeStyle=hexToRgba(layerColor,0.8);
+CTX.lineWidth=2;
+CTX.strokeRect(x,baseY-height,width,height);
+
+// Store position for labels and interaction
+ch._renderX=x;
+ch._renderY=baseY-height;
+ch._renderW=width;
+ch._renderH=height;
+
+x+=width+chamberSpacing;
+});
+}
+
+function updateLabels(){
+const labelsDiv=document.getElementById('labels');
+let html='';
+
+STATE.chambers.forEach(ch=>{
+if(!STATE.activeLayers.has(ch.depth))return;
+if(!ch._renderX)return;
+
+const [sx,sy]=worldToScreen(ch._renderX+ch._renderW/2,ch._renderY);
+if(sx<-100||sx>W+100||sy<-100||sy>H+100)return;
+
+const className=`chamber-label depth${Math.min(ch.depth,2)}`;
+html+=`<div class="${className}" 
+style="left:${sx}px;top:${sy-20}px" 
+onclick="inspectChamber('${ch.id.replace(/'/g,"\\'")}')">
+${ch.name}<br>
+<span style="font-size:8px;opacity:0.7">${ch.totalCount} · ${formatSize(ch.totalSize)}</span>
+</div>`;
+});
+
+labelsDiv.innerHTML=html;
+}
+
+function worldToScreen(x,y){
+return[
+(x*STATE.zoom+STATE.panX)*DPR,
+(y*STATE.zoom+STATE.panY)*DPR
+];
+}
+
+function formatSize(bytes){
+if(bytes<1024)return bytes+'B';
+if(bytes<1024*1024)return(bytes/1024).toFixed(1)+'KB';
+if(bytes<1024*1024*1024)return(bytes/1024/1024).toFixed(1)+'MB';
+return(bytes/1024/1024/1024).toFixed(2)+'GB';
+}
+
+function hexToRgba(hex,alpha){
+const h=hex.replace('#','');
+const r=parseInt(h.slice(0,2),16);
+const g=parseInt(h.slice(2,4),16);
+const b=parseInt(h.slice(4,6),16);
+return `rgba(${r},${g},${b},${alpha})`;
+}
+
+window.inspectChamber=function(id){
+const ch=STATE.chambers.find(c=>c.id===id);
+if(!ch)return;
+
+let html=`
+<div class="info-sec">
+<div class="label">Name</div><div class="value">${ch.name}</div>
+<div class="label">Path</div><div class="value" style="font-size:9px;word-break:break-all">${ch.id}</div>
+<div class="label">Depth</div><div class="value">Level ${ch.depth}</div>
+</div>
+
+<div class="info-sec">
+<div class="label">Direct Artifacts</div><div class="value">${ch.artifacts.length}</div>
+<div class="label">Total (with descendants)</div><div class="value">${ch.totalCount}</div>
+<div class="label">Direct Size</div><div class="value">${formatSize(ch.artifacts.reduce((s,a)=>s+(a.size||0),0))}</div>
+<div class="label">Total Size</div><div class="value">${formatSize(ch.totalSize)}</div>
+<div class="label">Children</div><div class="value">${ch.children.length}</div>
+<div class="label">Descendants</div><div class="value">${ch.descendants}</div>
+</div>
+
+<div style="font-size:11px;color:#4dd9cc;font-weight:bold;margin:12px 0">SPECIES (${Object.keys(ch.species).length})</div>`;
+
+Object.entries(ch.species).sort((a,b)=>b[1]-a[1]).slice(0,10).forEach(([sp,cnt])=>{
+html+=`<div style="padding:6px;margin:4px 0;background:rgba(77,217,204,.05);border-radius:3px">
+<div style="color:#4dd9cc;font-size:10px">${sp.toUpperCase()}</div>
+<div style="color:#6b8a96;font-size:9px">${cnt} files · ${(cnt/ch.totalCount*100).toFixed(1)}%</div>
+</div>`;
+});
+
+if(ch.children.length>0){
+html+=`<div style="font-size:11px;color:#e8b849;font-weight:bold;margin:12px 0">CHILDREN (${ch.children.length})</div>`;
+ch.children.slice(0,8).forEach(childId=>{
+const child=STATE.chambers.find(c=>c.id===childId);
+if(child){
+html+=`<div style="padding:4px;margin:3px 0;cursor:pointer;background:rgba(232,184,73,.05);
+border-left:2px solid #e8b849;font-size:9px" onclick="inspectChamber('${childId.replace(/'/g,"\\'")}')">
+${child.name} · ${child.totalCount} artifacts
+</div>`;
+}
+});
+if(ch.children.length>8)html+=`<div style="font-size:9px;color:#6b8a96;padding:4px">+${ch.children.length-8} more</div>`;
+}
+
+document.getElementById('inspectorContent').innerHTML=html;
+document.getElementById('inspector').classList.add('open');
+};
+
+function closeInspector(){
+document.getElementById('inspector').classList.remove('open');
+}
+
+function updateHUD(){
+document.getElementById('totalChambers').textContent=STATE.chambers.length;
+document.getElementById('maxDepth').textContent=STATE.maxDepth+1;
+document.getElementById('totalArtifacts').textContent=STATE.artifacts.length.toLocaleString();
+document.getElementById('totalSize').textContent=formatSize(STATE.artifacts.reduce((s,a)=>s+(a.size||0),0));
+document.getElementById('activeMetric').textContent=STATE.metric.toUpperCase();
+const active=Array.from(STATE.activeLayers).sort((a,b)=>a-b);
+document.getElementById('visibleDepths').textContent=active.length>=10?'All':'D'+active.join(',D');
+}
+
+function resize(){
+W=window.innerWidth;
+H=window.innerHeight;
+CAN.width=W*DPR;
+CAN.height=H*DPR;
+CAN.style.width=W+'px';
+CAN.style.height=H+'px';
+CTX.scale(DPR,DPR);
+}
+
+// Events
+window.addEventListener('resize',()=>{resize();draw();});
+
+CAN.addEventListener('wheel',e=>{
+e.preventDefault();
+const delta=e.deltaY>0?0.9:1.1;
+STATE.zoom=Math.max(0.1,Math.min(5,STATE.zoom*delta));
+draw();
+});
+
+CAN.addEventListener('mousedown',e=>{
+STATE.dragging=true;
+STATE.lastX=e.clientX;
+STATE.lastY=e.clientY;
+});
+
+CAN.addEventListener('mousemove',e=>{
+if(!STATE.dragging)return;
+STATE.panX+=e.clientX-STATE.lastX;
+STATE.panY+=e.clientY-STATE.lastY;
+STATE.lastX=e.clientX;
+STATE.lastY=e.clientY;
+draw();
+});
+
+CAN.addEventListener('mouseup',()=>STATE.dragging=false);
+
+document.getElementById('btnCount').onclick=()=>{
+STATE.metric='count';
+document.querySelectorAll('.controls .btn').forEach(b=>b.classList.remove('active'));
+document.getElementById('btnCount').classList.add('active');
+updateHUD();
+draw();
+};
+
+document.getElementById('btnSize').onclick=()=>{
+STATE.metric='size';
+document.querySelectorAll('.controls .btn').forEach(b=>b.classList.remove('active'));
+document.getElementById('btnSize').classList.add('active');
+updateHUD();
+draw();
+};
+
+['D0','D1','D2','D3','D4','D5'].forEach((id,depth)=>{
+document.getElementById('btn'+id).onclick=function(){
+this.classList.toggle('active');
+if(STATE.activeLayers.has(depth)){
+STATE.activeLayers.delete(depth);
+}else{
+STATE.activeLayers.add(depth);
+}
+updateHUD();
+draw();
+};
+});
+
+document.getElementById('contourDetail').oninput=function(){
+STATE.contourLevels=parseInt(this.value);
+draw();
+};
+
+document.getElementById('layerSpacing').oninput=function(){
+STATE.layerSpacing=parseInt(this.value);
+draw();
+};
+
+load();
+</script>
+</body></html>
