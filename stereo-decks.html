@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>STEREO DECKS - Synchronized Dual Visualization</title>
+<style>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: #0a0a0a;
+  color: #4dd9cc;
+  font-family: 'Monaco', 'Courier New', monospace;
+  overflow: hidden;
+  height: 100vh;
+}
+
+/* Control bar */
+#controlBar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background: rgba(0, 0, 0, 0.95);
+  border-bottom: 2px solid #4dd9cc;
+  backdrop-filter: blur(15px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  box-shadow: 0 0 30px rgba(77, 217, 204, 0.3);
+}
+
+.control-section {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+#title {
+  font-size: 18px;
+  color: #e8b849;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  text-shadow: 0 0 10px rgba(232, 184, 73, 0.6);
+}
+
+.deck-label {
+  font-size: 11px;
+  color: #6b8a96;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.deck-indicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.deck-indicator.left {
+  background: #9d7be8;
+  box-shadow: 0 0 10px rgba(157, 123, 232, 0.8);
+}
+
+.deck-indicator.right {
+  background: #e8b849;
+  box-shadow: 0 0 10px rgba(232, 184, 73, 0.8);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.2); }
+}
+
+.btn {
+  padding: 8px 16px;
+  background: rgba(77, 217, 204, 0.1);
+  border: 1px solid #4dd9cc;
+  color: #4dd9cc;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 11px;
+  transition: all 0.2s;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.btn:hover {
+  background: rgba(77, 217, 204, 0.3);
+  box-shadow: 0 0 15px rgba(77, 217, 204, 0.4);
+  transform: translateY(-2px);
+}
+
+.btn.active {
+  background: rgba(232, 184, 73, 0.3);
+  border-color: #e8b849;
+  color: #e8b849;
+}
+
+/* Layout modes */
+#deckContainer {
+  position: fixed;
+  top: 60px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+}
+
+#deckContainer.split-vertical {
+  flex-direction: row;
+}
+
+#deckContainer.split-horizontal {
+  flex-direction: column;
+}
+
+#deckContainer.overlay {
+  flex-direction: row;
+}
+
+.deck {
+  position: relative;
+  flex: 1;
+  border: 1px solid rgba(77, 217, 204, 0.2);
+  overflow: hidden;
+}
+
+#deckContainer.split-vertical .deck:first-child {
+  border-right: 2px solid #9d7be8;
+}
+
+#deckContainer.split-horizontal .deck:first-child {
+  border-bottom: 2px solid #9d7be8;
+}
+
+#deckContainer.overlay .deck:last-child {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.deck iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+}
+
+.deck-overlay-label {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  padding: 6px 12px;
+  background: rgba(0, 0, 0, 0.9);
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  z-index: 10;
+  pointer-events: none;
+  backdrop-filter: blur(10px);
+}
+
+#leftDeck .deck-overlay-label {
+  color: #9d7be8;
+  box-shadow: 0 0 15px rgba(157, 123, 232, 0.6);
+}
+
+#rightDeck .deck-overlay-label {
+  color: #e8b849;
+  box-shadow: 0 0 15px rgba(232, 184, 73, 0.6);
+}
+
+/* Sync indicator */
+#syncStatus {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  color: #6b8a96;
+}
+
+#syncIndicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #6bbd8f;
+  box-shadow: 0 0 8px rgba(107, 189, 143, 0.8);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+#syncIndicator.syncing {
+  background: #e8b849;
+  box-shadow: 0 0 8px rgba(232, 184, 73, 0.8);
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  #controlBar {
+    height: auto;
+    flex-direction: column;
+    padding: 10px;
+    gap: 10px;
+  }
+  
+  .control-section {
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  #title {
+    font-size: 14px;
+  }
+  
+  .btn {
+    font-size: 9px;
+    padding: 6px 12px;
+  }
+  
+  #deckContainer {
+    top: auto;
+  }
+}
+
+/* Divider handle */
+.divider {
+  position: absolute;
+  background: #4dd9cc;
+  z-index: 100;
+  cursor: col-resize;
+  transition: all 0.2s;
+}
+
+#deckContainer.split-vertical .divider {
+  width: 4px;
+  height: 100%;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  cursor: col-resize;
+}
+
+#deckContainer.split-horizontal .divider {
+  height: 4px;
+  width: 100%;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: row-resize;
+}
+
+.divider:hover {
+  background: #e8b849;
+  box-shadow: 0 0 20px rgba(232, 184, 73, 0.8);
+}
+
+.divider::before {
+  content: '⋮⋮⋮';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #0a0a0a;
+  font-size: 12px;
+  font-weight: bold;
+  letter-spacing: -2px;
+}
+
+#deckContainer.split-horizontal .divider::before {
+  content: '⋯⋯⋯';
+  letter-spacing: 2px;
+}
+</style>
+</head>
+<body>
+
+<div id="controlBar">
+  <div class="control-section">
+    <div id="title">⚡ STEREO DECKS</div>
+    <div id="syncStatus">
+      <div id="syncIndicator"></div>
+      <span>SYNCHRONIZED</span>
+    </div>
+  </div>
+  
+  <div class="control-section">
+    <div class="deck-label">
+      <div class="deck-indicator left"></div>
+      <span>DECK L: Voronoi</span>
+    </div>
+    <div class="deck-label">
+      <div class="deck-indicator right"></div>
+      <span>DECK R: Sediment</span>
+    </div>
+  </div>
+  
+  <div class="control-section">
+    <button class="btn active" onclick="setLayout('split-vertical')">⬌ SPLIT</button>
+    <button class="btn" onclick="setLayout('split-horizontal')">⬍ STACK</button>
+    <button class="btn" onclick="setLayout('overlay')">◎ OVERLAY</button>
+    <button class="btn" onclick="swapDecks()">⇄ SWAP</button>
+  </div>
+</div>
+
+<div id="deckContainer" class="split-vertical">
+  <div id="leftDeck" class="deck">
+    <div class="deck-overlay-label">◐ VORONOI WARFARE</div>
+    <iframe id="leftFrame" src="approach-2-depth-test.html"></iframe>
+  </div>
+  
+  <div class="divider"></div>
+  
+  <div id="rightDeck" class="deck">
+    <div class="deck-overlay-label">◑ EXCAVATION OS</div>
+    <iframe id="rightFrame" src="approach-4b-sediment-simple.html"></iframe>
+  </div>
+</div>
+
+<script>
+let currentLayout = 'split-vertical';
+let leftSrc = 'approach-2-depth-test.html';
+let rightSrc = 'approach-4b-sediment-simple.html';
+
+function setLayout(layout) {
+  currentLayout = layout;
+  const container = document.getElementById('deckContainer');
+  container.className = layout;
+  
+  // Update button states
+  document.querySelectorAll('.btn').forEach(btn => {
+    btn.classList.remove('active');
+  });
+  event.target.classList.add('active');
+  
+  // Flash sync indicator
+  const indicator = document.getElementById('syncIndicator');
+  indicator.classList.add('syncing');
+  setTimeout(() => indicator.classList.remove('syncing'), 500);
+}
+
+function swapDecks() {
+  const leftFrame = document.getElementById('leftFrame');
+  const rightFrame = document.getElementById('rightFrame');
+  
+  // Swap sources
+  [leftSrc, rightSrc] = [rightSrc, leftSrc];
+  leftFrame.src = leftSrc;
+  rightFrame.src = rightSrc;
+  
+  // Update labels
+  const leftLabel = document.querySelector('#leftDeck .deck-overlay-label');
+  const rightLabel = document.querySelector('#rightDeck .deck-overlay-label');
+  [leftLabel.textContent, rightLabel.textContent] = [rightLabel.textContent, leftLabel.textContent];
+  
+  // Flash sync indicator
+  const indicator = document.getElementById('syncIndicator');
+  indicator.classList.add('syncing');
+  setTimeout(() => indicator.classList.remove('syncing'), 500);
+}
+
+// Draggable divider (future enhancement)
+let isDragging = false;
+let startPos = 0;
+
+document.querySelector('.divider')?.addEventListener('mousedown', (e) => {
+  isDragging = true;
+  startPos = currentLayout === 'split-vertical' ? e.clientX : e.clientY;
+  document.body.style.cursor = currentLayout === 'split-vertical' ? 'col-resize' : 'row-resize';
+});
+
+document.addEventListener('mousemove', (e) => {
+  if (!isDragging) return;
+  
+  const container = document.getElementById('deckContainer');
+  const leftDeck = document.getElementById('leftDeck');
+  const rightDeck = document.getElementById('rightDeck');
+  
+  if (currentLayout === 'split-vertical') {
+    const containerWidth = container.offsetWidth;
+    const newLeftWidth = (e.clientX / containerWidth) * 100;
+    if (newLeftWidth > 20 && newLeftWidth < 80) {
+      leftDeck.style.flex = `0 0 ${newLeftWidth}%`;
+      rightDeck.style.flex = `0 0 ${100 - newLeftWidth}%`;
+    }
+  } else if (currentLayout === 'split-horizontal') {
+    const containerHeight = container.offsetHeight;
+    const newTopHeight = (e.clientY / containerHeight) * 100;
+    if (newTopHeight > 20 && newTopHeight < 80) {
+      leftDeck.style.flex = `0 0 ${newTopHeight}%`;
+      rightDeck.style.flex = `0 0 ${100 - newTopHeight}%`;
+    }
+  }
+});
+
+document.addEventListener('mouseup', () => {
+  if (isDragging) {
+    isDragging = false;
+    document.body.style.cursor = 'default';
+  }
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+  if (e.key === '1') setLayout('split-vertical');
+  if (e.key === '2') setLayout('split-horizontal');
+  if (e.key === '3') setLayout('overlay');
+  if (e.key === 's' || e.key === 'S') swapDecks();
+});
+
+// Log sync events (for future cross-iframe communication)
+window.addEventListener('message', (event) => {
+  // Future: handle navigation sync between iframes
+  console.log('Deck sync event:', event.data);
+  
+  const indicator = document.getElementById('syncIndicator');
+  indicator.classList.add('syncing');
+  setTimeout(() => indicator.classList.remove('syncing'), 300);
+});
+
+console.log('🎚️ STEREO DECKS initialized');
+console.log('Keyboard shortcuts:');
+console.log('  1 = Split vertical');
+console.log('  2 = Split horizontal');
+console.log('  3 = Overlay mode');
+console.log('  S = Swap decks');
+</script>
+
+</body>
+</html>

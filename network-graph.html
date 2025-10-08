@@ -168,12 +168,86 @@
         // Load manifest and build graph
         async function loadGraph() {
             try {
-                const response = await fetch('media-manifest.json');
-                const manifest = await response.json();
+                // Load from new JSONL system
+                const [primResp, ekphResp] = await Promise.all([
+                    fetch('sys/primitive.jsonl'),
+                    fetch('sys/ekphrasis.jsonl')
+                ]);
+                
+                const primText = await primResp.text();
+                const ekphText = await ekphResp.text();
+                
+                const artifacts = primText.trim().split('\n').filter(l => l).map(line => JSON.parse(line));
+                const chains = ekphText.trim().split('\n').filter(l => l).map(line => JSON.parse(line));
+                
+                // Convert to manifest format
+                const manifest = convertToManifest(artifacts, chains);
                 buildGraph(manifest);
             } catch (e) {
-                console.error('Could not load manifest:', e);
+                console.error('Could not load data:', e);
+                document.querySelector('.hud').innerHTML = `
+                    <h2>⚠️ Data Load Error</h2>
+                    <p style="color: var(--trace);">Could not load sys/primitive.jsonl or sys/ekphrasis.jsonl</p>
+                    <p style="font-size: 0.75rem; margin-top: 10px;">Try: <strong>index-master.html</strong> for full system</p>
+                `;
             }
+        }
+        
+        function convertToManifest(artifacts, chains) {
+            // Build circulation map from ekphrasis chains
+            // Format: JSON prompts → Python scripts → Generated media
+            const circulation = {};
+            
+            // Create pseudo-HTML nodes for Python scripts
+            chains.forEach(chain => {
+                if (chain.script) {
+                    if (!circulation[chain.script]) circulation[chain.script] = [];
+                    if (chain.prompt_file) {
+                        circulation[chain.script].push(chain.prompt_file);
+                    }
+                }
+            });
+            
+            // Separate artifacts by type
+            const images = artifacts.filter(a => ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'].includes(a.ext));
+            const videos = artifacts.filter(a => ['.mp4', '.mov', '.avi', '.webm', '.mkv'].includes(a.ext));
+            const audio = artifacts.filter(a => ['.mp3', '.wav', '.ogg', '.m4a'].includes(a.ext));
+            const jsonFiles = artifacts.filter(a => a.ext === '.json');
+            const pyFiles = artifacts.filter(a => a.ext === '.py');
+            
+            // Map ekphrasis chain relationships
+            // JSON files are "used by" Python scripts
+            const usageMap = {};
+            chains.forEach(chain => {
+                if (chain.prompt_file && chain.script) {
+                    if (!usageMap[chain.prompt_file]) usageMap[chain.prompt_file] = [];
+                    usageMap[chain.prompt_file].push(chain.script);
+                }
+            });
+            
+            return {
+                circulation: circulation,
+                artifacts: {
+                    images: images.map(a => ({
+                        path: a.path,
+                        size: a.size,
+                        animal: a.path.split('/')[0] || 'ROOT',
+                        used_by: usageMap[a.path] || []
+                    })),
+                    videos: videos.map(a => ({
+                        path: a.path,
+                        size: a.size,
+                        animal: a.path.split('/')[0] || 'ROOT',
+                        used_by: usageMap[a.path] || []
+                    })),
+                    audio: audio.map(a => ({
+                        path: a.path,
+                        size: a.size,
+                        animal: a.path.split('/')[0] || 'ROOT',
+                        used_by: usageMap[a.path] || []
+                    }))
+                }
+            };
         }
 
         function buildGraph(manifest) {

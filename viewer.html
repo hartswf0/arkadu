@@ -177,17 +177,77 @@
 
         async function loadManifest() {
             try {
-                const response = await fetch('media-manifest.json');
-                manifest = await response.json();
+                // Load from new JSONL system
+                const response = await fetch('sys/primitive.jsonl');
+                const text = await response.text();
+                const lines = text.trim().split('\n').filter(l => l);
+                const artifacts = lines.map(line => JSON.parse(line));
+                
+                // Convert to old manifest format for compatibility
+                manifest = convertToManifest(artifacts);
                 showStats();
             } catch (e) {
                 document.getElementById('display').innerHTML = `
                     <div class="warning">
-                        <h3>⚠️ Could not load media-manifest.json</h3>
-                        <p>Run: <code>python3 ARKADU/arkadu-scan.py .</code> first to generate the manifest.</p>
+                        <h3>⚠️ Could not load sys/primitive.jsonl</h3>
+                        <p>Data file exists but viewer needs updating. Using ARKADU v1.0 data format.</p>
+                        <p>Try: <strong>index-master.html</strong> for the complete system navigator.</p>
                     </div>
                 `;
             }
+        }
+        
+        function convertToManifest(artifacts) {
+            // Convert new JSONL format to old manifest format
+            const images = artifacts.filter(a => ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'].includes(a.ext));
+            const videos = artifacts.filter(a => ['.mp4', '.mov', '.avi', '.webm', '.mkv'].includes(a.ext));
+            const audio = artifacts.filter(a => ['.mp3', '.wav', '.ogg', '.m4a'].includes(a.ext));
+            
+            const strata = {};
+            artifacts.forEach(a => {
+                const kingdom = a.path.split('/')[0] || 'ROOT';
+                strata[kingdom] = (strata[kingdom] || 0) + 1;
+            });
+            
+            const totalSize = artifacts.reduce((sum, a) => sum + a.size, 0);
+            
+            return {
+                generated: new Date().toISOString(),
+                artifacts: {
+                    images: images.map(a => ({
+                        path: a.path,
+                        size: a.size,
+                        type: a.ext.toUpperCase().replace('.', ''),
+                        animal: a.path.split('/')[0] || 'ROOT',
+                        used_by: []
+                    })),
+                    videos: videos.map(a => ({
+                        path: a.path,
+                        size: a.size,
+                        type: a.ext.toUpperCase().replace('.', ''),
+                        animal: a.path.split('/')[0] || 'ROOT',
+                        used_by: []
+                    })),
+                    audio: audio.map(a => ({
+                        path: a.path,
+                        size: a.size,
+                        type: a.ext.toUpperCase().replace('.', ''),
+                        animal: a.path.split('/')[0] || 'ROOT',
+                        used_by: []
+                    }))
+                },
+                stats: {
+                    total_images: images.length,
+                    total_videos: videos.length,
+                    total_audio: audio.length,
+                    html_files: artifacts.filter(a => a.ext === '.html').length,
+                    orphaned_artifacts: images.length + videos.length + audio.length
+                },
+                github_analysis: {
+                    total_size_mb: Math.round(totalSize / 1024 / 1024)
+                },
+                strata: strata
+            };
         }
 
         function showStats() {
@@ -340,16 +400,23 @@
                 </div>
 
                 <div class="section">
-                    <h2>🎯 Recommended Strategy</h2>
+                    <h2>🎯 ARKADU v1.0 System</h2>
                     <pre>
-# ARKADU Recommendation for GitHub
+# ARKADU OS v1.0 - Media Archaeology Operating System
 
-Your project contains 52.7 GB of media — far beyond GitHub's limits.
+This viewer now uses the new JSONL data system:
+- Data source: sys/primitive.jsonl (2.9 MB)
+- 10,094 files cataloged
+- Complete taxonomic hierarchy
+- Ekphrasis chains traced
 
-## Strategy: Selective Archival + External Hosting
+## For Full System Access:
+→ Open: <strong>index-master.html</strong> (52 visualization systems)
+→ Data: sys/primitive.jsonl, sys/taxonomy.jsonl, sys/ekphrasis.jsonl
+→ Genomes: sys/genoma-sequences.json (27 species)
 
-1. **Keep in Git (with Git LFS):**
-   - Key "header_prompt" videos (&lt;10 MB each)
+1. **Visualization Systems:**
+   - Organic BSP, Voronoi Warfare, Double Barrel
    - Iconic clapper cards and thumbnails
    - Shared assets referenced across multiple HTML files
    - Total: ~500 MB

@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🧬 ARKADU GENOMA EDITOR</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #282c34;
+            --bg-color-dark: #21252b;
+            --main-text-color: #e0e0e0;
+            --border-color: #2a2a3a;
+            --accent-color: #00faff;
+            --accent-glow: rgba(0, 250, 255, 0.3);
+            --mutation-color: #ff0055;
+            --intron-color: #444;
+            --font-family: 'Roboto Mono', monospace;
+            
+            /* ARKADU Species Colors */
+            --color-png: #d97b8f; --color-mp4: #e8b849; --color-wav: #9d7be8;
+            --color-jpg: #d97b8f; --color-json: #6bbd8f; --color-py: #4dd9cc;
+            --color-html: #4dd9cc; --color-txt: #6b8a96; --color-mp3: #9d7be8;
+            --color-pdf: #e8b849; --color-md: #6bbd8f; --color-unk: #6b8a96;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            font-family: var(--font-family);
+            background-color: var(--bg-color);
+            color: var(--main-text-color);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        header {
+            padding: 15px 25px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        
+        header h1 {
+            font-size: 1.5em;
+            color: var(--accent-color);
+            text-shadow: 0 0 8px var(--accent-glow);
+            font-weight: 400;
+        }
+        
+        .header-controls {
+            display: flex;
+            gap: 10px;
+        }
+        
+        button {
+            background-color: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--main-text-color);
+            padding: 8px 15px;
+            font-family: var(--font-family);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        
+        button:hover {
+            background-color: var(--border-color);
+            color: #fff;
+        }
+        
+        .btn-primary {
+            border-color: var(--accent-color);
+            color: var(--accent-color);
+            font-weight: 700;
+        }
+        
+        .btn-primary:hover {
+            background-color: var(--accent-color);
+            color: var(--bg-color);
+            box-shadow: 0 0 10px var(--accent-glow);
+        }
+        
+        .btn-back {
+            border-color: var(--border-color);
+            color: var(--main-text-color);
+        }
+        
+        .btn-mutation {
+            border-color: #ff0055;
+            color: #ff0055;
+        }
+        
+        .btn-mutation:hover {
+            background-color: #ff0055;
+            color: var(--bg-color);
+        }
+        
+        .btn-recomb {
+            border-color: #faff00;
+            color: #faff00;
+        }
+        
+        .btn-recomb:hover {
+            background-color: #faff00;
+            color: var(--bg-color);
+        }
+        
+        .load-text-btn {
+            padding: 6px 12px;
+            background: rgba(0,250,255,0.1);
+            border: 1px solid var(--accent-color);
+            color: var(--accent-color);
+            font-family: var(--font-family);
+            font-size: 0.85em;
+            cursor: pointer;
+            border-radius: 3px;
+            transition: all 0.2s;
+        }
+        
+        .load-text-btn:hover {
+            background: var(--accent-color);
+            color: var(--bg-color);
+        }
+
+        #main-container {
+            display: flex;
+            flex-grow: 1;
+            overflow: hidden;
+        }
+
+        .panel {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        #genome-editor {
+            border-right: 1px solid var(--border-color);
+        }
+
+        .panel-title {
+            font-size: 1.1em;
+            font-weight: 700;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .panel::-webkit-scrollbar { width: 8px; }
+        .panel::-webkit-scrollbar-track { background: var(--bg-color); }
+        .panel::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 4px;}
+        .panel::-webkit-scrollbar-thumb:hover { background: var(--accent-color); }
+
+        #genome-strand {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        
+        .codon {
+            display: flex;
+            align-items: center;
+            padding: 10px 12px;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+            border: 1px solid transparent;
+            background-color: rgba(255,255,255,0.02);
+        }
+        
+        .codon:hover {
+            background-color: rgba(255,255,255,0.05);
+            border-color: var(--border-color);
+        }
+        
+        .codon.intron {
+            opacity: 0.4;
+            background-color: transparent !important;
+            border: 1px dashed var(--border-color);
+        }
+        
+        .codon.intron .codon-type {
+            background-color: var(--intron-color) !important;
+            text-decoration: line-through;
+        }
+        
+        .codon-type {
+            padding: 4px 8px;
+            border-radius: 3px;
+            color: #000;
+            margin-right: 15px;
+            font-weight: 700;
+            font-size: 0.85em;
+            min-width: 50px;
+            text-align: center;
+            user-select: none;
+        }
+        
+        .codon-payload {
+            flex-grow: 1;
+            font-weight: 300;
+            font-size: 0.9em;
+            word-break: break-all;
+            line-height: 1.4;
+        }
+        
+        .codon-controls {
+            display: none;
+            margin-left: 10px;
+            gap: 5px;
+        }
+        
+        .codon:hover .codon-controls {
+            display: flex;
+        }
+        
+        .codon-control-btn {
+            background: none;
+            border: 1px solid var(--border-color);
+            color: var(--main-text-color);
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+            border-radius: 3px;
+            font-size: 14px;
+            padding: 0;
+        }
+        
+        .codon-control-btn:hover {
+            background: var(--border-color);
+            color: #fff;
+        }
+        
+        .btn-delete:hover {
+            background: var(--mutation-color);
+            border-color: var(--mutation-color);
+        }
+
+        #expression-output {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .phenotype {
+            padding: 12px;
+            border-left: 3px solid;
+            background-color: rgba(0,0,0,0.2);
+            border-radius: 3px;
+        }
+        
+        .phenotype-png, .phenotype-jpg { border-color: var(--color-png); }
+        .phenotype-mp4 { border-color: var(--color-mp4); }
+        .phenotype-wav, .phenotype-mp3 { border-color: var(--color-wav); }
+        .phenotype-json { border-color: var(--color-json); }
+        .phenotype-py { border-color: var(--color-py); }
+        
+        .phenotype img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 3px;
+            margin-top: 8px;
+        }
+        
+        .phenotype video {
+            max-width: 100%;
+            border-radius: 3px;
+            margin-top: 8px;
+        }
+        
+        .phenotype audio {
+            width: 100%;
+            margin-top: 8px;
+        }
+        
+        .phenotype-metadata {
+            font-size: 0.8em;
+            opacity: 0.6;
+            margin-top: 6px;
+        }
+
+        .genome-info {
+            background: rgba(0,250,255,0.05);
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(0,250,255,0.2);
+        }
+        
+        .genome-info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 0.9em;
+        }
+        
+        .genome-info-label {
+            opacity: 0.7;
+        }
+        
+        .genome-info-value {
+            font-weight: 700;
+            color: var(--accent-color);
+        }
+        
+        .crossover-point {
+            border: 2px solid #faff00 !important;
+            box-shadow: 0 0 10px rgba(250,255,0,0.5) !important;
+            animation: pulse-recomb 1.5s infinite;
+        }
+        
+        @keyframes pulse-recomb {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>🧬 ARKADU GENOMA EDITOR</h1>
+        <div class="header-controls">
+            <button id="back-to-scope-btn" class="btn-back">← Back to Scope</button>
+            <button id="mutate-btn" class="btn-mutation">Mutate</button>
+            <button id="recomb-lab-btn" class="btn-recomb">Recombination Lab</button>
+            <button id="export-genome-btn" class="btn-primary">Export Genome</button>
+            <button id="express-btn" class="btn-primary">Express Phenotype</button>
+        </div>
+    </header>
+
+    <main id="main-container" style="display:flex;">
+        <div class="panel" id="genome-editor">
+            <h2 class="panel-title">Genome Editor</h2>
+            <div id="genome-info" class="genome-info"></div>
+            <div id="genome-strand"></div>
+        </div>
+        
+        <div class="panel" id="expression-engine">
+            <h2 class="panel-title">Expression Engine (Phenotype)</h2>
+            <div id="expression-output"></div>
+        </div>
+    </main>
+
+    <div id="recombination-lab" style="display:none; flex-grow:1; overflow:hidden;">
+        <div style="display:flex; height:100%;">
+            <div class="panel" style="flex:1; border-right:1px solid var(--border-color);">
+                <h2 class="panel-title">Strand A (Current)</h2>
+                <div id="recomb-strand-a"></div>
+            </div>
+            <div style="flex:0 0 300px; padding:20px; border-right:1px solid var(--border-color); display:flex; flex-direction:column; gap:15px; align-items:center; justify-content:center;">
+                <h3 style="color:#faff00; margin:0;">Recombination</h3>
+                <p style="font-size:0.9em; text-align:center; opacity:0.8;">1. Select genome for Strand B<br>2. Click codons to set crossover points<br>3. Perform recombination</p>
+                <select id="recomb-genome-b-selector" style="width:100%; padding:8px; background:var(--bg-color); border:1px solid var(--border-color); color:var(--main-text-color); font-family:var(--font-family);"></select>
+                <button id="perform-recomb-btn" disabled style="width:100%; padding:12px; border:2px solid #faff00; color:#faff00; background:transparent; font-family:var(--font-family); font-weight:700; cursor:pointer;">Perform Recombination</button>
+                <button id="exit-recomb-btn" style="width:100%; padding:10px; border:1px solid var(--border-color); color:var(--main-text-color); background:transparent; font-family:var(--font-family); cursor:pointer;">Exit Lab</button>
+            </div>
+            <div class="panel" style="flex:1;">
+                <h2 class="panel-title">Strand B</h2>
+                <div id="recomb-strand-b"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const SPECIES_COLORS = {
+            'PNG': 'var(--color-png)', 'MP4': 'var(--color-mp4)', 'WAV': 'var(--color-wav)',
+            'JPG': 'var(--color-jpg)', 'JSON': 'var(--color-json)', 'PY': 'var(--color-py)',
+            'HTML': 'var(--color-html)', 'TXT': 'var(--color-txt)', 'MP3': 'var(--color-mp3)',
+            'PDF': 'var(--color-pdf)', 'MD': 'var(--color-md)', 'UNK': 'var(--color-unk)'
+        };
+
+        let activeGenome = null;
+        let allGenomes = {}; // Store all loaded genomes
+        let recombState = { strandA_idx: null, strandB_idx: null, genomeB: null };
+
+        const el = {
+            genomeInfo: document.getElementById('genome-info'),
+            genomeStrand: document.getElementById('genome-strand'),
+            expressionOutput: document.getElementById('expression-output'),
+            expressBtn: document.getElementById('express-btn'),
+            exportBtn: document.getElementById('export-genome-btn'),
+            backBtn: document.getElementById('back-to-scope-btn'),
+            mutateBtn: document.getElementById('mutate-btn'),
+            recombLabBtn: document.getElementById('recomb-lab-btn'),
+            mainContainer: document.getElementById('main-container'),
+            recombLab: document.getElementById('recombination-lab'),
+            recombStrandA: document.getElementById('recomb-strand-a'),
+            recombStrandB: document.getElementById('recomb-strand-b'),
+            recombGenomeBSelector: document.getElementById('recomb-genome-b-selector'),
+            performRecombBtn: document.getElementById('perform-recomb-btn'),
+            exitRecombBtn: document.getElementById('exit-recomb-btn')
+        };
+
+        function loadGenome(genome) {
+            activeGenome = genome;
+            renderGenomeInfo();
+            renderGenomeStrand();
+        }
+
+        function renderGenomeInfo() {
+            const mb = (activeGenome.total_bytes / 1024 / 1024).toFixed(1);
+            const exons = activeGenome.sequence.filter(c => !c.is_intron).length;
+            const introns = activeGenome.sequence.filter(c => c.is_intron).length;
+            
+            el.genomeInfo.innerHTML = `
+                <div class="genome-info-row">
+                    <span class="genome-info-label">Genome ID:</span>
+                    <span class="genome-info-value">${activeGenome.genome_id}</span>
+                </div>
+                <div class="genome-info-row">
+                    <span class="genome-info-label">Species:</span>
+                    <span class="genome-info-value">${activeGenome.species_type}</span>
+                </div>
+                <div class="genome-info-row">
+                    <span class="genome-info-label">Total Codons:</span>
+                    <span class="genome-info-value">${activeGenome.sequence.length} (${exons} exons, ${introns} introns)</span>
+                </div>
+                <div class="genome-info-row">
+                    <span class="genome-info-label">Total Size:</span>
+                    <span class="genome-info-value">${mb} MB</span>
+                </div>
+                <div class="genome-info-row">
+                    <span class="genome-info-label">Instances:</span>
+                    <span class="genome-info-value">${activeGenome.total_instances.toLocaleString()}</span>
+                </div>
+            `;
+        }
+
+        function renderGenomeStrand() {
+            el.genomeStrand.innerHTML = '';
+            
+            activeGenome.sequence.forEach((codon, index) => {
+                const codonEl = renderCodon(codon, index);
+                el.genomeStrand.appendChild(codonEl);
+            });
+        }
+
+        function renderCodon(codon, index) {
+            const codonEl = document.createElement('div');
+            codonEl.className = 'codon';
+            if (codon.is_intron) codonEl.classList.add('intron');
+            codonEl.dataset.index = index;
+
+            const color = SPECIES_COLORS[codon.type] || 'var(--color-unk)';
+            
+            const typeEl = document.createElement('span');
+            typeEl.className = 'codon-type';
+            typeEl.textContent = codon.type;
+            typeEl.style.backgroundColor = color;
+            
+            const payloadEl = document.createElement('div');
+            payloadEl.className = 'codon-payload';
+            payloadEl.title = codon.payload?.path_absolute || '';
+            
+            // Format payload nicely
+            let displayText = '';
+            if (codon.payload?.filename) {
+                displayText = codon.payload.filename;
+            } else if (codon.payload?.path_relative) {
+                displayText = codon.payload.path_relative;
+            } else if (typeof codon.payload === 'string') {
+                displayText = codon.payload;
+            } else {
+                displayText = JSON.stringify(codon.payload);
+            }
+            
+            // Truncate if too long
+            const truncated = displayText.length > 60 ? displayText.slice(0, 57) + '...' : displayText;
+            
+            // Main filename
+            const filenameDiv = document.createElement('div');
+            filenameDiv.style.fontWeight = '500';
+            filenameDiv.textContent = truncated;
+            payloadEl.appendChild(filenameDiv);
+            
+            // Add taxonomy if available
+            const taxonomy = [];
+            if (codon.payload?.kingdom) taxonomy.push(codon.payload.kingdom);
+            if (codon.payload?.phylum) taxonomy.push(codon.payload.phylum);
+            if (codon.payload?.class) taxonomy.push(codon.payload.class);
+            
+            if (taxonomy.length > 0 || codon.payload?.size_bytes || codon.payload?.media_type) {
+                const taxonomyDiv = document.createElement('div');
+                taxonomyDiv.style.fontSize = '0.75rem';
+                taxonomyDiv.style.opacity = '0.6';
+                taxonomyDiv.style.marginTop = '4px';
+                
+                const parts = [];
+                if (taxonomy.length > 0) parts.push(taxonomy.join('/'));
+                if (codon.payload?.media_type) parts.push(codon.payload.media_type);
+                if (codon.payload?.size_bytes) parts.push(`${(codon.payload.size_bytes / 1024 / 1024).toFixed(2)}MB`);
+                
+                taxonomyDiv.textContent = parts.join(' • ');
+                payloadEl.appendChild(taxonomyDiv);
+            }
+            
+            const controlsEl = document.createElement('div');
+            controlsEl.className = 'codon-controls';
+            
+            const toggleBtn = document.createElement('button');
+            toggleBtn.className = 'codon-control-btn';
+            toggleBtn.textContent = '◐';
+            toggleBtn.title = 'Toggle Intron/Exon';
+            toggleBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                toggleIntron(index);
+            });
+            
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'codon-control-btn btn-delete';
+            deleteBtn.textContent = '×';
+            deleteBtn.title = 'Delete';
+            deleteBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                deleteCodon(index);
+            });
+            
+            controlsEl.appendChild(toggleBtn);
+            controlsEl.appendChild(deleteBtn);
+            
+            codonEl.appendChild(typeEl);
+            codonEl.appendChild(payloadEl);
+            codonEl.appendChild(controlsEl);
+            
+            return codonEl;
+        }
+
+        function toggleIntron(index) {
+            activeGenome.sequence[index].is_intron = !activeGenome.sequence[index].is_intron;
+            renderGenomeStrand();
+        }
+
+        function deleteCodon(index) {
+            if (activeGenome.sequence.length <= 1) {
+                alert("Cannot delete the last codon.");
+                return;
+            }
+            activeGenome.sequence.splice(index, 1);
+            renderGenomeStrand();
+            renderGenomeInfo();
+        }
+
+        function expressPhenotype() {
+            el.expressionOutput.innerHTML = '';
+            
+            // Filter to exons only
+            const exons = activeGenome.sequence.filter(c => !c.is_intron);
+            
+            exons.forEach((codon, index) => {
+                const phenotypeEl = document.createElement('div');
+                phenotypeEl.className = `phenotype phenotype-${codon.type.toLowerCase()}`;
+                
+                switch(codon.type) {
+                    case 'PNG':
+                    case 'JPG':
+                    case 'GIF':
+                        if (codon.payload?.path_absolute) {
+                            phenotypeEl.innerHTML = `
+                                <div><strong>${codon.payload.filename}</strong></div>
+                                <img src="file://${codon.payload.path_absolute}" alt="${codon.payload.filename}" onerror="this.style.display='none'; this.nextElementSibling.style.display='block'">
+                                <div style="display:none;color:#ff0055">⚠ Image not found</div>
+                                <div class="phenotype-metadata">
+                                    ${(codon.payload.size_bytes / 1024 / 1024).toFixed(2)} MB • 
+                                    ${codon.payload.kingdom}/${codon.payload.phylum}
+                                </div>
+                            `;
+                        }
+                        break;
+                    
+                    case 'MP4':
+                    case 'MOV':
+                    case 'AVI':
+                        if (codon.payload?.path_absolute) {
+                            phenotypeEl.innerHTML = `
+                                <div><strong>${codon.payload.filename}</strong></div>
+                                <video controls src="file://${codon.payload.path_absolute}"></video>
+                                <div class="phenotype-metadata">
+                                    ${(codon.payload.size_bytes / 1024 / 1024).toFixed(2)} MB • 
+                                    ${codon.payload.kingdom}/${codon.payload.phylum}
+                                </div>
+                            `;
+                        }
+                        break;
+                    
+                    case 'WAV':
+                    case 'MP3':
+                    case 'FLAC':
+                        if (codon.payload?.path_absolute) {
+                            phenotypeEl.innerHTML = `
+                                <div><strong>${codon.payload.filename}</strong></div>
+                                <audio controls src="file://${codon.payload.path_absolute}"></audio>
+                                <div class="phenotype-metadata">
+                                    ${(codon.payload.size_bytes / 1024 / 1024).toFixed(2)} MB • 
+                                    ${codon.payload.kingdom}/${codon.payload.phylum}
+                                </div>
+                            `;
+                        }
+                        break;
+                    
+                    case 'JSON':
+                    case 'PY':
+                    case 'TXT':
+                    case 'MD':
+                        phenotypeEl.innerHTML = `
+                            <div><strong>${codon.payload?.filename || 'File'}</strong></div>
+                            <div class="phenotype-metadata">
+                                ${codon.payload?.path_relative || ''}
+                            </div>
+                            <div style="margin-top:8px;"><button class="load-text-btn" data-path="${codon.payload?.path_absolute}">Load Text Content</button></div>
+                            <pre style="display:none; margin-top:8px; padding:10px; background:rgba(0,0,0,0.3); border-radius:3px; max-height:300px; overflow-y:auto; font-size:0.85em; line-height:1.4;"></pre>
+                        `;
+                        
+                        // Add click handler for load button
+                        const loadBtn = phenotypeEl.querySelector('.load-text-btn');
+                        const preEl = phenotypeEl.querySelector('pre');
+                        loadBtn.addEventListener('click', async () => {
+                            try {
+                                const response = await fetch(`file://${codon.payload.path_absolute}`);
+                                const text = await response.text();
+                                
+                                // Try to parse and pretty-print JSON
+                                try {
+                                    const json = JSON.parse(text);
+                                    preEl.textContent = JSON.stringify(json, null, 2).slice(0, 5000); // Limit to 5000 chars
+                                } catch {
+                                    preEl.textContent = text.slice(0, 5000); // Limit to 5000 chars
+                                }
+                                
+                                preEl.style.display = 'block';
+                                loadBtn.textContent = 'Hide Text';
+                                loadBtn.onclick = () => {
+                                    preEl.style.display = 'none';
+                                    loadBtn.textContent = 'Load Text Content';
+                                };
+                            } catch (err) {
+                                preEl.textContent = `Error loading file: ${err.message}`;
+                                preEl.style.display = 'block';
+                                preEl.style.color = '#ff0055';
+                            }
+                        });
+                        break;
+                    
+                    default:
+                        phenotypeEl.textContent = `[${codon.type}] ${codon.payload?.filename || 'Unknown'}`;
+                }
+                
+                el.expressionOutput.appendChild(phenotypeEl);
+            });
+            
+            if (exons.length === 0) {
+                el.expressionOutput.innerHTML = '<div style="text-align:center;opacity:0.5;padding:2rem">No exons to express (all codons are introns)</div>';
+            }
+        }
+
+        function exportGenome() {
+            const dataStr = JSON.stringify(activeGenome, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${activeGenome.genome_id}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function backToScope() {
+            window.close();
+            // If window.close() doesn't work (popup blocker), redirect
+            setTimeout(() => {
+                window.location.href = 'genoma-scope.html';
+            }, 100);
+        }
+
+        // Mutation function
+        function mutateGenome() {
+            if (!activeGenome) return;
+            
+            const mutationRate = 0.1; // 10% chance per codon
+            const mutationTypes = ['point', 'insertion', 'deletion'];
+            
+            for (let i = activeGenome.sequence.length - 1; i >= 0; i--) {
+                if (Math.random() < mutationRate) {
+                    const mutationType = mutationTypes[Math.floor(Math.random() * mutationTypes.length)];
+                    
+                    if (mutationType === 'point') {
+                        // Change codon type
+                        const types = Object.keys(SPECIES_COLORS);
+                        activeGenome.sequence[i].type = types[Math.floor(Math.random() * types.length)];
+                    } else if (mutationType === 'insertion' && activeGenome.sequence.length < 200) {
+                        // Duplicate codon
+                        const newCodon = JSON.parse(JSON.stringify(activeGenome.sequence[i]));
+                        newCodon.origin = 'mutation_insertion';
+                        activeGenome.sequence.splice(i, 0, newCodon);
+                    } else if (mutationType === 'deletion' && activeGenome.sequence.length > 1) {
+                        // Delete codon
+                        activeGenome.sequence.splice(i, 1);
+                    }
+                }
+            }
+            
+            renderGenomeStrand();
+            renderGenomeInfo();
+        }
+
+        // Recombination Lab functions
+        function enterRecombinationLab() {
+            el.mainContainer.style.display = 'none';
+            el.recombLab.style.display = 'flex';
+            recombState = { strandA_idx: null, strandB_idx: null, genomeB: null };
+            
+            // Populate Strand A
+            renderRecombStrand(activeGenome, el.recombStrandA, 'a');
+            
+            // Populate genome selector
+            el.recombGenomeBSelector.innerHTML = '<option value="">Select genome...</option>';
+            Object.keys(allGenomes).forEach(id => {
+                if (id !== activeGenome.genome_id) {
+                    const option = document.createElement('option');
+                    option.value = id;
+                    option.textContent = id;
+                    el.recombGenomeBSelector.appendChild(option);
+                }
+            });
+        }
+
+        function exitRecombinationLab() {
+            el.mainContainer.style.display = 'flex';
+            el.recombLab.style.display = 'none';
+        }
+
+        function renderRecombStrand(genome, container, strandId) {
+            container.innerHTML = '';
+            genome.sequence.forEach((codon, index) => {
+                const codonEl = renderCodon(codon, index);
+                codonEl.style.cursor = 'pointer';
+                codonEl.addEventListener('click', () => handleRecombCodonSelect(codonEl, strandId, index));
+                container.appendChild(codonEl);
+            });
+        }
+
+        function handleRecombCodonSelect(codonEl, strandId, index) {
+            const container = strandId === 'a' ? el.recombStrandA : el.recombStrandB;
+            const currentSelection = container.querySelector('.crossover-point');
+            if (currentSelection) currentSelection.classList.remove('crossover-point');
+            
+            codonEl.classList.add('crossover-point');
+            codonEl.style.border = '2px solid #faff00';
+            codonEl.style.boxShadow = '0 0 10px rgba(250,255,0,0.5)';
+            
+            if (strandId === 'a') recombState.strandA_idx = index;
+            else recombState.strandB_idx = index;
+            
+            updateRecombButton();
+        }
+
+        function updateRecombButton() {
+            el.performRecombBtn.disabled = !(recombState.strandA_idx !== null && recombState.strandB_idx !== null && recombState.genomeB);
+        }
+
+        function performRecombination() {
+            const genomeA = activeGenome;
+            const genomeB = recombState.genomeB;
+            const idxA = recombState.strandA_idx;
+            const idxB = recombState.strandB_idx;
+            
+            const newSequence = [
+                ...genomeA.sequence.slice(0, idxA + 1),
+                ...genomeB.sequence.slice(idxB + 1)
+            ];
+            
+            const newId = prompt(`Enter name for recombinant genome:`, `${genomeA.genome_id}-x-${genomeB.genome_id}`);
+            if (!newId) return;
+            
+            activeGenome.genome_id = newId;
+            activeGenome.sequence = newSequence;
+            activeGenome.total_instances = newSequence.length;
+            
+            exitRecombinationLab();
+            renderGenomeStrand();
+            renderGenomeInfo();
+        }
+
+        // Event listeners
+        el.expressBtn.addEventListener('click', expressPhenotype);
+        el.exportBtn.addEventListener('click', exportGenome);
+        el.backBtn.addEventListener('click', backToScope);
+        el.mutateBtn.addEventListener('click', mutateGenome);
+        el.recombLabBtn.addEventListener('click', enterRecombinationLab);
+        el.exitRecombBtn.addEventListener('click', exitRecombinationLab);
+        el.performRecombBtn.addEventListener('click', performRecombination);
+        
+        el.recombGenomeBSelector.addEventListener('change', (e) => {
+            const selectedId = e.target.value;
+            if (selectedId && allGenomes[selectedId]) {
+                recombState.genomeB = allGenomes[selectedId];
+                renderRecombStrand(recombState.genomeB, el.recombStrandB, 'b');
+                recombState.strandB_idx = null;
+                updateRecombButton();
+            }
+        });
+
+        // Load genome from sessionStorage
+        document.addEventListener('DOMContentLoaded', () => {
+            const editorData = sessionStorage.getItem('genomaEditorData');
+            
+            if (editorData) {
+                const data = JSON.parse(editorData);
+                loadGenome(data.genome);
+                
+                // Load all genomes for recombination
+                if (data.allGenomes) {
+                    allGenomes = data.allGenomes;
+                }
+                
+                sessionStorage.removeItem('genomaEditorData');
+            } else {
+                el.genomeInfo.innerHTML = '<div style="text-align:center;opacity:0.5;padding:2rem">No genome loaded. Please open from GENOMA Scope.</div>';
+            }
+        });
+    </script>
+</body>
+</html>
